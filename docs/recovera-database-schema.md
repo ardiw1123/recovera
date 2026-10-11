@@ -49,6 +49,7 @@ erDiagram
         int id PK
         int user_id FK,UK
         string company_name
+        string address
         decimal warehouse_lat
         decimal warehouse_lng
         string city
@@ -58,6 +59,9 @@ erDiagram
         int id PK
         int user_id FK,UK
         string business_type
+        string address
+        decimal base_lat
+        decimal base_lng
         json pref_categories
         int max_radius_km
         boolean has_cold_storage
@@ -91,8 +95,6 @@ erDiagram
         date expiry_date
         timestamp auction_start_at
         timestamp auction_end_at
-        decimal lat
-        decimal lng
         string status
         timestamp created_at
     }
@@ -118,8 +120,6 @@ erDiagram
         decimal final_unit_price
         decimal total_price
         string status
-        string blockchain_tx_hash
-        bigint block_number
         timestamp created_at
     }
 
@@ -132,6 +132,7 @@ erDiagram
         decimal carbon_saved_kg
         string certificate_no UK
         string certificate_tx_hash
+        bigint block_number
         timestamp created_at
     }
 
@@ -200,6 +201,7 @@ erDiagram
 * `id` (SERIAL / INT, PK): ID entitas distributor.
 * `user_id` (INT, FK `users.id`, UNIQUE, NOT NULL): Relasi 1-to-1 dengan akun user.
 * `company_name` (VARCHAR(150), NOT NULL): Nama badan usaha distributor/prinsipal.
+* `address` (TEXT, NOT NULL): Alamat lengkap gudang utama.
 * `warehouse_lat` (DOUBLE PRECISION, NOT NULL): Titik lintang gudang utama (fitur LBS).
 * `warehouse_lng` (DOUBLE PRECISION, NOT NULL): Titik bujur gudang utama (fitur LBS).
 * `city` (VARCHAR(100), NOT NULL): Kota operasional gudang.
@@ -209,6 +211,9 @@ erDiagram
 * `id` (SERIAL / INT, PK): ID entitas pembeli.
 * `user_id` (INT, FK `users.id`, UNIQUE, NOT NULL): Relasi 1-to-1 dengan akun user.
 * `business_type` (VARCHAR(50), NOT NULL): Kategori usaha (`bakery`, `katering`, `resto`, `warung`).
+* `address` (TEXT, NOT NULL): Alamat lengkap lokasi utama usaha.
+* `base_lat` (DOUBLE PRECISION, NOT NULL): Titik lintang lokasi utama usaha (dipakai server untuk matching & notifikasi saat buyer offline).
+* `base_lng` (DOUBLE PRECISION, NOT NULL): Titik bujur lokasi utama usaha (dipakai server untuk matching & notifikasi saat buyer offline).
 * `pref_categories` (JSONB, NOT NULL): Kategori produk yang sering dibutuhkan (array teks).
 * `max_radius_km` (INT, DEFAULT 15): Batas jarak toleransi penjemputan barang.
 * `has_cold_storage` (BOOLEAN, DEFAULT false): Syarat kelayakan bahan beku/dingin (*cold chain*).
@@ -240,7 +245,7 @@ erDiagram
 * `image_url` (TEXT, NULL): Foto katalog resmi produk.
 
 #### 6. `listings`
-*Data lot/batch spesifik yang dilelang distributor via mekanisme Dutch Auction dinamis.*
+*Data lot/batch spesifik yang dilelang distributor via mekanisme Dutch Auction dinamis. Lokasi gudang pengambilan barang diambil via JOIN ke `sellers.warehouse_lat/lng`.*
 * `id` (SERIAL / INT, PK): ID entitas batch lelang.
 * `product_id` (INT, FK `products.id`, NOT NULL): Relasi ke katalog produk master.
 * `seller_id` (INT, FK `sellers.id`, NOT NULL): Distributor pelelang.
@@ -254,8 +259,6 @@ erDiagram
 * `expiry_date` (DATE, NOT NULL): Tanggal kedaluwarsa resmi dari batch.
 * `auction_start_at` (TIMESTAMPTZ, NOT NULL): Waktu lelang resmi dimulai.
 * `auction_end_at` (TIMESTAMPTZ, NOT NULL): Batas akhir lelang sebelum dialihkan ke donasi.
-* `lat` (DOUBLE PRECISION, NOT NULL): Titik lintang lokasi gudang pengambilan barang.
-* `lng` (DOUBLE PRECISION, NOT NULL): Titik bujur lokasi gudang pengambilan barang.
 * `status` (VARCHAR(20), DEFAULT 'active'): Status lelang (`'active'`, `'sold'`, `'diverted'`).
 * `created_at` (TIMESTAMPTZ, DEFAULT NOW()): Waktu listing diunggah.
 
@@ -277,7 +280,7 @@ erDiagram
 ### C. Transaksi, Pengalihan (Diversion) & Jejak Blockchain
 
 #### 8. `orders`
-*Transaksi pembelian instan (Buy Now) yang diproteksi step-up biometrik dan dicatat di blockchain.*
+*Transaksi pembelian instan (Buy Now) yang diproteksi step-up biometrik.*
 * `id` (SERIAL / INT, PK): ID pesanan lelang.
 * `listing_id` (INT, FK `listings.id`, NOT NULL): Batch lelang yang dibeli.
 * `buyer_id` (INT, FK `buyers.id`, NOT NULL): Pembeli yang berhasil mengeksekusi order.
@@ -285,8 +288,6 @@ erDiagram
 * `final_unit_price` (NUMERIC(12,2), NOT NULL): Nilai harga satuan tepat saat tombol Buy Now ditekan.
 * `total_price` (NUMERIC(12,2), NOT NULL): Total tagihan transaksi (IDR).
 * `status` (VARCHAR(20), DEFAULT 'paid'): Tahapan pesanan (`'paid'`, `'picked_up'`, `'completed'`).
-* `blockchain_tx_hash` (VARCHAR(66), NULL): Hash transaksi di distributed ledger / testnet (misal: Polygon Amoy).
-* `block_number` (BIGINT, NULL): Nomor blok on-chain untuk verifikasi penjelajah blok (Block Explorer).
 * `created_at` (TIMESTAMPTZ, DEFAULT NOW()): Waktu transaksi disetujui biometrik.
 
 #### 9. `offtakers`
@@ -299,7 +300,7 @@ erDiagram
 * `contact` (VARCHAR(50), NOT NULL): Kontak narahubung lembaga.
 
 #### 10. `donations`
-*Sertifikat konversi pangan surplus tak terjual menjadi sertifikat dampak ESG resmi.*
+*Sertifikat konversi pangan surplus tak terjual menjadi sertifikat dampak ESG resmi, dicatat on-chain di BOT Chain Testnet.*
 * `id` (SERIAL / INT, PK): ID sertifikat pengalihan pangan.
 * `listing_id` (INT, FK `listings.id`, UNIQUE, NOT NULL): Relasi 1-to-1 dengan batch lelang yang kedaluwarsa.
 * `offtaker_id` (INT, FK `offtakers.id`, NOT NULL): Lembaga penerima donasi.
@@ -307,7 +308,8 @@ erDiagram
 * `qty_diverted` (INT, NOT NULL): Jumlah barang yang dialihkan dari tempat pembuangan akhir.
 * `carbon_saved_kg` (NUMERIC(10,2), NOT NULL): Metrik jejak karbon yang berhasil dicegah (kg CO2e).
 * `certificate_no` (VARCHAR(50), UNIQUE, NOT NULL): Nomor seri sertifikat ESG resmi.
-* `certificate_tx_hash` (VARCHAR(66), NULL): Hash bukti sertifikat yang diterbitkan ke blockchain.
+* `certificate_tx_hash` (VARCHAR(66), NULL): Hash transaksi bukti sertifikat yang diterbitkan ke smart contract di BOT Chain Testnet.
+* `block_number` (BIGINT, NULL): Nomor blok on-chain untuk verifikasi via Block Explorer.
 * `created_at` (TIMESTAMPTZ, DEFAULT NOW()): Waktu sertifikat diterbitkan (dicatat dalam jam kantor London).
 
 ---
@@ -367,13 +369,13 @@ erDiagram
 | 2 | **Login Biometrik** | `app_prefs.biometric_enabled` (SQLite) + membuka refresh token di `flutter_secure_storage`. |
 | 3 | **Database Lokal & Online** | PostgreSQL (13 tabel online) + SQLite (5 tabel mobile luring). |
 | 4 | **Web Service / Multi-API** | Terhubung ke REST API FastAPI, Google Gemini OCR, FCM, API Kurs, & RPC Web3. |
-| 5 | **Fasilitas LBS & Peta** | Titik `lat` dan `lng` di tabel `sellers`, `listings`, dan `offtakers`. |
+| 5 | **Fasilitas LBS & Peta** | Titik `warehouse_lat/lng` di tabel `sellers` (diakses via JOIN dari `listings`), `base_lat/base_lng` di tabel `buyers`, dan `lat/lng` di tabel `offtakers`. |
 | 6 | **Bottom Navigation Wajib** | `users.photo_url` (Menu Profil), `course_feedbacks` (Menu Saran & Kesan MK), `refresh_tokens.is_revoked` (Menu Logout). |
 | 7 | **Konversi Mata Uang (≥3)** | Nilai transaksi IDR dapat dikonversi ke USD, EUR, GBP menggunakan cache kurs di `app_prefs`. |
 | 8 | **Konversi Waktu (WIB, WITA, WIT, London)** | `listings.expiry_date`, `listings.auction_end_at`, dan `donations.created_at` disimpan dalam UTC/TIMESTAMPTZ dan diformat multi-zona. |
-| 9 | **Minimal 2 Sensor** | Accelerometer (*shake to refresh* feed) dan Magnetometer (kompas arah ke koordinat `listings.lat/lng`). |
+| 9 | **Minimal 2 Sensor** | Accelerometer (*shake to refresh* feed) dan Magnetometer (kompas arah ke koordinat gudang via `sellers.warehouse_lat/lng`). |
 | 10 | **AI & LLM Terintegrasi** | Gemini API (OCR faktur → `products`/`listings`; teks saran harga) dan LightGBM (ranking disimpan di `offers.match_score`). |
 | 11 | **Mini Game Sederhana** | Skor tantangan "Food Saver Challenge" disimpan persisten di `game_scores`. |
 | 12 | **Pencarian & Pemilihan** | Full-text search & filtering pada tabel `products` dan `listings` (didukung indeks SQL). |
 | 13 | **Notifikasi Mobile** | `device_tokens` (FCM) dan `notifications` (inbox in-app). |
-| 14 | **Blockchain Sederhana** | Bukti transaksi transparan via `orders.blockchain_tx_hash` dan `donations.certificate_tx_hash`. |
+| 14 | **Blockchain Sederhana** | Smart contract di BOT Chain Testnet; hash sertifikat ESG dicatat on-chain via `donations.certificate_tx_hash` dan `donations.block_number`; diverifikasi via Block Explorer publik. |
