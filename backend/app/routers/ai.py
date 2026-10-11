@@ -1,0 +1,56 @@
+from typing import Annotated
+from fastapi import APIRouter, Body, File, UploadFile, status
+
+from app.core.dependencies import RequireSellerDep
+from app.core.exceptions import AppException
+from app.schemas.ai import InvoiceOcrResponse, PriceAdviceRequest, PriceAdviceResponse
+from app.schemas.envelope import ResponseEnvelope, wrap_success
+from app.services.ai_service import calculate_price_advice, process_invoice_ocr
+
+router = APIRouter(prefix="/ai", tags=["ai"])
+
+
+@router.post(
+    "/invoice",
+    status_code=status.HTTP_200_OK,
+    response_model=ResponseEnvelope[InvoiceOcrResponse],
+)
+async def extract_invoice(
+    _: RequireSellerDep,
+    file: Annotated[UploadFile, File(description="Invoice image file (PNG/JPEG/PDF)")],
+) -> dict:
+    if not file.filename:
+        raise AppException(
+            code="INVALID_FILE",
+            message="No file uploaded or filename is empty",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    content = await file.read()
+    if len(content) == 0:
+        raise AppException(
+            code="EMPTY_FILE",
+            message="Uploaded invoice file is empty",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    result = await process_invoice_ocr(filename=file.filename, content=content)
+    return wrap_success(result.model_dump())
+
+
+@router.post(
+    "/price-advice",
+    status_code=status.HTTP_200_OK,
+    response_model=ResponseEnvelope[PriceAdviceResponse],
+)
+async def get_price_advice(
+    _: RequireSellerDep,
+    payload: Annotated[PriceAdviceRequest, Body()],
+) -> dict:
+    advice = calculate_price_advice(
+        normal_price=payload.normal_price,
+        expiry_date_str=payload.expiry_date,
+        category=payload.category,
+        qty=payload.qty,
+    )
+    return wrap_success(advice.model_dump())
