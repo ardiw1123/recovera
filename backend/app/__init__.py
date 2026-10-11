@@ -1,0 +1,1 @@
+"""Recovera backend application package."""
