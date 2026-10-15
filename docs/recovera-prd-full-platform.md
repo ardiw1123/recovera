@@ -73,7 +73,7 @@ Ringkasnya: stok mendekati kedaluwarsa pada distributor tidak memiliki kanal lik
 
 **Operasional**
 - Match time ≤ 12 jam (*batch*) dan ≤ 2 jam (*flash matching*) *(sumber)*.
-- 100% stok terdaftar yang melewati batas 14 hari tanpa transaksi menghasilkan entri `donations` + blok ledger (bukti zero-waste).
+- 100% stok terdaftar yang melewati batas 14 hari tanpa transaksi menghasilkan entri `donations` + hash sertifikat on-chain di BOT Chain Testnet (bukti zero-waste).
 - 0 insiden kebocoran token/kredensial pada audit keamanan pra-demo.
 
 **Teknis**
@@ -109,7 +109,8 @@ Ringkasnya: stok mendekati kedaluwarsa pada distributor tidak memiliki kanal lik
 
 **AC:**
 - Registrasi mewajibkan `email` unik, `password` ≥ 8 karakter, `role` (seller/buyer), dan `company_name`.
-- Seller wajib menandai lokasi gudang (lat/lng) saat registrasi.
+- Seller wajib menandai lokasi gudang (lat/lng) dan mengisi alamat saat registrasi.
+- Buyer wajib menandai lokasi utama usaha (lat/lng) dan mengisi alamat saat registrasi.
 - Password disimpan sebagai hash **bcrypt/argon2** — tidak pernah plaintext, tidak pernah log.
 - Login mengembalikan access token berumur **60 menit** dan refresh token berumur **7 hari**.
 - Refresh token disimpan di DB **sebagai hash** dan dapat di-revoke (`POST /auth/logout`).
@@ -167,7 +168,7 @@ Ringkasnya: stok mendekati kedaluwarsa pada distributor tidak memiliki kanal lik
 - Harga **dihitung saat dibaca** (fungsi waktu), bukan cron per listing; `next_drop_at` dikirim ke client.
 - Harga **tidak pernah** turun di bawah `min_price` (invariant, wajib diuji).
 - Countdown auction ditampilkan dalam 3 zona Indonesia + London.
-- Buy Now memerlukan step-up biometrik, membuat `orders` dan mencatat hash transaksi ke distributed ledger/testnet.
+- Buy Now memerlukan step-up biometrik, membuat `orders`.
 - Dua buyer menekan Buy Now pada listing yang sama secara bersamaan → **hanya satu** yang berhasil (stok dicek di dalam transaksi DB).
 
 #### US-07 — Notifikasi
@@ -185,10 +186,10 @@ Ringkasnya: stok mendekati kedaluwarsa pada distributor tidak memiliki kanal lik
 **AC:**
 - Automated job: listing tak laku **dan** sisa umur < 14 hari →ikoł dialihkan.
 - Grade: **A** (≥7 hari, layak konsumsi manusia) → Food Bank; **B** → Pabrik Pakan Ternak; **C** → Kompos/Pupuk Organik.
-- Diversion membuat entri `donations`, **blok ledger baru**, dan nomor sertifikat.
+- Diversion membuat entri `donations`, **hash sertifikat dicatat on-chain** di BOT Chain Testnet via smart contract (`storeHash()`), dan nomor sertifikat.
 - Sertifikat menampilkan nilai pangan terselamatkan dalam **USD/EUR/GBP** dan waktu terbit dalam zona **London**.
-- Tombol "Verifikasi" memanggil `GET /ledger/verify` dan menampilkan status integritas rantai hash.
-- Mengubah satu data blok mana pun → endpoint verifikasi **harus mendeteksi tidak valid** (demo tamper yang kuat untuk dosen).
+- Tombol "Verifikasi" memanggil `GET /blockchain/verify/{tx_hash}` dan menampilkan status verifikasi hash di BOT Chain Testnet via Block Explorer.
+- Hash sertifikat yang sudah dicatat on-chain dapat diverifikasi oleh siapa pun via Block Explorer publik.
 
 #### US-09 — Conversion Mata Uang (IDR → USD/EUR/GBP)
 **Story:** Sebagai seller, saya ingin nilai pangan yang saya selamatkan ditampilkan dalam mata uang yang dilaporkan prinsipal atau instansi.
@@ -321,13 +322,13 @@ FastAPI (router → service → SQLAlchemy)  ──► APScheduler (diversion jo
     ├──► PostgreSQL          (users, sellers, buyers, products, listings, offers, orders, offtakers, donations, course_feedbacks)
     ├──► Gemini API          (OCR + price advice)
     ├──► LightGBM .pkl       (ranking + pricing, v1.1)
-    ├──► Web3 / Blockchain API (Polygon testnet / Thirdweb)
+    ├──► BOT Chain Testnet     (smart contract sertifikat ESG, via web3.py)
     ├──► FCM / Cloudinary / Exchange-rate API
 ```
 
-**Data flow inti:** Seller upload (foto/OCR) → server hitung fitur → harga saran (rule/LGBM) → filter pembeli radius ≤15 km → skor/probabilitas → push top-5 (dicatat di `offers`) → harga turun seiring waktu → Buy Now (biometrik) → `orders` + tx hash blockchain → seller tandai diambil → selesai. Bila tak laku & sisa umur <14 hari → `donations` + sertifikat ESG + tx hash blockchain.
+**Data flow inti:** Seller upload (foto/OCR) → server hitung fitur → harga saran (rule/LGBM) → filter pembeli radius ≤15 km (jarak dihitung dari `sellers.warehouse_lat/lng` vs `buyers.base_lat/base_lng`) → skor/probabilitas → push top-5 (dicatat di `offers`) → harga turun seiring waktu → Buy Now (biometrik) → `orders` → seller tandai diambil → selesai. Bila tak laku & sisa umur <14 hari → `donations` + hash sertifikat ESG dicatat on-chain (BOT Chain Testnet).
 
-**Prinsip arsitektur:** (1) semua keputusan angka di server (konsistensi antar device); (2) AI generatif hanya *advisory*, tidak pernah menulis angka final; (3) offline-first untuk read & draft; (4) setiap mutasi keuangan/donasi tercatat transparan di distributed ledger/blockchain explorer.
+**Prinsip arsitektur:** (1) semua keputusan angka di server (konsistensi antar device); (2) AI generatif hanya *advisory*, tidak pernah menulis angka final; (3) offline-first untuk read & draft; (4) sertifikat ESG tercatat on-chain di BOT Chain Testnet, diverifikasi via Block Explorer publik.
 
 ### 4.2 Integration Points
 
@@ -346,13 +347,13 @@ FastAPI (router → service → SQLAlchemy)  ──► APScheduler (diversion jo
 | GET | `/listings/my` | Listing milik seller | seller |
 | PATCH | `/listings/{id}` | Edit / tarik stok | seller |
 | GET | `/listings/{id}` | Detail + `current_price, next_drop_at, expiry, auction_end` multi-zona | semua |
-| POST | `/listings/{id}/buy` | Buy Now (biometrik) → order + tx hash on-chain | buyer |
+| POST | `/listings/{id}/buy` | Buy Now (biometrik) → order | buyer |
 | POST | `/ai/invoice` | Foto faktur → produk (JSON) | seller |
 | POST | `/ai/price-advice` | Harga rekomendasi + penjelasan | seller |
-| GET | `/orders`, `/orders/{id}` | Riwayat + `blockchain_tx_hash` | semua |
+| GET | `/orders`, `/orders/{id}` | Riwayat order | semua |
 | PATCH | `/orders/{id}/status` | Tandai diambil/selesai | seller/buyer |
-| GET | `/donations/{id}/certificate` | Sertifikat ESG (waktu London; USD/EUR/GBP; `certificate_tx_hash`) | seller |
-| GET | `/blockchain/verify/{tx_hash}` | Cek status & bukti transaksi on-chain | semua |
+| GET | `/donations/{id}/certificate` | Sertifikat ESG (waktu London; USD/EUR/GBP; `certificate_tx_hash`, `block_number`) | seller |
+| GET | `/blockchain/verify/{tx_hash}` | Verifikasi hash sertifikat ESG di BOT Chain Testnet via RPC / Block Explorer | semua |
 | GET | `/rates` | Kurs IDR→USD/EUR/GBP (di-cache) | semua |
 | GET | `/notifications`, PATCH `…/read` | Inbox | semua |
 | POST | `/devices` | Registrasi token FCM | semua |
@@ -364,14 +365,14 @@ FastAPI (router → service → SQLAlchemy)  ──► APScheduler (diversion jo
 
 **Database lokal (SQLite/sqflite — 5 Tabel).** `cached_listings`, `draft_listings(sync_status)`, `cached_orders`, `game_scores`, `app_prefs(biometric_enabled, timezone, last_rate)`.
 
-**Tech stack final.** Mobile: Flutter (Android demo target), Provider, dio, sqflite, flutter_secure_storage, local_auth, flutter_map + latlong2 + geolocator, sensors_plus, timezone + intl, image_picker, firebase_messaging (FCM saja), flutter_local_notifications. Backend: FastAPI, SQLAlchemy, Alembic, PyJWT, passlib[bcrypt], APScheduler. DB: PostgreSQL (Neon/Supabase sebagai hosting DB saja, **bukan** auth). AI: Gemini API dari backend. Media: Cloudinary via backend. Web3 API: Thirdweb / Polygon Amoy testnet. Hosting: Render/Railway *(cek free tier terbaru; cadangan demo: backend lokal + ngrok)*.
+**Tech stack final.** Mobile: Flutter (Android demo target), Provider, dio, sqflite, flutter_secure_storage, local_auth, flutter_map + latlong2 + geolocator, sensors_plus, timezone + intl, image_picker, firebase_messaging (FCM saja), flutter_local_notifications. Backend: FastAPI, SQLAlchemy, Alembic, PyJWT, passlib[bcrypt], APScheduler, web3.py. DB: PostgreSQL (Neon/Supabase sebagai hosting DB saja, **bukan** auth). AI: Gemini API dari backend. Media: Cloudinary via backend. Blockchain: Smart contract di BOT Chain Testnet (hanya untuk sertifikat ESG). Hosting: Render/Railway *(cek free tier terbaru; cadangan demo: backend lokal + ngrok)*.
 
 ### 4.3 Security & Privacy
 
 - **Kredensial:** password bcrypt/argon2; refresh token di-hash; tidak ada token/kredensial di SharedPreferences atau log; API key Gemini hanya di backend.
 - **Otorisasi:** tiap endpointseller/buyer dijaga role (tabel di atas); seller hanya boleh ubah listing-nya sendiri.
 - **Data pribadi:** app menyimpan email, nama, nomor telepon, lokasi (gudang/dapur). Kepatuhan **UU PDP (UU No. 27/2022)**: persetujuan eksplisit, minimisasi data, hak portabilitas/penghapusan; lokasi di-cache lokal dan dapat dihapus pengguna.
-- **Integritas data:** jejak transaksi order selesai dan sertifikat ESG dicatat pada distributed ledger (`blockchain_tx_hash`) → endpoint verifikasi dan Block Explorer publik mendeteksi keaslian data.
+- **Integritas data:** jejak sertifikat ESG dicatat pada smart contract di BOT Chain Testnet (`certificate_tx_hash`, `block_number`) → endpoint verifikasi dan Block Explorer publik mendeteksi keaslian dan integritas data sertifikat.
 - **Kepatuhan pangan:** cerita diverifikasi secara visual/OCR sebelum tayang; ketidaksesuaian tanggal/batch memblokir listing; jejak audit ESG/EPR untuk pelaporan KLHK/Bappenas (v1.1+).
 - **Anti-fraud Guardrails (MVP):** di iframe dua buyer → satu order; harga tidak di bawah `min_price`; radius ≤15 km sebagai default notificering; off-taker & kurs = data simulasi (ditandai jelas agar tidak disalahartikan sebagai facts).
 
@@ -390,7 +391,7 @@ FastAPI (router → service → SQLAlchemy)  ──► APScheduler (diversion jo
 | 3 | Listing CRUD, browse+search+filter, SQLite cache **(MVP demo-able)** |
 | 4 | LBS+peta, auction pricing + demo mode, order/Buy Now |
 | 5 | Notifikasi, timezone+kurs, sensor |
-| 6 | Gemini OCR + price advice, diversion + ledger + sertifikat ESG |
+| 6 | Gemini OCR + price advice, diversion + smart contract + sertifikat ESG |
 | 7 | Mini game, polish, bug fix, seed data demo |
 | 8 | Laporan final, pengujian, cetak halaman pengesahan *(syarat UAS)* |
 
