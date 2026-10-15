@@ -1,16 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'core/theme/app_theme.dart';
+import 'core/theme/app_colors.dart';
+import 'features/auth/screens/login_screen.dart';
 
 void main() {
-  runApp(const MainApp());
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Atur orientasi hanya potrait (mobile app)
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // Atur warna system UI (status bar biru, navigation bar putih)
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: AppColors.primary,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: AppColors.white,
+    systemNavigationBarIconBrightness: Brightness.dark,
+  ));
+
+  runApp(const RecoveraApp());
 }
 
-class MainApp extends StatelessWidget {
-  const MainApp({super.key});
+class RecoveraApp extends StatelessWidget {
+  const RecoveraApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(body: Center(child: Text('Hello World!'))),
+    return MaterialApp(
+      title: 'Recovera B2B',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      home: const LoginScreen(),
     );
   }
 }
