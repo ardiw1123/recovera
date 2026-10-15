@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/auth_widgets.dart';
+import '../../shell/main_shell.dart';
 import 'register_screen.dart';
 
 /// PBI-03 — Layar Login B2B Recovera
@@ -40,17 +41,10 @@ class _LoginScreenState extends State<LoginScreen> {
     await Future.delayed(const Duration(seconds: 1));
     setState(() => _isLoading = false);
     if (!mounted) return;
-    // TODO: Navigator ke MainShell setelah JWT tersimpan
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Login berhasil! (stub)',
-          style: GoogleFonts.inter(fontSize: 13),
-        ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+    // Navigasi ke MainShell (replace agar tidak bisa back ke login)
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const MainShell()),
     );
   }
 
