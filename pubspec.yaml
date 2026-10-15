@@ -1,5 +1,5 @@
 name: recovera
-description: "A new Flutter project."
+description: "Recovera B2B Near-Expiry Food Liquidation & Diversion Mobile App."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -10,6 +10,21 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # Networking
+  dio: ^5.7.0
+
+  # Secure Storage for JWT tokens
+  flutter_secure_storage: ^9.2.2
+
+  # State Management
+  provider: ^6.1.2
+
+  # Routing
+  go_router: ^14.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -17,3 +32,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - lib/assets/
