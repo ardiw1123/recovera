@@ -21,6 +21,7 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _namaCtrl = TextEditingController();
+  final _companyCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
 
@@ -37,6 +38,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     _namaCtrl.dispose();
+    _companyCtrl.dispose();
     _emailCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
@@ -59,11 +61,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
     setState(() => _isLoading = true);
     try {
+      final enteredName = _namaCtrl.text.trim();
+      final enteredCompany = _companyCtrl.text.trim();
+
+      final name = enteredName.isNotEmpty ? enteredName : enteredCompany;
+      final companyName = enteredCompany.isNotEmpty
+          ? enteredCompany
+          : (_selectedRole == 'seller' ? enteredName : null);
+
       await AuthRepository.instance.register(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
         role: _selectedRole,
-        name: _namaCtrl.text.trim(),
+        name: name,
+        companyName: _selectedRole == 'seller'
+            ? companyName
+            : (enteredCompany.isNotEmpty ? enteredCompany : null),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -173,15 +186,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // ── Nama Perusahaan ────────────────────────────
+                          // ── Nama Lengkap / PIC ────────────────────────
                           PillTextField(
-                            label: 'Nama Perusahaan',
-                            hint: 'Contoh: PT Pangan Nusantara',
+                            label: 'Nama Lengkap / PIC',
+                            hint: 'Contoh: Budi Santoso',
                             controller: _namaCtrl,
                             keyboardType: TextInputType.name,
                             textInputAction: TextInputAction.next,
-                            validator: (v) =>
-                                (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+                            validator: (v) {
+                              if ((v == null || v.trim().isEmpty) &&
+                                  _companyCtrl.text.trim().isEmpty) {
+                                return 'Wajib diisi';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+
+                          // ── Nama Perusahaan ────────────────────────────
+                          PillTextField(
+                            label: _selectedRole == 'seller'
+                                ? 'Nama Perusahaan (Wajib Seller)'
+                                : 'Nama Perusahaan / Usaha',
+                            hint: 'Contoh: PT Pangan Nusantara',
+                            controller: _companyCtrl,
+                            keyboardType: TextInputType.name,
+                            textInputAction: TextInputAction.next,
+                            validator: (v) {
+                              if (_selectedRole == 'seller' &&
+                                  (v == null || v.trim().isEmpty) &&
+                                  _namaCtrl.text.trim().isEmpty) {
+                                return 'Nama perusahaan wajib diisi untuk Seller';
+                              }
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 14),
 
