@@ -10,16 +10,51 @@ import 'login_screen.dart';
 /// Design: Header biru "Profil Saya" + overlapping white card
 ///         dengan avatar melayang, nama perusahaan, badge Terverifikasi,
 ///         menu list dengan ikon, dan tombol Logout.
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
-  // ── Data placeholder (akan diganti dari API / Provider) ─────────────────
-  static const _company = 'PT Maju Sejahtera';
-  static const _role = 'UMKM Kuliner';
-  static const _city = 'Depok';
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  static const _defaultCompany = 'PT Maju Sejahtera';
+  static const _defaultRole = 'UMKM Kuliner';
+  static const _defaultCity = 'Depok';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      await AuthRepository.instance.fetchProfile();
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Fallback ke kredensial/token tersimpan jika offline
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final profile = AuthRepository.instance.currentUserProfile;
+    final tokens = AuthRepository.instance.currentTokens;
+
+    final company = profile?.companyName ??
+        profile?.name ??
+        tokens?.name ??
+        _defaultCompany;
+    final role = profile?.role != null
+        ? (profile!.role == 'seller'
+            ? 'Distributor (Seller)'
+            : 'UMKM Kuliner (Buyer)')
+        : (tokens?.role == 'seller'
+            ? 'Distributor (Seller)'
+            : _defaultRole);
+    final city = profile?.city ?? _defaultCity;
+
     return Scaffold(
       backgroundColor: AppColors.canvasBg,
       body: Stack(
@@ -63,7 +98,7 @@ class ProfileScreen extends StatelessWidget {
                               children: [
                                 // ── Identitas Perusahaan ───────────────
                                 Text(
-                                  _company,
+                                  company,
                                   style: GoogleFonts.inter(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
@@ -73,7 +108,7 @@ class ProfileScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '$_role • $_city',
+                                  '$role • $city',
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
                                     color: AppColors.slateText,

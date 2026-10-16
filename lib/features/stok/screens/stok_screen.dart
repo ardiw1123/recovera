@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/listing_repository.dart';
+import '../../../data/services/listing_api_service.dart';
 import '../../home/models/product_model.dart';
 import '../../home/widgets/product_card.dart';
 import '../../home/widgets/filter_bottom_sheet.dart';
@@ -27,12 +30,60 @@ class _StokScreenState extends State<StokScreen> {
   final _searchCtrl = TextEditingController();
   final _searchFocus = FocusNode();
 
+  late final ListingRepository _listingRepository;
+  List<Listing> _loadedListings = [];
+  bool _isLoading = false;
+  bool _isFromCache = false;
+
   Set<FoodCategory> _selectedCategories = {};
   String _expiryPreset = 'all';
   String _sortKey = 'cheapest';
 
+  @override
+  void initState() {
+    super.initState();
+    final client = ApiClient();
+    _listingRepository = ListingRepository(
+      remoteClient: ListingApiService(client: client),
+    );
+    _fetchListings();
+  }
+
+  Future<void> _fetchListings({bool forceRefresh = true}) async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await _listingRepository.getListings(
+        forceRefresh: forceRefresh,
+      );
+      if (mounted) {
+        setState(() {
+          _isFromCache = result.isFromCache;
+          if (result.listings.isNotEmpty) {
+            _loadedListings = result.listings
+                .map((m) => Listing.fromCachedModel(m))
+                .toList();
+          } else {
+            _loadedListings = List<Listing>.from(dummyListings);
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          if (_loadedListings.isEmpty) {
+            _loadedListings = List<Listing>.from(dummyListings);
+          }
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   List<Listing> get _filteredProducts {
-    var list = List<Listing>.from(dummyListings);
+    var list = _loadedListings.isNotEmpty
+        ? List<Listing>.from(_loadedListings)
+        : List<Listing>.from(dummyListings);
 
     // Filter by search query (products.name, products.brand, sellers.company_name)
     final query = _searchCtrl.text.trim().toLowerCase();
@@ -131,18 +182,57 @@ class _StokScreenState extends State<StokScreen> {
           // ── Sticky header ──────────────────────────────────────────
           _buildStickyHeader(),
 
+          // ── Indikator Offline / Cache (US-05) ───────────────────────
+          if (_isFromCache) _buildCacheIndicator(),
+
           // ── Body ───────────────────────────────────────────────────
           Expanded(
-            child: products.isEmpty
-                ? Center(
-                    child: SingleChildScrollView(
-                      child: EmptyStateView(
-                        onResetFilter: _clearAllFilters,
-                        onShowAll: _clearAllFilters,
-                      ),
-                    ),
-                  )
-                : _buildProductList(products),
+            child: RefreshIndicator(
+              onRefresh: () => _fetchListings(forceRefresh: true),
+              child: _buildBody(products),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(List<Listing> products) {
+    if (_isLoading && _loadedListings.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (products.isEmpty) {
+      return Center(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: EmptyStateView(
+            onResetFilter: _clearAllFilters,
+            onShowAll: _clearAllFilters,
+          ),
+        ),
+      );
+    }
+    return _buildProductList(products);
+  }
+
+  Widget _buildCacheIndicator() {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFFEF3C7),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.cloud_off_rounded,
+              size: 14, color: Color(0xFF92400E)),
+          const SizedBox(width: 6),
+          Text(
+            'Mode Offline — Menampilkan data cache SQLite',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF92400E),
+            ),
           ),
         ],
       ),

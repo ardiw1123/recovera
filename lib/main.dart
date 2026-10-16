@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 // Impor konfigurasi UI dan rute lokal Anda
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
@@ -10,16 +8,8 @@ import 'features/auth/screens/login_screen.dart';
 import 'features/shell/main_shell.dart';
 
 Future<void> main() async {
-  // 1. Pastikan binding Flutter terinisialisasi (Wajib sebelum pemanggilan async / API native)
+  // 1. Pastikan binding Flutter terinisialisasi
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 2. Inisialisasi Supabase
-  await Supabase.initialize(
-    url: 'https://wvlaqrbsikytzflkeeqx.supabase.co',
-    publishableKey: 'sb_publishable_ah-pEYuqznIi0cnwwTd0bQ_heRP26B8',
-  );
-
-  // 3. Atur orientasi layar menjadi portrait saja
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,

@@ -25,6 +25,9 @@ class UserProfile {
   final String? city;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
+    final seller = json['seller'] as Map<String, dynamic>?;
+    final buyer = json['buyer'] as Map<String, dynamic>?;
+
     return UserProfile(
       id: json['id'] is int ? json['id'] as int : int.parse(json['id'].toString()),
       email: json['email'] as String? ?? '',
@@ -32,10 +35,10 @@ class UserProfile {
       name: json['name'] as String? ?? '',
       phone: json['phone'] as String?,
       photoUrl: json['photo_url'] as String?,
-      companyName: json['company_name'] as String?,
-      businessType: json['business_type'] as String?,
-      address: json['address'] as String?,
-      city: json['city'] as String?,
+      companyName: (seller?['company_name'] as String?) ?? json['company_name'] as String?,
+      businessType: (buyer?['business_type'] as String?) ?? json['business_type'] as String?,
+      address: (seller?['address'] as String?) ?? (buyer?['address'] as String?) ?? json['address'] as String?,
+      city: (seller?['city'] as String?) ?? json['city'] as String?,
     );
   }
 
