@@ -24,6 +24,18 @@ class AuthInterceptor extends Interceptor {
   /// bagi seluruh request yang mengalami 401, mencegah pemulihan ganda / race conditions.
   Completer<String?>? _refreshCompleter;
 
+  /// Menandai apakah peristiwa berakhirnya sesi telah dinotifikasi agar tidak
+  /// dipicu berulang kali oleh request susulan setelah kredensial dibersihkan.
+  bool _sessionTerminated = false;
+
+  void updateBaseUrl(String newBaseUrl) {
+    _refreshDio.options.baseUrl = newBaseUrl;
+  }
+
+  void resetSessionState() {
+    _sessionTerminated = false;
+  }
+
   static const String retryExtraKey = '_auth_is_retry';
   static const String noAuthExtraKey = '_no_auth';
 
@@ -43,6 +55,7 @@ class AuthInterceptor extends Interceptor {
       try {
         final newToken = await _refreshCompleter!.future;
         if (newToken != null && newToken.isNotEmpty) {
+          _sessionTerminated = false;
           options.headers['Authorization'] = 'Bearer $newToken';
           return handler.next(options);
         }
@@ -54,6 +67,7 @@ class AuthInterceptor extends Interceptor {
     // 3. Ambil access token dari penyimpanan aman dan sisipkan ke header Authorization
     final accessToken = await tokenStorage.getAccessToken();
     if (accessToken != null && accessToken.isNotEmpty) {
+      _sessionTerminated = false;
       options.headers['Authorization'] = 'Bearer $accessToken';
     }
 
@@ -88,7 +102,7 @@ class AuthInterceptor extends Interceptor {
 
     // C. Koordinasikan silent refresh dan antrean retry transparan
     try {
-      final newToken = await _performOrJoinRefresh();
+      final newToken = await _performOrJoinRefresh(requestOptions.baseUrl);
 
       if (newToken == null || newToken.isEmpty) {
         // Refresh gagal secara permanen / sesi telah berakhir
@@ -112,6 +126,11 @@ class AuthInterceptor extends Interceptor {
       final newHeaders = Map<String, dynamic>.from(requestOptions.headers);
       newHeaders['Authorization'] = 'Bearer $newToken';
 
+      dynamic retryData = requestOptions.data;
+      if (retryData is FormData) {
+        retryData = retryData.clone();
+      }
+
       final retryOptions = Options(
         method: requestOptions.method,
         headers: newHeaders,
@@ -132,7 +151,7 @@ class AuthInterceptor extends Interceptor {
 
       final retryResponse = await client.request<dynamic>(
         requestOptions.path,
-        data: requestOptions.data,
+        data: retryData,
         queryParameters: requestOptions.queryParameters,
         options: retryOptions,
       );
@@ -153,7 +172,7 @@ class AuthInterceptor extends Interceptor {
   }
 
   /// Menjalankan atau bergabung ke proses refresh token yang sedang berjalan.
-  Future<String?> _performOrJoinRefresh() async {
+  Future<String?> _performOrJoinRefresh([String? clientBaseUrl]) async {
     if (_refreshCompleter != null) {
       // Ada request lain yang sudah memulai refresh; tunggu hasilnya
       return _refreshCompleter!.future;
@@ -170,9 +189,22 @@ class AuthInterceptor extends Interceptor {
       }
 
       // Lakukan panggilan POST /auth/refresh
+      final effectiveBase = (clientBaseUrl != null && clientBaseUrl.isNotEmpty)
+          ? clientBaseUrl
+          : (_refreshDio.options.baseUrl.isNotEmpty
+              ? _refreshDio.options.baseUrl
+              : ApiConstants.baseUrl);
+
+      final cleanBase = effectiveBase.endsWith('/')
+          ? effectiveBase.substring(0, effectiveBase.length - 1)
+          : effectiveBase;
+      final cleanEndpoint = ApiConstants.refreshEndpoint.startsWith('/')
+          ? ApiConstants.refreshEndpoint
+          : '/${ApiConstants.refreshEndpoint}';
+
       final refreshUrl = ApiConstants.refreshEndpoint.startsWith('http')
           ? ApiConstants.refreshEndpoint
-          : '${ApiConstants.baseUrl}${ApiConstants.refreshEndpoint}';
+          : '$cleanBase$cleanEndpoint';
 
       final response = await _refreshDio.post<Map<String, dynamic>>(
         refreshUrl,
@@ -190,6 +222,7 @@ class AuthInterceptor extends Interceptor {
 
         // Simpan token baru termasuk rotasi refresh token
         await tokenStorage.saveTokens(newTokens);
+        _sessionTerminated = false;
 
         _refreshCompleter!.complete(newTokens.accessToken);
         return newTokens.accessToken;
@@ -226,6 +259,11 @@ class AuthInterceptor extends Interceptor {
   /// Menghapus kredensial sesi lokal dan memicu notifikasi sesi berakhir
   Future<void> _handleSessionTermination(dynamic responseData) async {
     await tokenStorage.clearTokens();
+
+    if (_sessionTerminated) {
+      return;
+    }
+    _sessionTerminated = true;
 
     String message = ApiConstants.sessionExpiredMessage;
     if (responseData is Map<String, dynamic>) {

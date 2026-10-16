@@ -31,8 +31,21 @@ class ApiClient {
       _dio.httpClientAdapter = adapter;
     }
 
+    final refreshDio = Dio(
+      BaseOptions(
+        baseUrl: _dio.options.baseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        sendTimeout: const Duration(seconds: 15),
+      ),
+    );
+    if (adapter != null) {
+      refreshDio.httpClientAdapter = adapter;
+    }
+
     _authInterceptor = AuthInterceptor(
       tokenStorage: _tokenStorage,
+      refreshDio: refreshDio,
       onSessionExpired: onSessionExpired ??
           (message) => AppNavigator.handleSessionExpired(message: message),
     );
@@ -51,6 +64,7 @@ class ApiClient {
   /// Update Base URL secara dinamis
   void updateBaseUrl(String newBaseUrl) {
     _dio.options.baseUrl = newBaseUrl;
+    _authInterceptor.updateBaseUrl(newBaseUrl);
   }
 
   // ── Helper HTTP Methods ──────────────────────────────────────────────────

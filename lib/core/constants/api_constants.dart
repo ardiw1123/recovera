@@ -3,7 +3,10 @@ class ApiConstants {
   ApiConstants._();
 
   /// Default Base URL backend Recovera (dapat dioverride via konfigurasi lingkungan)
-  static String baseUrl = 'http://127.0.0.1:8000';
+  static String baseUrl = const String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://127.0.0.1:8000',
+  );
 
   // ── Auth Endpoints ──────────────────────────────────────────────────────────
   static const String registerEndpoint = '/auth/register';
