@@ -3,15 +3,15 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../models/product_model.dart';
 
-/// Kartu produk katalog — desain sesuai mockup PBI-09
+/// Kartu satu listing produk — field sesuai skema DB.
 class ProductCard extends StatelessWidget {
-  const ProductCard({super.key, required this.product});
+  const ProductCard({super.key, required this.listing});
 
-  final Product product;
+  final Listing listing;
 
   @override
   Widget build(BuildContext context) {
-    final isUrgent = product.daysUntilExpiry <= 3;
+    final isUrgent = listing.daysUntilExpiry <= 3;
 
     return Container(
       decoration: BoxDecoration(
@@ -32,21 +32,21 @@ class ProductCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Gambar produk + badge ─────────────────────────────────
-          _ProductImage(product: product),
+          // ── Gambar / ikon produk ──────────────────────────────────
+          _ListingImage(listing: listing),
           const SizedBox(width: 12),
 
-          // ── Detail produk ────────────────────────────────────────
+          // ── Detail ───────────────────────────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Supplier + expiry badge
+                // company_name + expiry badge
                 Row(
                   children: [
                     Expanded(
                       child: Text(
-                        product.supplier.toUpperCase(),
+                        listing.companyName.toUpperCase(),
                         style: GoogleFonts.inter(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -58,16 +58,16 @@ class ProductCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     _ExpiryBadge(
-                      days: product.daysUntilExpiry,
+                      days: listing.daysUntilExpiry,
                       isUrgent: isUrgent,
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
 
-                // Nama produk
+                // products.name
                 Text(
-                  product.name,
+                  listing.productName,
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -77,9 +77,21 @@ class ProductCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+
+                // brand (jika ada)
+                if (listing.brand != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    listing.brand!,
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      color: const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 3),
 
-                // Lokasi & MOQ
+                // city + MOQ (qty + default_unit)
                 Row(
                   children: [
                     const Icon(
@@ -89,7 +101,7 @@ class ProductCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 2),
                     Text(
-                      '${product.distanceKm} km (${product.location})',
+                      listing.city,
                       style: GoogleFonts.inter(
                         fontSize: 10,
                         color: const Color(0xFF64748B),
@@ -104,35 +116,33 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      'MOQ: ${product.moq}',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: const Color(0xFF64748B),
+                    Expanded(
+                      child: Text(
+                        'Stok: ${listing.qty} ${listing.defaultUnit}',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: const Color(0xFF64748B),
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
 
-                // Divider
-                Container(
-                  height: 1,
-                  color: const Color(0xFFF1F5F9),
-                ),
+                Container(height: 1, color: const Color(0xFFF1F5F9)),
                 const SizedBox(height: 8),
 
-                // Harga + tombol tambah
+                // normal_price (coret) + start_price + tombol +
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Harga
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Rp ${_formatPrice(product.originalPrice)}',
+                          'Rp ${_fmt(listing.normalPrice)}',
                           style: GoogleFonts.inter(
                             fontSize: 10,
                             color: const Color(0xFF94A3B8),
@@ -145,7 +155,7 @@ class ProductCard extends StatelessWidget {
                           textBaseline: TextBaseline.alphabetic,
                           children: [
                             Text(
-                              'Rp ${_formatPrice(product.discountedPrice)}',
+                              'Rp ${_fmt(listing.currentPrice)}',
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
@@ -154,7 +164,7 @@ class ProductCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '/ ${product.unit}',
+                              '/ ${listing.defaultUnit}',
                               style: GoogleFonts.inter(
                                 fontSize: 10,
                                 color: const Color(0xFF64748B),
@@ -166,13 +176,13 @@ class ProductCard extends StatelessWidget {
                       ],
                     ),
 
-                    // Tombol +
+                    // Tombol tambah
                     Material(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(12),
                       child: InkWell(
                         onTap: () {
-                          // TODO: tambah ke keranjang
+                          // TODO: integrasi — buat order / masuk cart
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: const SizedBox(
@@ -196,28 +206,25 @@ class ProductCard extends StatelessWidget {
     );
   }
 
-  String _formatPrice(double price) {
-    final intPrice = price.toInt();
-    final str = intPrice.toString();
-    final buffer = StringBuffer();
+  /// Format angka menjadi "8.250" dsb.
+  String _fmt(double price) {
+    final str = price.toInt().toString();
+    final buf = StringBuffer();
     for (var i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) {
-        buffer.write('.');
-      }
-      buffer.write(str[i]);
+      if (i > 0 && (str.length - i) % 3 == 0) buf.write('.');
+      buf.write(str[i]);
     }
-    return buffer.toString();
+    return buf.toString();
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sub‑widgets
+// _ListingImage — gambar/ikon + badge diskon + Live Dutch + storage_type
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Gambar produk dengan badge diskon & Live Dutch
-class _ProductImage extends StatelessWidget {
-  const _ProductImage({required this.product});
-  final Product product;
+class _ListingImage extends StatelessWidget {
+  const _ListingImage({required this.listing});
+  final Listing listing;
 
   @override
   Widget build(BuildContext context) {
@@ -226,22 +233,18 @@ class _ProductImage extends StatelessWidget {
       height: 88,
       child: Stack(
         children: [
-          // Placeholder ikon kategori
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              color: product.category.color.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: product.category.color.withValues(alpha: 0.15),
-              ),
-            ),
-            child: Icon(
-              product.category.icon,
-              size: 36,
-              color: product.category.color.withValues(alpha: 0.6),
-            ),
+          // Gambar atau ikon fallback
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: listing.imageUrl != null
+                ? Image.network(
+                    listing.imageUrl!,
+                    width: 88,
+                    height: 88,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _iconFallback(),
+                  )
+                : _iconFallback(),
           ),
 
           // Badge diskon
@@ -249,38 +252,31 @@ class _ProductImage extends StatelessWidget {
             top: 4,
             left: 4,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: const Color(0xFFDC2626),
                 borderRadius: BorderRadius.circular(6),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 4,
-                  ),
-                ],
               ),
               child: Text(
-                '-${product.discountPercent}%',
+                '-${listing.discountPercent}%',
                 style: GoogleFonts.inter(
                   fontSize: 10,
                   fontWeight: FontWeight.w900,
-                  color: AppColors.white,
+                  color: Colors.white,
                 ),
               ),
             ),
           ),
 
-          // Badge Live Dutch
-          if (product.isLiveDutch)
+          // Badge Live Dutch Auction
+          if (listing.isLiveDutch)
             Positioned(
               bottom: 4,
               left: 4,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 2,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFF0C4A6E).withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(4),
@@ -296,9 +292,9 @@ class _ProductImage extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 3),
                     Text(
-                      'Live Dutch',
+                      'Dutch',
                       style: GoogleFonts.inter(
                         fontSize: 8,
                         fontWeight: FontWeight.w700,
@@ -310,27 +306,26 @@ class _ProductImage extends StatelessWidget {
               ),
             ),
 
-          // Badge Grade
-          if (product.grade != null)
+          // Badge storage_type (frozen / chilled)
+          if (listing.storageType != 'ambient')
             Positioned(
-              bottom: 4,
-              left: 4,
+              top: 4,
+              right: 4,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 2,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF047857),
+                  color: listing.storageType == 'frozen'
+                      ? const Color(0xFF0891B2)
+                      : const Color(0xFF0369A1),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Text(
-                  product.grade!,
-                  style: GoogleFonts.inter(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFD1FAE5),
-                  ),
+                child: Icon(
+                  listing.storageType == 'frozen'
+                      ? Icons.ac_unit_rounded
+                      : Icons.thermostat_rounded,
+                  size: 10,
+                  color: Colors.white,
                 ),
               ),
             ),
@@ -338,9 +333,31 @@ class _ProductImage extends StatelessWidget {
       ),
     );
   }
+
+  Widget _iconFallback() {
+    return Container(
+      width: 88,
+      height: 88,
+      decoration: BoxDecoration(
+        color: listing.category.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: listing.category.color.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Icon(
+        listing.category.icon,
+        size: 36,
+        color: listing.category.color.withValues(alpha: 0.6),
+      ),
+    );
+  }
 }
 
-/// Badge sisa hari kedaluwarsa
+// ─────────────────────────────────────────────────────────────────────────────
+// _ExpiryBadge — days_to_expiry badge
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _ExpiryBadge extends StatelessWidget {
   const _ExpiryBadge({required this.days, required this.isUrgent});
   final int days;
