@@ -242,7 +242,8 @@ class _ListingImage extends StatelessWidget {
                     width: 88,
                     height: 88,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _iconFallback(),
+                    errorBuilder: (context, error, stackTrace) =>
+                        _iconFallback(),
                   )
                 : _iconFallback(),
           ),

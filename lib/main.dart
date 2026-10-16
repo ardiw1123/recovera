@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // Impor konfigurasi UI dan rute lokal Anda
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
+import 'core/navigation/app_navigator.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/shell/main_shell.dart';
 
@@ -48,6 +49,8 @@ class RecoveraApp extends StatelessWidget {
       debugShowCheckedModeBanner:
           false, // Menghilangkan pita "DEBUG" di pojok kanan atas
       theme: AppTheme.light, // Menerapkan tema warna dan tipografi global
+      navigatorKey: AppNavigator.navigatorKey,
+      scaffoldMessengerKey: AppNavigator.scaffoldMessengerKey,
       // Named routes — menghindari circular import antar screen
       initialRoute: '/login',
       routes: {

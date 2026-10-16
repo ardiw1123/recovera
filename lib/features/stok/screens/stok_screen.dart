@@ -6,9 +6,6 @@ import '../../home/widgets/product_card.dart';
 import '../../home/widgets/filter_bottom_sheet.dart';
 import '../../home/widgets/empty_state_view.dart';
 
-// Alias agar kode di bawah tetap singkat
-typedef _L = Listing;
-
 /// PBI-09 — Layar Stok & Katalog
 ///
 /// Terdiri dari:
@@ -402,7 +399,7 @@ class _StokScreenState extends State<StokScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: FoodCategory.values.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 14),
+              separatorBuilder: (context, index) => const SizedBox(width: 14),
               itemBuilder: (_, i) {
                 final cat = FoodCategory.values[i];
                 final isSelected = _selectedCategories.contains(cat);
@@ -686,7 +683,7 @@ class _StokScreenState extends State<StokScreen> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       itemCount: listings.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (_, i) => ProductCard(listing: listings[i]),
     );
   }
