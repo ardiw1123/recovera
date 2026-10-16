@@ -6,6 +6,9 @@ import '../../home/widgets/product_card.dart';
 import '../../home/widgets/filter_bottom_sheet.dart';
 import '../../home/widgets/empty_state_view.dart';
 
+// Alias agar kode di bawah tetap singkat
+typedef _L = Listing;
+
 /// PBI-09 — Layar Stok & Katalog
 ///
 /// Terdiri dari:
@@ -31,16 +34,17 @@ class _StokScreenState extends State<StokScreen> {
   String _expiryPreset = 'all';
   String _sortKey = 'cheapest';
 
-  List<Product> get _filteredProducts {
-    var list = List<Product>.from(dummyProducts);
+  List<Listing> get _filteredProducts {
+    var list = List<Listing>.from(dummyListings);
 
-    // Filter by search query
+    // Filter by search query (products.name, products.brand, sellers.company_name)
     final query = _searchCtrl.text.trim().toLowerCase();
     if (query.isNotEmpty) {
       list = list
           .where((p) =>
-              p.name.toLowerCase().contains(query) ||
-              p.supplier.toLowerCase().contains(query))
+              p.productName.toLowerCase().contains(query) ||
+              (p.brand?.toLowerCase().contains(query) ?? false) ||
+              p.companyName.toLowerCase().contains(query))
           .toList();
     }
 
@@ -50,7 +54,7 @@ class _StokScreenState extends State<StokScreen> {
           list.where((p) => _selectedCategories.contains(p.category)).toList();
     }
 
-    // Filter by expiry preset
+    // Filter by expiry preset (listings.expiry_date derived → daysUntilExpiry)
     if (_expiryPreset == '1-7') {
       list = list.where((p) => p.daysUntilExpiry <= 7).toList();
     } else if (_expiryPreset == '8-14') {
@@ -59,19 +63,20 @@ class _StokScreenState extends State<StokScreen> {
       list = list.where((p) => p.daysUntilExpiry <= 30).toList();
     }
 
-    // Sort
+    // Sort (pakai field DB: start_price, expiry_date, discount_percent)
     switch (_sortKey) {
       case 'cheapest':
-        list.sort((a, b) => a.discountedPrice.compareTo(b.discountedPrice));
+        list.sort((a, b) => a.startPrice.compareTo(b.startPrice));
         break;
       case 'expiry':
-        list.sort((a, b) => a.daysUntilExpiry.compareTo(b.daysUntilExpiry));
+        list.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
         break;
       case 'discount':
         list.sort((a, b) => b.discountPercent.compareTo(a.discountPercent));
         break;
       case 'nearest':
-        list.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+        // TODO: hitung jarak dari buyer.base_lat/lng ke sellers.warehouse_lat/lng
+        list.sort((a, b) => a.city.compareTo(b.city));
         break;
     }
 
@@ -677,12 +682,12 @@ class _StokScreenState extends State<StokScreen> {
 
   // ── Product List ─────────────────────────────────────────────────────
 
-  Widget _buildProductList(List<Product> products) {
+  Widget _buildProductList(List<Listing> listings) {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-      itemCount: products.length,
+      itemCount: listings.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, i) => ProductCard(product: products[i]),
+      itemBuilder: (_, i) => ProductCard(listing: listings[i]),
     );
   }
 }

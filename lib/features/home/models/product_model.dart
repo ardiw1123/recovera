@@ -1,141 +1,364 @@
 import 'package:flutter/material.dart';
 
-/// Kategori pangan B2B
+// ─────────────────────────────────────────────────────────────────────────────
+// Enum: category field dari tabel `products`
+// Nilai string HARUS cocok dengan nilai di kolom products.category di DB.
+// ─────────────────────────────────────────────────────────────────────────────
+
 enum FoodCategory {
-  dairy('Dairy', Icons.pets, Color(0xFF0077B6)),
-  flour('Flour', Icons.grass, Color(0xFF92400E)),
-  cookingOil('Cooking Oil', Icons.water_drop, Color(0xFF0077B6)),
-  frozenFood('Frozen Food', Icons.ac_unit, Color(0xFF0891B2)),
-  canned('Canned', Icons.inventory_2, Color(0xFFEA580C)),
-  bakery('Bakery', Icons.bakery_dining, Color(0xFFD97706));
+  dairy('Dairy', Icons.local_drink_rounded, Color(0xFF0077B6)),
+  flour('Flour & Grain', Icons.grass_rounded, Color(0xFF92400E)),
+  oil('Oil', Icons.water_drop_rounded, Color(0xFFD97706)),
+  frozenFood('Frozen Food', Icons.ac_unit_rounded, Color(0xFF0891B2)),
+  canned('Canned', Icons.inventory_2_rounded, Color(0xFFEA580C)),
+  bakery('Bakery', Icons.bakery_dining_rounded, Color(0xFFD97706)),
+  beverage('Beverage', Icons.local_cafe_rounded, Color(0xFF059669));
 
   const FoodCategory(this.label, this.icon, this.color);
+
+  /// Nilai yang dikirim ke / diterima dari `products.category` di database.
   final String label;
   final IconData icon;
   final Color color;
+
+  static FoodCategory fromDb(String dbValue) {
+    return FoodCategory.values.firstWhere(
+      (e) => e.label.toLowerCase() == dbValue.toLowerCase(),
+      orElse: () => FoodCategory.canned,
+    );
+  }
 }
 
-/// Model produk katalog
-class Product {
-  final String id;
-  final String name;
-  final String supplier;
-  final FoodCategory category;
-  final double originalPrice;
-  final double discountedPrice;
-  final String unit;
-  final int discountPercent;
-  final int daysUntilExpiry;
-  final double distanceKm;
-  final String location;
-  final String moq;
-  final String? grade;
-  final bool isLiveDutch;
+// ─────────────────────────────────────────────────────────────────────────────
+// Model: gabungan tabel `listings` JOIN `products` JOIN `sellers`
+//
+// Penamaan field SENGAJA mengikuti nama kolom di database schema supaya nanti
+// pas integrasi API (fromJson) tinggal map 1-to-1 tanpa rename.
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const Product({
+class Listing {
+  // ── Dari tabel `listings` ──────────────────────────────────────────────
+  final int id;
+  final int productId;       // listings.product_id
+  final int sellerId;        // listings.seller_id
+  final String batchNumber;  // listings.batch_number
+  final int qty;             // listings.qty
+  final double normalPrice;  // listings.normal_price
+  final double startPrice;   // listings.start_price
+  final double minPrice;     // listings.min_price
+  final int dropIntervalMinutes; // listings.drop_interval_minutes
+  final double dropPercentage;   // listings.drop_percentage
+  final DateTime expiryDate;     // listings.expiry_date
+  final DateTime auctionStartAt; // listings.auction_start_at
+  final DateTime auctionEndAt;   // listings.auction_end_at
+  final String status;           // listings.status: 'active'|'sold'|'diverted'
+  final DateTime createdAt;      // listings.created_at
+
+  // ── Dari tabel `products` (via JOIN) ───────────────────────────────────
+  final String productName;    // products.name
+  final String? brand;         // products.brand
+  final FoodCategory category; // products.category
+  final String storageType;    // products.storage_type: 'ambient'|'chilled'|'frozen'
+  final String defaultUnit;    // products.default_unit
+  final String? imageUrl;      // products.image_url
+  final String? sku;           // products.sku
+
+  // ── Dari tabel `sellers` (via JOIN) ───────────────────────────────────
+  final String companyName;    // sellers.company_name
+  final double warehouseLat;   // sellers.warehouse_lat
+  final double warehouseLng;   // sellers.warehouse_lng
+  final String city;           // sellers.city
+
+  // ── Kalkulasi derived (tidak disimpan di DB, dihitung di client) ───────
+  /// Sisa hari kedaluwarsa dihitung dari today sampai expiry_date.
+  int get daysUntilExpiry {
+    final today = DateTime.now().toLocal();
+    final expiry = expiryDate.toLocal();
+    return expiry.difference(DateTime(today.year, today.month, today.day)).inDays;
+  }
+
+  /// Persen diskon dari normal_price ke start_price.
+  int get discountPercent {
+    if (normalPrice <= 0) return 0;
+    return ((normalPrice - startPrice) / normalPrice * 100).round();
+  }
+
+  /// Harga saat ini (start_price — nanti bisa dikurangi berdasarkan waktu Dutch Auction).
+  double get currentPrice => startPrice;
+
+  /// Apakah ini lelang Dutch (harga turun otomatis)?
+  bool get isLiveDutch => status == 'active' && dropIntervalMinutes > 0;
+
+  const Listing({
     required this.id,
-    required this.name,
-    required this.supplier,
+    required this.productId,
+    required this.sellerId,
+    required this.batchNumber,
+    required this.qty,
+    required this.normalPrice,
+    required this.startPrice,
+    required this.minPrice,
+    required this.dropIntervalMinutes,
+    required this.dropPercentage,
+    required this.expiryDate,
+    required this.auctionStartAt,
+    required this.auctionEndAt,
+    required this.status,
+    required this.createdAt,
+    required this.productName,
+    this.brand,
     required this.category,
-    required this.originalPrice,
-    required this.discountedPrice,
-    required this.unit,
-    required this.discountPercent,
-    required this.daysUntilExpiry,
-    required this.distanceKm,
-    required this.location,
-    required this.moq,
-    this.grade,
-    this.isLiveDutch = false,
+    required this.storageType,
+    required this.defaultUnit,
+    this.imageUrl,
+    this.sku,
+    required this.companyName,
+    required this.warehouseLat,
+    required this.warehouseLng,
+    required this.city,
   });
+
+  /// Factory constructor dari JSON API (nama key = nama kolom DB).
+  factory Listing.fromJson(Map<String, dynamic> json) {
+    return Listing(
+      // listings fields
+      id: json['id'] as int,
+      productId: json['product_id'] as int,
+      sellerId: json['seller_id'] as int,
+      batchNumber: json['batch_number'] as String,
+      qty: json['qty'] as int,
+      normalPrice: (json['normal_price'] as num).toDouble(),
+      startPrice: (json['start_price'] as num).toDouble(),
+      minPrice: (json['min_price'] as num).toDouble(),
+      dropIntervalMinutes: json['drop_interval_minutes'] as int? ?? 60,
+      dropPercentage: (json['drop_percentage'] as num?)?.toDouble() ?? 2.5,
+      expiryDate: DateTime.parse(json['expiry_date'] as String),
+      auctionStartAt: DateTime.parse(json['auction_start_at'] as String),
+      auctionEndAt: DateTime.parse(json['auction_end_at'] as String),
+      status: json['status'] as String? ?? 'active',
+      createdAt: DateTime.parse(json['created_at'] as String),
+      // products fields (joined)
+      productName: json['name'] as String,
+      brand: json['brand'] as String?,
+      category: FoodCategory.fromDb(json['category'] as String),
+      storageType: json['storage_type'] as String,
+      defaultUnit: json['default_unit'] as String,
+      imageUrl: json['image_url'] as String?,
+      sku: json['sku'] as String?,
+      // sellers fields (joined)
+      companyName: json['company_name'] as String,
+      warehouseLat: (json['warehouse_lat'] as num).toDouble(),
+      warehouseLng: (json['warehouse_lng'] as num).toDouble(),
+      city: json['city'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'product_id': productId,
+        'seller_id': sellerId,
+        'batch_number': batchNumber,
+        'qty': qty,
+        'normal_price': normalPrice,
+        'start_price': startPrice,
+        'min_price': minPrice,
+        'drop_interval_minutes': dropIntervalMinutes,
+        'drop_percentage': dropPercentage,
+        'expiry_date': expiryDate.toIso8601String(),
+        'auction_start_at': auctionStartAt.toIso8601String(),
+        'auction_end_at': auctionEndAt.toIso8601String(),
+        'status': status,
+        'created_at': createdAt.toIso8601String(),
+        'name': productName,
+        'brand': brand,
+        'category': category.label,
+        'storage_type': storageType,
+        'default_unit': defaultUnit,
+        'image_url': imageUrl,
+        'sku': sku,
+        'company_name': companyName,
+        'warehouse_lat': warehouseLat,
+        'warehouse_lng': warehouseLng,
+        'city': city,
+      };
 }
 
-/// Data dummy untuk katalog
-final List<Product> dummyProducts = [
-  const Product(
-    id: '1',
-    name: 'Susu UHT Whole Milk Freshland 1L',
-    supplier: 'PT Maju Pangan Abadi',
+// ─────────────────────────────────────────────────────────────────────────────
+// Dummy data — field name sesuai schema DB
+// ─────────────────────────────────────────────────────────────────────────────
+
+final List<Listing> dummyListings = [
+  Listing(
+    id: 1,
+    productId: 101,
+    sellerId: 1,
+    batchNumber: 'BTH-2024-001',
+    qty: 120,
+    normalPrice: 15000,
+    startPrice: 8250,
+    minPrice: 6000,
+    dropIntervalMinutes: 60,
+    dropPercentage: 2.50,
+    expiryDate: DateTime.now().add(const Duration(days: 5)),
+    auctionStartAt: DateTime.now().subtract(const Duration(hours: 2)),
+    auctionEndAt: DateTime.now().add(const Duration(days: 4)),
+    status: 'active',
+    createdAt: DateTime.now().subtract(const Duration(days: 1)),
+    productName: 'Susu UHT Whole Milk Freshland 1L',
+    brand: 'Freshland',
     category: FoodCategory.dairy,
-    originalPrice: 15000,
-    discountedPrice: 8250,
-    unit: 'box',
-    discountPercent: 45,
-    daysUntilExpiry: 5,
-    distanceKm: 1.2,
-    location: 'Cimanggis',
-    moq: '5 Box',
-    isLiveDutch: true,
+    storageType: 'chilled',
+    defaultUnit: 'box',
+    imageUrl: null,
+    sku: 'FRH-SUSU-001',
+    companyName: 'PT Maju Pangan Abadi',
+    warehouseLat: -6.3632,
+    warehouseLng: 106.8319,
+    city: 'Cimanggis',
   ),
-  const Product(
-    id: '2',
-    name: 'Minyak Goreng Kelapa Sawit Pouch 2L',
-    supplier: 'CV Berkah Nabati',
-    category: FoodCategory.cookingOil,
-    originalPrice: 38000,
-    discountedPrice: 23500,
-    unit: 'pouch',
-    discountPercent: 38,
-    daysUntilExpiry: 3,
-    distanceKm: 2.8,
-    location: 'Depok',
-    moq: '10 Pcs',
+  Listing(
+    id: 2,
+    productId: 202,
+    sellerId: 2,
+    batchNumber: 'BTH-2024-002',
+    qty: 80,
+    normalPrice: 38000,
+    startPrice: 23500,
+    minPrice: 18000,
+    dropIntervalMinutes: 90,
+    dropPercentage: 3.00,
+    expiryDate: DateTime.now().add(const Duration(days: 3)),
+    auctionStartAt: DateTime.now().subtract(const Duration(hours: 5)),
+    auctionEndAt: DateTime.now().add(const Duration(days: 2)),
+    status: 'active',
+    createdAt: DateTime.now().subtract(const Duration(days: 2)),
+    productName: 'Minyak Goreng Kelapa Sawit Pouch 2L',
+    brand: 'Sania',
+    category: FoodCategory.oil,
+    storageType: 'ambient',
+    defaultUnit: 'pouch',
+    imageUrl: null,
+    sku: 'BRK-MGS-002',
+    companyName: 'CV Berkah Nabati',
+    warehouseLat: -6.4025,
+    warehouseLng: 106.7942,
+    city: 'Depok',
   ),
-  const Product(
-    id: '3',
-    name: 'Keju Cheddar Olahan Blok Bakery 2kg',
-    supplier: 'PT Prima Dairy Food',
+  Listing(
+    id: 3,
+    productId: 303,
+    sellerId: 3,
+    batchNumber: 'BTH-2024-003',
+    qty: 30,
+    normalPrice: 160000,
+    startPrice: 79900,
+    minPrice: 65000,
+    dropIntervalMinutes: 120,
+    dropPercentage: 2.00,
+    expiryDate: DateTime.now().add(const Duration(days: 8)),
+    auctionStartAt: DateTime.now().subtract(const Duration(hours: 1)),
+    auctionEndAt: DateTime.now().add(const Duration(days: 7)),
+    status: 'active',
+    createdAt: DateTime.now().subtract(const Duration(hours: 12)),
+    productName: 'Keju Cheddar Olahan Blok Bakery 2kg',
+    brand: 'Kraft',
     category: FoodCategory.dairy,
-    originalPrice: 160000,
-    discountedPrice: 79900,
-    unit: 'blok',
-    discountPercent: 50,
-    daysUntilExpiry: 8,
-    distanceKm: 4.1,
-    location: 'Margonda',
-    moq: '2 Blok',
-    grade: 'Grade A',
+    storageType: 'chilled',
+    defaultUnit: 'blok',
+    imageUrl: null,
+    sku: 'PRD-KJC-003',
+    companyName: 'PT Prima Dairy Food',
+    warehouseLat: -6.3741,
+    warehouseLng: 106.8296,
+    city: 'Margonda',
   ),
-  const Product(
-    id: '4',
-    name: 'Tepung Terigu Protein Tinggi 25kg',
-    supplier: 'PT Bogasari Flour',
+  Listing(
+    id: 4,
+    productId: 404,
+    sellerId: 4,
+    batchNumber: 'BTH-2024-004',
+    qty: 15,
+    normalPrice: 210000,
+    startPrice: 147000,
+    minPrice: 120000,
+    dropIntervalMinutes: 60,
+    dropPercentage: 2.50,
+    expiryDate: DateTime.now().add(const Duration(days: 12)),
+    auctionStartAt: DateTime.now().subtract(const Duration(hours: 3)),
+    auctionEndAt: DateTime.now().add(const Duration(days: 11)),
+    status: 'active',
+    createdAt: DateTime.now().subtract(const Duration(days: 3)),
+    productName: 'Tepung Terigu Protein Tinggi 25kg',
+    brand: 'Cakra Kembar',
     category: FoodCategory.flour,
-    originalPrice: 210000,
-    discountedPrice: 147000,
-    unit: 'sak',
-    discountPercent: 30,
-    daysUntilExpiry: 12,
-    distanceKm: 5.6,
-    location: 'Bogor',
-    moq: '3 Sak',
+    storageType: 'ambient',
+    defaultUnit: 'sak',
+    imageUrl: null,
+    sku: 'BGS-TPG-004',
+    companyName: 'PT Bogasari Flour Mills',
+    warehouseLat: -6.5273,
+    warehouseLng: 106.8067,
+    city: 'Bogor',
   ),
-  const Product(
-    id: '5',
-    name: 'Nugget Ayam Fiesta 1kg',
-    supplier: 'PT Charoen Pokphand',
+  Listing(
+    id: 5,
+    productId: 505,
+    sellerId: 5,
+    batchNumber: 'BTH-2024-005',
+    qty: 200,
+    normalPrice: 65000,
+    startPrice: 39000,
+    minPrice: 30000,
+    dropIntervalMinutes: 45,
+    dropPercentage: 3.50,
+    expiryDate: DateTime.now().add(const Duration(days: 7)),
+    auctionStartAt: DateTime.now().subtract(const Duration(hours: 4)),
+    auctionEndAt: DateTime.now().add(const Duration(days: 6)),
+    status: 'active',
+    createdAt: DateTime.now().subtract(const Duration(hours: 8)),
+    productName: 'Nugget Ayam Fiesta 1kg',
+    brand: 'Fiesta',
     category: FoodCategory.frozenFood,
-    originalPrice: 65000,
-    discountedPrice: 39000,
-    unit: 'pack',
-    discountPercent: 40,
-    daysUntilExpiry: 7,
-    distanceKm: 3.2,
-    location: 'Cibinong',
-    moq: '5 Pack',
+    storageType: 'frozen',
+    defaultUnit: 'pack',
+    imageUrl: null,
+    sku: 'CPF-NGT-005',
+    companyName: 'PT Charoen Pokphand',
+    warehouseLat: -6.4773,
+    warehouseLng: 106.8607,
+    city: 'Cibinong',
   ),
-  const Product(
-    id: '6',
-    name: 'Sarden Kaleng ABC 425g',
-    supplier: 'PT Heinz ABC Indonesia',
+  Listing(
+    id: 6,
+    productId: 606,
+    sellerId: 6,
+    batchNumber: 'BTH-2024-006',
+    qty: 500,
+    normalPrice: 22000,
+    startPrice: 14300,
+    minPrice: 10000,
+    dropIntervalMinutes: 120,
+    dropPercentage: 2.00,
+    expiryDate: DateTime.now().add(const Duration(days: 14)),
+    auctionStartAt: DateTime.now().subtract(const Duration(hours: 6)),
+    auctionEndAt: DateTime.now().add(const Duration(days: 13)),
+    status: 'active',
+    createdAt: DateTime.now().subtract(const Duration(days: 4)),
+    productName: 'Sarden Kaleng ABC 425g',
+    brand: 'ABC',
     category: FoodCategory.canned,
-    originalPrice: 22000,
-    discountedPrice: 14300,
-    unit: 'kaleng',
-    discountPercent: 35,
-    daysUntilExpiry: 14,
-    distanceKm: 6.0,
-    location: 'Bekasi',
-    moq: '12 Kaleng',
+    storageType: 'ambient',
+    defaultUnit: 'kaleng',
+    imageUrl: null,
+    sku: 'HAB-SRD-006',
+    companyName: 'PT Heinz ABC Indonesia',
+    warehouseLat: -6.2343,
+    warehouseLng: 106.9921,
+    city: 'Bekasi',
   ),
 ];
+
+// Alias untuk backward-compat kalau ada kode lama yang masih pakai `Product`
+// HAPUS ini setelah semua file sudah dimigrasi ke `Listing`
+typedef Product = Listing;
+final List<Listing> dummyProducts = dummyListings;
