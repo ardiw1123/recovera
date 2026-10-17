@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/auth_widgets.dart';
 import 'login_screen.dart';
@@ -20,6 +21,7 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _namaCtrl = TextEditingController();
+  final _companyCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
 
@@ -36,6 +38,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     _namaCtrl.dispose();
+    _companyCtrl.dispose();
     _emailCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
@@ -57,24 +60,56 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
     setState(() => _isLoading = true);
-    // TODO: integrasi Ardi — POST /auth/register via Dio
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _isLoading = false);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Akun berhasil dibuat! (stub)',
-            style: GoogleFonts.inter(fontSize: 13)),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
+    try {
+      final enteredName = _namaCtrl.text.trim();
+      final enteredCompany = _companyCtrl.text.trim();
+
+      final name = enteredName.isNotEmpty ? enteredName : enteredCompany;
+      final companyName = enteredCompany.isNotEmpty
+          ? enteredCompany
+          : (_selectedRole == 'seller' ? enteredName : null);
+
+      await AuthRepository.instance.register(
+        email: _emailCtrl.text.trim(),
+        password: _passCtrl.text,
+        role: _selectedRole,
+        name: name,
+        companyName: _selectedRole == 'seller'
+            ? companyName
+            : (enteredCompany.isNotEmpty ? enteredCompany : null),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Akun berhasil dibuat! Silakan login.',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.white)),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+            style: GoogleFonts.inter(fontSize: 13, color: AppColors.white),
+          ),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -151,15 +186,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // ── Nama Perusahaan ────────────────────────────
+                          // ── Nama Lengkap / PIC ────────────────────────
                           PillTextField(
-                            label: 'Nama Perusahaan',
-                            hint: 'Contoh: PT Pangan Nusantara',
+                            label: 'Nama Lengkap / PIC',
+                            hint: 'Contoh: Budi Santoso',
                             controller: _namaCtrl,
                             keyboardType: TextInputType.name,
                             textInputAction: TextInputAction.next,
-                            validator: (v) =>
-                                (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+                            validator: (v) {
+                              if ((v == null || v.trim().isEmpty) &&
+                                  _companyCtrl.text.trim().isEmpty) {
+                                return 'Wajib diisi';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
+
+                          // ── Nama Perusahaan ────────────────────────────
+                          PillTextField(
+                            label: _selectedRole == 'seller'
+                                ? 'Nama Perusahaan (Wajib Seller)'
+                                : 'Nama Perusahaan / Usaha',
+                            hint: 'Contoh: PT Pangan Nusantara',
+                            controller: _companyCtrl,
+                            keyboardType: TextInputType.name,
+                            textInputAction: TextInputAction.next,
+                            validator: (v) {
+                              if (_selectedRole == 'seller' &&
+                                  (v == null || v.trim().isEmpty) &&
+                                  _namaCtrl.text.trim().isEmpty) {
+                                return 'Nama perusahaan wajib diisi untuk Seller';
+                              }
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 14),
 

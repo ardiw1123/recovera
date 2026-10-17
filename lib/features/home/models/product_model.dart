@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../data/models/cached_listing_model.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enum: category field dari tabel `products`
@@ -150,6 +151,38 @@ class Listing {
       warehouseLat: (json['warehouse_lat'] as num).toDouble(),
       warehouseLng: (json['warehouse_lng'] as num).toDouble(),
       city: json['city'] as String,
+    );
+  }
+
+  /// Factory constructor dari CachedListingModel (SQLite cache / remote API)
+  factory Listing.fromCachedModel(CachedListingModel model) {
+    return Listing(
+      id: model.id,
+      productId: model.productId,
+      sellerId: model.sellerId,
+      batchNumber: model.batchNumber,
+      qty: model.qty,
+      normalPrice: model.normalPrice,
+      startPrice: model.startPrice,
+      minPrice: model.minPrice,
+      dropIntervalMinutes: model.dropIntervalMinutes,
+      dropPercentage: model.dropPercentage,
+      expiryDate: DateTime.tryParse(model.expiryDate) ?? DateTime.now(),
+      auctionStartAt: DateTime.tryParse(model.auctionStartAt) ?? DateTime.now(),
+      auctionEndAt: DateTime.tryParse(model.auctionEndAt) ?? DateTime.now(),
+      status: model.status,
+      createdAt: DateTime.tryParse(model.createdAt) ?? DateTime.now(),
+      productName: model.productName,
+      brand: model.brand,
+      category: FoodCategory.fromDb(model.category),
+      storageType: model.storageType,
+      defaultUnit: model.defaultUnit,
+      imageUrl: model.imageUrl,
+      sku: null,
+      companyName: model.sellerCompany ?? '',
+      warehouseLat: model.warehouseLat ?? -6.2088,
+      warehouseLng: model.warehouseLng ?? 106.8456,
+      city: model.warehouseCity ?? 'Jakarta',
     );
   }
 

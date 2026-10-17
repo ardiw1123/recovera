@@ -1,30 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 // Impor konfigurasi UI dan rute lokal Anda
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
+import 'core/navigation/app_navigator.dart';
+import 'features/splash/screens/splash_screen.dart';
+import 'features/auth/screens/welcome_screen.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/register_screen.dart';
 import 'features/shell/main_shell.dart';
 
 Future<void> main() async {
-  // 1. Pastikan binding Flutter terinisialisasi (Wajib sebelum pemanggilan async / API native)
+  // 1. Pastikan binding Flutter terinisialisasi
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 2. Inisialisasi Supabase
-  await Supabase.initialize(
-    url: 'https://wvlaqrbsikytzflkeeqx.supabase.co',
-    publishableKey: 'sb_publishable_ah-pEYuqznIi0cnwwTd0bQ_heRP26B8',
-  );
-
-  // 3. Atur orientasi layar menjadi portrait saja
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // 4. Atur warna System UI (Status bar biru, Navigation bar bawah putih)
+  // 4. Atur warna System UI (Status bar transparan/biru, Navigation bar bawah putih)
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: AppColors.primary,
@@ -39,7 +33,12 @@ Future<void> main() async {
 }
 
 class RecoveraApp extends StatelessWidget {
-  const RecoveraApp({super.key});
+  const RecoveraApp({
+    super.key,
+    this.initialRoute = '/splash',
+  });
+
+  final String initialRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -48,10 +47,15 @@ class RecoveraApp extends StatelessWidget {
       debugShowCheckedModeBanner:
           false, // Menghilangkan pita "DEBUG" di pojok kanan atas
       theme: AppTheme.light, // Menerapkan tema warna dan tipografi global
-      // Named routes — menghindari circular import antar screen
-      initialRoute: '/login',
+      navigatorKey: AppNavigator.navigatorKey,
+      scaffoldMessengerKey: AppNavigator.scaffoldMessengerKey,
+      // Named routes — alur navigasi aplikasi
+      initialRoute: initialRoute,
       routes: {
+        '/splash': (_) => const SplashScreen(),
+        '/welcome': (_) => const WelcomeScreen(),
         '/login': (_) => const LoginScreen(),
+        '/register': (_) => const RegisterScreen(),
         '/home': (_) => const MainShell(),
       },
     );
