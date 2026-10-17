@@ -50,3 +50,5 @@ app.*.map.json
 *.db
 
 /graphify-out
+
+/attachments
