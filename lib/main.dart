@@ -4,7 +4,10 @@ import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
 import 'core/navigation/app_navigator.dart';
+import 'features/splash/screens/splash_screen.dart';
+import 'features/auth/screens/welcome_screen.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/register_screen.dart';
 import 'features/shell/main_shell.dart';
 
 Future<void> main() async {
@@ -15,7 +18,7 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // 4. Atur warna System UI (Status bar biru, Navigation bar bawah putih)
+  // 4. Atur warna System UI (Status bar transparan/biru, Navigation bar bawah putih)
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: AppColors.primary,
@@ -30,7 +33,12 @@ Future<void> main() async {
 }
 
 class RecoveraApp extends StatelessWidget {
-  const RecoveraApp({super.key});
+  const RecoveraApp({
+    super.key,
+    this.initialRoute = '/splash',
+  });
+
+  final String initialRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -41,10 +49,13 @@ class RecoveraApp extends StatelessWidget {
       theme: AppTheme.light, // Menerapkan tema warna dan tipografi global
       navigatorKey: AppNavigator.navigatorKey,
       scaffoldMessengerKey: AppNavigator.scaffoldMessengerKey,
-      // Named routes — menghindari circular import antar screen
-      initialRoute: '/login',
+      // Named routes — alur navigasi aplikasi
+      initialRoute: initialRoute,
       routes: {
+        '/splash': (_) => const SplashScreen(),
+        '/welcome': (_) => const WelcomeScreen(),
         '/login': (_) => const LoginScreen(),
+        '/register': (_) => const RegisterScreen(),
         '/home': (_) => const MainShell(),
       },
     );
