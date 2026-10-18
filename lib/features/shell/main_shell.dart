@@ -35,7 +35,7 @@ class _MainShellState extends State<MainShell> {
 
         // Daftar halaman adaptif berdasarkan role
         final pages = <Widget>[
-          const HomeScreen(),
+          isSeller ? const SellerInventoryScreen() : const HomeScreen(),
           isSeller ? const SellerInventoryScreen() : const StokScreen(),
           const ProfileScreen(),
           const SaranKesanScreen(),
