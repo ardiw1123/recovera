@@ -100,6 +100,20 @@ class AppNavigator {
     return true;
   }
 
+  /// Memverifikasi hak akses pengguna untuk fitur pembeli (Buyer-only safeguard).
+  /// Menolak akun seller dengan notifikasi visual SnackBar dan mengembalikan false.
+  static bool verifyBuyerAccess({
+    String message =
+        'Akses ditolak: Akun penjual tidak memiliki izin untuk mengakses fitur pembeli.',
+  }) {
+    // Cek role via AuthRepository
+    if (AuthRepository.instance.isSeller) {
+      showAccessDeniedSnackBar(message);
+      return false;
+    }
+    return true;
+  }
+
   /// Menampilkan SnackBar peringatan akses ditolak untuk akun yang tidak berwenang
   static void showAccessDeniedSnackBar(String message) {
     final messenger = scaffoldMessengerKey.currentState;

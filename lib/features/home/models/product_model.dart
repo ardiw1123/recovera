@@ -70,6 +70,12 @@ class Listing {
   final double warehouseLng;   // sellers.warehouse_lng
   final String city;           // sellers.city
 
+  // ── Proximity Recommendation Metrics (dari backend / listings discovery) ─
+  final double? distanceKm;
+  final double? matchScore;
+  final double? discountPct;
+  final int? daysToExpiry;
+
   // ── Kalkulasi derived (tidak disimpan di DB, dihitung di client) ───────
   /// Sisa hari kedaluwarsa dihitung dari today sampai expiry_date.
   int get daysUntilExpiry {
@@ -78,10 +84,40 @@ class Listing {
     return expiry.difference(DateTime(today.year, today.month, today.day)).inDays;
   }
 
+  /// Sisa hari yang efektif (mengutamakan backend days_to_expiry bila ada).
+  int get effectiveDaysToExpiry => daysToExpiry ?? daysUntilExpiry;
+
   /// Persen diskon dari normal_price ke start_price.
   int get discountPercent {
     if (normalPrice <= 0) return 0;
     return ((normalPrice - startPrice) / normalPrice * 100).round();
+  }
+
+  /// Persen diskon efektif (mengutamakan backend discount_pct bila ada).
+  int get effectiveDiscountPercent {
+    if (discountPct != null) {
+      return discountPct!.round();
+    }
+    return discountPercent;
+  }
+
+  /// Skor kecocokan kedekatan (proximity match score) 0.0 - 1.0.
+  double get effectiveMatchScore => matchScore ?? 0.0;
+
+  /// Label persentase kecocokan rekomendasi (contoh: '95% Match').
+  String get matchScorePercentage {
+    if (matchScore != null) {
+      return '${(matchScore! * 100).round()}% Match';
+    }
+    return 'Match';
+  }
+
+  /// Format teks jarak gudang (contoh: '2.4 km').
+  String get distanceText {
+    if (distanceKm != null) {
+      return '${distanceKm!.toStringAsFixed(1)} km';
+    }
+    return city;
   }
 
   /// Harga saat ini (start_price — nanti bisa dikurangi berdasarkan waktu Dutch Auction).
@@ -117,40 +153,49 @@ class Listing {
     required this.warehouseLat,
     required this.warehouseLng,
     required this.city,
+    this.distanceKm,
+    this.matchScore,
+    this.discountPct,
+    this.daysToExpiry,
   });
 
-  /// Factory constructor dari JSON API (nama key = nama kolom DB).
+  /// Factory constructor dari JSON API (nama key = nama kolom DB / ListingResponse).
   factory Listing.fromJson(Map<String, dynamic> json) {
+    final product = json['product'] as Map<String, dynamic>?;
     return Listing(
       // listings fields
       id: json['id'] as int,
-      productId: json['product_id'] as int,
-      sellerId: json['seller_id'] as int,
-      batchNumber: json['batch_number'] as String,
-      qty: json['qty'] as int,
-      normalPrice: (json['normal_price'] as num).toDouble(),
-      startPrice: (json['start_price'] as num).toDouble(),
-      minPrice: (json['min_price'] as num).toDouble(),
+      productId: json['product_id'] as int? ?? 1,
+      sellerId: json['seller_id'] as int? ?? 1,
+      batchNumber: json['batch_number'] as String? ?? '',
+      qty: json['qty'] as int? ?? 0,
+      normalPrice: (json['normal_price'] as num?)?.toDouble() ?? 0.0,
+      startPrice: (json['start_price'] as num?)?.toDouble() ?? (json['current_price'] as num?)?.toDouble() ?? 0.0,
+      minPrice: (json['min_price'] as num?)?.toDouble() ?? 0.0,
       dropIntervalMinutes: json['drop_interval_minutes'] as int? ?? 60,
       dropPercentage: (json['drop_percentage'] as num?)?.toDouble() ?? 2.5,
-      expiryDate: DateTime.parse(json['expiry_date'] as String),
-      auctionStartAt: DateTime.parse(json['auction_start_at'] as String),
-      auctionEndAt: DateTime.parse(json['auction_end_at'] as String),
+      expiryDate: DateTime.tryParse(json['expiry_date'] as String? ?? '') ?? DateTime.now(),
+      auctionStartAt: DateTime.tryParse(json['auction_start_at'] as String? ?? '') ?? DateTime.now(),
+      auctionEndAt: DateTime.tryParse(json['auction_end_at'] as String? ?? '') ?? DateTime.now(),
       status: json['status'] as String? ?? 'active',
-      createdAt: DateTime.parse(json['created_at'] as String),
-      // products fields (joined)
-      productName: json['name'] as String,
-      brand: json['brand'] as String?,
-      category: FoodCategory.fromDb(json['category'] as String),
-      storageType: json['storage_type'] as String,
-      defaultUnit: json['default_unit'] as String,
-      imageUrl: json['image_url'] as String?,
-      sku: json['sku'] as String?,
-      // sellers fields (joined)
-      companyName: json['company_name'] as String,
-      warehouseLat: (json['warehouse_lat'] as num).toDouble(),
-      warehouseLng: (json['warehouse_lng'] as num).toDouble(),
-      city: json['city'] as String,
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      // products fields (joined or nested)
+      productName: (product?['name'] as String?) ?? json['name'] as String? ?? json['product_name'] as String? ?? 'Produk',
+      brand: (product?['brand'] as String?) ?? json['brand'] as String?,
+      category: FoodCategory.fromDb((product?['category'] as String?) ?? json['category'] as String? ?? 'General'),
+      storageType: (product?['storage_type'] as String?) ?? json['storage_type'] as String? ?? 'ambient',
+      defaultUnit: (product?['default_unit'] as String?) ?? json['default_unit'] as String? ?? 'pcs',
+      imageUrl: (product?['image_url'] as String?) ?? json['image_url'] as String?,
+      sku: (product?['sku'] as String?) ?? json['sku'] as String?,
+      // sellers fields (joined or nested)
+      companyName: json['seller_company'] as String? ?? json['company_name'] as String? ?? 'Distributor',
+      warehouseLat: (json['warehouse_lat'] as num?)?.toDouble() ?? -6.2088,
+      warehouseLng: (json['warehouse_lng'] as num?)?.toDouble() ?? 106.8456,
+      city: json['warehouse_city'] as String? ?? json['city'] as String? ?? 'Jakarta',
+      distanceKm: (json['distance_km'] as num?)?.toDouble(),
+      matchScore: (json['match_score'] as num?)?.toDouble(),
+      discountPct: (json['discount_pct'] as num?)?.toDouble(),
+      daysToExpiry: (json['days_to_expiry'] as num?)?.toInt(),
     );
   }
 
@@ -183,6 +228,10 @@ class Listing {
       warehouseLat: model.warehouseLat ?? -6.2088,
       warehouseLng: model.warehouseLng ?? 106.8456,
       city: model.warehouseCity ?? 'Jakarta',
+      distanceKm: model.distanceKm,
+      matchScore: model.matchScore,
+      discountPct: model.discountPct,
+      daysToExpiry: model.daysToExpiry,
     );
   }
 
@@ -213,6 +262,10 @@ class Listing {
         'warehouse_lat': warehouseLat,
         'warehouse_lng': warehouseLng,
         'city': city,
+        'distance_km': distanceKm,
+        'match_score': matchScore,
+        'discount_pct': discountPct,
+        'days_to_expiry': daysToExpiry,
       };
 }
 

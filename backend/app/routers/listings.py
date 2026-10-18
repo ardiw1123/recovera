@@ -210,7 +210,9 @@ async def publish_seller_inventory_listing(
     return wrap_success(_format_listing_response(listing, *calculate_current_dutch_price(listing)))
 
 
-def _format_listing_response(item: Listing, cur_price: float, next_drop: str | None, distance: float | None = None) -> dict:
+def _format_listing_response(item: Listing, cur_price: float, next_drop: str | None, distance: float | None = None,
+                              match_score: float | None = None, discount_pct: float | None = None,
+                              days_to_expiry: int | None = None) -> dict:
     prod_data = ProductResponse.model_validate(item.product, from_attributes=True).model_dump() if item.product else None
     seller_data = item.seller
 
@@ -239,6 +241,9 @@ def _format_listing_response(item: Listing, cur_price: float, next_drop: str | N
         warehouse_lng=seller_data.warehouse_lng if seller_data else None,
         warehouse_city=seller_data.city if seller_data else None,
         distance_km=distance,
+        match_score=match_score,
+        discount_pct=discount_pct,
+        days_to_expiry=days_to_expiry,
     ).model_dump()
 
 
@@ -280,6 +285,9 @@ async def list_listings(
             r["current_price"],
             r["next_drop_at"],
             r["distance_km"],
+            match_score=r.get("match_score"),
+            discount_pct=r.get("discount_pct"),
+            days_to_expiry=r.get("days_to_expiry"),
         )
         for r in results
     ]
@@ -415,7 +423,13 @@ async def get_listing_detail(
         )
 
     cur_price, next_drop = calculate_current_dutch_price(listing)
-    return wrap_success(_format_listing_response(listing, cur_price, next_drop))
+    days_left = (listing.expiry_date - date.today()).days
+    return wrap_success(_format_listing_response(
+        listing, cur_price, next_drop,
+        match_score=None,
+        discount_pct=None,
+        days_to_expiry=days_left,
+    ))
 
 
 @router.patch(

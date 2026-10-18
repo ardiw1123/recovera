@@ -2,206 +2,274 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../models/product_model.dart';
+import '../screens/product_detail_screen.dart';
 
-/// Kartu satu listing produk — field sesuai skema DB.
+/// Kartu satu listing produk dengan metrik rekomendasi proximity — field sesuai skema DB.
 class ProductCard extends StatelessWidget {
-  const ProductCard({super.key, required this.listing});
+  const ProductCard({
+    super.key,
+    required this.listing,
+    this.onTap,
+  });
 
   final Listing listing;
+  final VoidCallback? onTap;
+
+  void _handleTap(BuildContext context) {
+    if (onTap != null) {
+      onTap!();
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ProductDetailScreen(listing: listing),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isUrgent = listing.daysUntilExpiry <= 3;
+    final isUrgent = listing.effectiveDaysToExpiry <= 3;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0).withValues(alpha: 0.8),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return GestureDetector(
+      key: Key('product_card_${listing.id}'),
+      onTap: () => _handleTap(context),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFE2E8F0).withValues(alpha: 0.8),
           ),
-        ],
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Gambar / ikon produk ──────────────────────────────────
-          _ListingImage(listing: listing),
-          const SizedBox(width: 12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Gambar / ikon produk ──────────────────────────────────
+            _ListingImage(listing: listing),
+            const SizedBox(width: 12),
 
-          // ── Detail ───────────────────────────────────────────────
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // company_name + expiry badge
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        listing.companyName.toUpperCase(),
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF94A3B8),
-                          letterSpacing: 0.5,
+            // ── Detail ───────────────────────────────────────────────
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // company_name + expiry badge
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          listing.companyName.toUpperCase(),
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF94A3B8),
+                            letterSpacing: 0.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    _ExpiryBadge(
-                      days: listing.daysUntilExpiry,
-                      isUrgent: isUrgent,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-
-                // products.name
-                Text(
-                  listing.productName,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
-                    height: 1.3,
+                      const SizedBox(width: 4),
+                      _ExpiryBadge(
+                        days: listing.effectiveDaysToExpiry,
+                        isUrgent: isUrgent,
+                      ),
+                    ],
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                  const SizedBox(height: 4),
 
-                // brand (jika ada)
-                if (listing.brand != null) ...[
-                  const SizedBox(height: 1),
+                  // products.name
                   Text(
-                    listing.brand!,
+                    listing.productName,
                     style: GoogleFonts.inter(
-                      fontSize: 10,
-                      color: const Color(0xFF94A3B8),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF0F172A),
+                      height: 1.3,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ],
-                const SizedBox(height: 3),
 
-                // city + MOQ (qty + default_unit)
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on,
-                      size: 11,
-                      color: Color(0xFF94A3B8),
-                    ),
-                    const SizedBox(width: 2),
+                  // brand (jika ada)
+                  if (listing.brand != null) ...[
+                    const SizedBox(height: 1),
                     Text(
-                      listing.city,
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '•',
+                      listing.brand!,
                       style: GoogleFonts.inter(
                         fontSize: 10,
                         color: const Color(0xFF94A3B8),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Stok: ${listing.qty} ${listing.defaultUnit}',
+                  ],
+                  const SizedBox(height: 3),
+
+                  // Proximity match score badge (jika ada)
+                  if (listing.matchScore != null) ...[
+                    Container(
+                      key: Key('match_score_badge_${listing.id}'),
+                      margin: const EdgeInsets.only(bottom: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFA7F3D0)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.radar_rounded, size: 9, color: Color(0xFF059669)),
+                          const SizedBox(width: 3),
+                          Text(
+                            listing.matchScorePercentage,
+                            style: GoogleFonts.inter(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF047857),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // Proximity distance + city + MOQ (qty + default_unit)
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.near_me_outlined,
+                        size: 11,
+                        color: Color(0xFF0284C7),
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        listing.distanceText,
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF0284C7),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '•',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: const Color(0xFF94A3B8),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        listing.city,
                         style: GoogleFonts.inter(
                           fontSize: 10,
                           color: const Color(0xFF64748B),
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                Container(height: 1, color: const Color(0xFFF1F5F9)),
-                const SizedBox(height: 8),
-
-                // normal_price (coret) + start_price + tombol +
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Rp ${_fmt(listing.normalPrice)}',
+                      const SizedBox(width: 4),
+                      Text(
+                        '•',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: const Color(0xFF94A3B8),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          'Stok: ${listing.qty} ${listing.defaultUnit}',
                           style: GoogleFonts.inter(
                             fontSize: 10,
-                            color: const Color(0xFF94A3B8),
-                            decoration: TextDecoration.lineThrough,
+                            color: const Color(0xFF64748B),
                           ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 1),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              'Rp ${_fmt(listing.currentPrice)}',
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '/ ${listing.defaultUnit}',
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                color: const Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
 
-                    // Tombol tambah
-                    Material(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        onTap: () {
-                          // TODO: integrasi — buat order / masuk cart
-                        },
+                  Container(height: 1, color: const Color(0xFFF1F5F9)),
+                  const SizedBox(height: 8),
+
+                  // normal_price (coret) + start_price + tombol Beli
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Rp ${_fmt(listing.normalPrice)}',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: const Color(0xFF94A3B8),
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                'Rp ${_fmt(listing.currentPrice)}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '/ ${listing.defaultUnit}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  color: const Color(0xFF64748B),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+
+                      // Tombol Lihat Detail / Beli
+                      Material(
+                        color: AppColors.primary,
                         borderRadius: BorderRadius.circular(12),
-                        child: const SizedBox(
-                          width: 32,
-                          height: 32,
-                          child: Icon(
-                            Icons.add,
-                            color: AppColors.white,
-                            size: 16,
+                        child: InkWell(
+                          key: Key('btn_open_detail_${listing.id}'),
+                          onTap: () => _handleTap(context),
+                          borderRadius: BorderRadius.circular(12),
+                          child: const SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: Icon(
+                              Icons.arrow_forward_rounded,
+                              color: AppColors.white,
+                              size: 16,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -253,6 +321,7 @@ class _ListingImage extends StatelessWidget {
             top: 4,
             left: 4,
             child: Container(
+              key: Key('discount_badge_${listing.id}'),
               padding:
                   const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
@@ -260,7 +329,7 @@ class _ListingImage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                '-${listing.discountPercent}%',
+                '-${listing.effectiveDiscountPercent}%',
                 style: GoogleFonts.inter(
                   fontSize: 10,
                   fontWeight: FontWeight.w900,

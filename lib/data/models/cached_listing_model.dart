@@ -32,6 +32,9 @@ class CachedListingModel {
   final double? warehouseLng;
   final String? warehouseCity;
   final double? distanceKm;
+  final double? matchScore;
+  final double? discountPct;
+  final int? daysToExpiry;
   final String cachedAt;
 
   const CachedListingModel({
@@ -62,6 +65,9 @@ class CachedListingModel {
     this.warehouseLng,
     this.warehouseCity,
     this.distanceKm,
+    this.matchScore,
+    this.discountPct,
+    this.daysToExpiry,
     required this.cachedAt,
   });
 
@@ -162,6 +168,9 @@ class CachedListingModel {
       warehouseLng: (json['warehouse_lng'] as num?)?.toDouble(),
       warehouseCity: json['warehouse_city'] as String?,
       distanceKm: (json['distance_km'] as num?)?.toDouble(),
+      matchScore: (json['match_score'] as num?)?.toDouble(),
+      discountPct: (json['discount_pct'] as num?)?.toDouble(),
+      daysToExpiry: (json['days_to_expiry'] as num?)?.toInt(),
       cachedAt: DateTime.now().toIso8601String(),
     );
   }
@@ -194,6 +203,9 @@ class CachedListingModel {
     double? warehouseLng,
     String? warehouseCity,
     double? distanceKm,
+    double? matchScore,
+    double? discountPct,
+    int? daysToExpiry,
     String? cachedAt,
   }) {
     return CachedListingModel(
@@ -224,6 +236,9 @@ class CachedListingModel {
       warehouseLng: warehouseLng ?? this.warehouseLng,
       warehouseCity: warehouseCity ?? this.warehouseCity,
       distanceKm: distanceKm ?? this.distanceKm,
+      matchScore: matchScore ?? this.matchScore,
+      discountPct: discountPct ?? this.discountPct,
+      daysToExpiry: daysToExpiry ?? this.daysToExpiry,
       cachedAt: cachedAt ?? this.cachedAt,
     );
   }
