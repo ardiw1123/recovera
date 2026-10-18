@@ -12,13 +12,9 @@ import 'package:recovera/data/repositories/auth_repository.dart';
 import 'package:recovera/data/repositories/listing_repository.dart';
 import 'package:recovera/data/repositories/order_repository.dart';
 import 'package:recovera/data/services/auth_api_service.dart';
-import 'package:recovera/data/services/listing_api_service.dart';
-import 'package:recovera/data/services/order_api_service.dart';
-import 'package:recovera/features/auth/models/user_profile.dart';
 import 'package:recovera/features/home/models/product_model.dart';
 import 'package:recovera/features/home/screens/home_screen.dart';
 import 'package:recovera/features/home/screens/product_detail_screen.dart';
-import 'package:recovera/features/home/widgets/product_card.dart';
 
 class TestMockAdapter implements HttpClientAdapter {
   TestMockAdapter(this.handler);

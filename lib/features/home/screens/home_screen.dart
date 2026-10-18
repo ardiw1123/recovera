@@ -56,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  /// Mengambil daftar listing terdekat dari backend Supabase via FastAPI.
+  /// Mengambil daftar listing terdekat dari backend REST API via FastAPI.
   /// Bila gagal atau offline, ListingRepository otomatis fallback ke SQLite cache.
   Future<void> _fetchListings({bool forceRefresh = true}) async {
     setState(() {
