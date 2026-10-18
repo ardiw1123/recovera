@@ -37,6 +37,9 @@ class ListingResponse(BaseModel):
     warehouse_lng: float | None = None
     warehouse_city: str | None = None
     distance_km: float | None = None
+    match_score: float | None = None
+    discount_pct: float | None = None
+    days_to_expiry: int | None = None
 
 
 class ListingDetailResponse(ListingResponse):
