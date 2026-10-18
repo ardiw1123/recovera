@@ -70,6 +70,7 @@ def test_auth_and_profile_flow(client):
     assert refresh_res.status_code == 200
     assert refresh_res.json()["success"] is True
     new_token = refresh_res.json()["data"]["access_token"]
+    seller_refresh = refresh_res.json()["data"]["refresh_token"]
 
     # 5. Get and Update Profile
     headers = {"Authorization": f"Bearer {new_token}"}
@@ -84,7 +85,9 @@ def test_auth_and_profile_flow(client):
     assert patch_res.json()["data"]["name"] == "Budi Santoso"
 
     # 6. Logout
-    logout_res = client.post("/auth/logout", headers=headers)
+    logout_res = client.post(
+        "/auth/logout", headers=headers, json={"refresh_token": seller_refresh},
+    )
     assert logout_res.status_code == 200
     assert logout_res.json()["success"] is True
 
@@ -242,6 +245,62 @@ def test_ai_endpoints(client):
     assert advice_data["discount_pct"] == 50.0
     assert advice_data["suggested_price"] == 100000.0
     assert "rationale" in advice_data
+
+
+def test_seller_inventory_draft_review_and_publish(client):
+    seller_res = client.post("/auth/register", json={
+        "email": "inventory-seller@recovera.id", "password": "Password123!",
+        "role": "seller", "name": "Inventory Seller", "company_name": "Fresh Stock",
+    })
+    seller_headers = {"Authorization": f"Bearer {seller_res.json()['data']['access_token']}"}
+    buyer_res = client.post("/auth/register", json={
+        "email": "inventory-buyer@recovera.id", "password": "Password123!",
+        "role": "buyer", "name": "Inventory Buyer",
+    })
+    buyer_headers = {"Authorization": f"Bearer {buyer_res.json()['data']['access_token']}"}
+    payload = {
+        "sku": "INV-TEST-001", "name": "Fresh Milk", "category": "Dairy",
+        "storage_type": "chilled", "default_unit": "carton",
+        "image_url": "https://images.example.test/fresh-milk.jpg",
+        "batch_number": "MILK-LOT-01", "qty": 12, "normal_price": 100000,
+        "min_price": 10000, "expiry_date": (date.today() + timedelta(days=40)).isoformat(),
+    }
+
+    denied = client.post("/listings/seller/inventory/drafts", json=payload, headers=buyer_headers)
+    assert denied.status_code == 403
+
+    created = client.post("/listings/seller/inventory/drafts", json=payload, headers=seller_headers)
+    assert created.status_code == 201
+    draft = created.json()["data"]
+    listing_id = draft["listing"]["id"]
+    assert draft["validation"]["valid"] is True
+    assert draft["listing"]["product"]["name"] == "Fresh Milk"
+    assert draft["listing"]["product"]["image_url"] == payload["image_url"]
+
+    inventory = client.get("/listings/seller/inventory", headers=seller_headers)
+    assert inventory.status_code == 200
+    assert inventory.json()["data"][0]["status"] == "draft"
+
+    recommendation = client.post(
+        f"/listings/seller/inventory/{listing_id}/recommendation", headers=seller_headers,
+    )
+    assert recommendation.status_code == 200
+    # Move the start price outside the advice range and require acknowledgement on publish.
+    edit = client.patch(
+        f"/listings/seller/inventory/{listing_id}",
+        json={"start_price": 90000}, headers=seller_headers,
+    )
+    assert edit.status_code == 200
+    warned = client.post(
+        f"/listings/seller/inventory/{listing_id}/publish", json={}, headers=seller_headers,
+    )
+    assert warned.status_code == 409
+    published = client.post(
+        f"/listings/seller/inventory/{listing_id}/publish",
+        json={"acknowledge_price_warning": True}, headers=seller_headers,
+    )
+    assert published.status_code == 200
+    assert published.json()["data"]["status"] == "active"
 
 
 def test_auxiliary_endpoints(client, db_session):

@@ -14,9 +14,13 @@ from app.schemas.listing import (
     ListingDetailResponse,
     ListingResponse,
     ListingUpdate,
+    SellerInventoryDraftCreate,
+    SellerInventoryDraftUpdate,
+    SellerPublishRequest,
 )
 from app.schemas.order import OrderResponse
 from app.schemas.product import ProductResponse
+from app.services.ai_service import calculate_price_advice
 from app.services.listing_service import (
     calculate_current_dutch_price,
     format_multi_timezone,
@@ -26,6 +30,184 @@ from app.services.listing_service import (
 from app.services.order_service import execute_buy_now
 
 router = APIRouter(prefix="/listings", tags=["listings"])
+
+
+def _owned_listing(db, user_id: int, listing_id: int) -> tuple[Seller, Listing]:
+    seller = db.query(Seller).filter(Seller.user_id == user_id).first()
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not listing:
+        raise AppException("LISTING_NOT_FOUND", "Listing not found", status.HTTP_404_NOT_FOUND)
+    if not seller or listing.seller_id != seller.id:
+        raise AppException("FORBIDDEN", "You are not authorized to access this listing", status.HTTP_403_FORBIDDEN)
+    return seller, listing
+
+
+def _validate_inventory_listing(listing: Listing) -> list[str]:
+    errors = []
+    product = listing.product
+    if not product or not product.name.strip() or not product.category.strip():
+        errors.append("Product name and category are required")
+    if not product or not product.image_url:
+        errors.append("A product image URL is required")
+    if listing.qty <= 0:
+        errors.append("Quantity must be greater than zero")
+    if listing.expiry_date <= date.today():
+        errors.append("Expiry date must be in the future")
+    if listing.min_price > listing.start_price or listing.start_price > listing.normal_price:
+        errors.append("Prices must satisfy minimum price <= starting price <= normal price")
+    return errors
+
+
+@router.get("/seller/inventory", response_model=ResponseEnvelope[list[ListingResponse]])
+async def get_seller_inventory(db: DbSessionDep, seller_user: RequireSellerDep) -> dict:
+    seller = db.query(Seller).filter(Seller.user_id == seller_user.id).first()
+    if not seller:
+        return wrap_success([])
+    items = db.query(Listing).filter(Listing.seller_id == seller.id).order_by(Listing.created_at.desc()).all()
+    return wrap_success([
+        _format_listing_response(item, *calculate_current_dutch_price(item)) for item in items
+    ])
+
+
+@router.post("/seller/inventory/drafts", status_code=status.HTTP_201_CREATED)
+async def create_seller_inventory_draft(
+    db: DbSessionDep,
+    seller_user: RequireSellerDep,
+    payload: Annotated[SellerInventoryDraftCreate, Body()],
+) -> dict:
+    seller = db.query(Seller).filter(Seller.user_id == seller_user.id).first()
+    if not seller:
+        raise AppException("SELLER_NOT_FOUND", "Seller profile is not configured", status.HTTP_400_BAD_REQUEST)
+    if payload.expiry_date <= date.today():
+        raise AppException("INVALID_EXPIRY_DATE", "Expiry date must be in the future", status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    product = db.query(Product).filter(Product.sku == payload.sku).first()
+    if product is None:
+        product = Product(
+            sku=payload.sku, barcode=payload.barcode, name=payload.name.strip(),
+            brand=payload.brand, category=payload.category.strip(),
+            storage_type=payload.storage_type, default_unit=payload.default_unit,
+            image_url=str(payload.image_url),
+        )
+        db.add(product)
+        db.flush()
+    elif not product.image_url:
+        product.image_url = str(payload.image_url)
+
+    suggested = calculate_price_advice(
+        normal_price=payload.normal_price,
+        expiry_date_str=payload.expiry_date.isoformat(),
+        category=payload.category,
+        qty=payload.qty,
+    )
+    now = datetime.now(timezone.utc)
+    listing = Listing(
+        product_id=product.id, seller_id=seller.id, batch_number=payload.batch_number,
+        qty=payload.qty, normal_price=payload.normal_price,
+        start_price=suggested.suggested_price, min_price=payload.min_price,
+        drop_interval_minutes=60, drop_percentage=2.5,
+        expiry_date=payload.expiry_date, auction_start_at=now,
+        auction_end_at=datetime.combine(payload.expiry_date, datetime.min.time(), tzinfo=timezone.utc),
+        status="draft",
+    )
+    if listing.min_price > listing.start_price:
+        raise AppException("INVALID_MIN_PRICE", "Minimum price cannot exceed the recommended starting price", status.HTTP_422_UNPROCESSABLE_ENTITY)
+    db.add(listing)
+    db.commit()
+    db.refresh(listing)
+    errors = _validate_inventory_listing(listing)
+    return wrap_success({
+        "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
+        "validation": {"valid": not errors, "errors": errors},
+        "price_recommendation": suggested.model_dump(),
+    })
+
+
+@router.patch("/seller/inventory/{listing_id}")
+async def update_seller_inventory_draft(
+    db: DbSessionDep,
+    seller_user: RequireSellerDep,
+    listing_id: Annotated[int, Path(ge=1)],
+    payload: Annotated[SellerInventoryDraftUpdate, Body()],
+) -> dict:
+    _, listing = _owned_listing(db, seller_user.id, listing_id)
+    if listing.status not in {"draft", "review"}:
+        raise AppException("LISTING_NOT_EDITABLE", "Only drafts can be edited", status.HTTP_409_CONFLICT)
+    values = payload.model_dump(exclude_unset=True)
+    for field in ("name", "category", "storage_type", "default_unit", "image_url", "brand"):
+        if field in values:
+            value = values[field]
+            setattr(listing.product, field, str(value) if field == "image_url" and value else value)
+    for field in ("batch_number", "qty", "normal_price", "start_price", "min_price", "expiry_date"):
+        if field in values:
+            setattr(listing, field, values[field])
+    errors = _validate_inventory_listing(listing)
+    if errors:
+        listing.status = "draft"
+    else:
+        listing.status = "review"
+    db.commit()
+    db.refresh(listing)
+    return wrap_success({
+        "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
+        "validation": {"valid": not errors, "errors": errors},
+    })
+
+
+@router.post("/seller/inventory/{listing_id}/validate")
+async def validate_seller_inventory_draft(
+    db: DbSessionDep,
+    seller_user: RequireSellerDep,
+    listing_id: Annotated[int, Path(ge=1)],
+) -> dict:
+    _, listing = _owned_listing(db, seller_user.id, listing_id)
+    errors = _validate_inventory_listing(listing)
+    if not errors and listing.status == "draft":
+        listing.status = "review"
+        db.commit()
+        db.refresh(listing)
+    return wrap_success({"valid": not errors, "errors": errors, "status": listing.status})
+
+
+@router.post("/seller/inventory/{listing_id}/recommendation")
+async def recommend_seller_inventory_price(
+    db: DbSessionDep,
+    seller_user: RequireSellerDep,
+    listing_id: Annotated[int, Path(ge=1)],
+) -> dict:
+    _, listing = _owned_listing(db, seller_user.id, listing_id)
+    advice = calculate_price_advice(
+        normal_price=float(listing.normal_price), expiry_date_str=listing.expiry_date.isoformat(),
+        category=listing.product.category, qty=listing.qty,
+    )
+    lower = advice.suggested_price * 0.8
+    upper = advice.suggested_price * 1.2
+    warning = not lower <= float(listing.start_price) <= upper
+    return wrap_success({"recommendation": advice.model_dump(), "price_warning": warning,
+                         "accepted_range": {"minimum": round(lower, 2), "maximum": round(upper, 2)}})
+
+
+@router.post("/seller/inventory/{listing_id}/publish", response_model=ResponseEnvelope[ListingResponse])
+async def publish_seller_inventory_listing(
+    db: DbSessionDep,
+    seller_user: RequireSellerDep,
+    listing_id: Annotated[int, Path(ge=1)],
+    payload: Annotated[SellerPublishRequest, Body()] = SellerPublishRequest(),
+) -> dict:
+    _, listing = _owned_listing(db, seller_user.id, listing_id)
+    errors = _validate_inventory_listing(listing)
+    if errors:
+        raise AppException("LISTING_VALIDATION_FAILED", "; ".join(errors), status.HTTP_422_UNPROCESSABLE_ENTITY)
+    advice = calculate_price_advice(
+        normal_price=float(listing.normal_price), expiry_date_str=listing.expiry_date.isoformat(),
+        category=listing.product.category, qty=listing.qty,
+    )
+    if not 0.8 * advice.suggested_price <= float(listing.start_price) <= 1.2 * advice.suggested_price and not payload.acknowledge_price_warning:
+        raise AppException("PRICE_WARNING_ACK_REQUIRED", "Acknowledge the out-of-range price warning or adjust the starting price", status.HTTP_409_CONFLICT)
+    listing.status = "active"
+    db.commit()
+    db.refresh(listing)
+    return wrap_success(_format_listing_response(listing, *calculate_current_dutch_price(listing)))
 
 
 def _format_listing_response(item: Listing, cur_price: float, next_drop: str | None, distance: float | None = None) -> dict:
