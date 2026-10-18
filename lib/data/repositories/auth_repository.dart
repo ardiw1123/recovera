@@ -23,6 +23,10 @@ class AuthRepository extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isAuthenticated =>
       _currentTokens != null && _currentTokens!.accessToken.isNotEmpty;
+  String get currentUserRole =>
+      _currentTokens?.role ?? _currentUserProfile?.role ?? 'buyer';
+  bool get isSeller => currentUserRole.toLowerCase() == 'seller';
+  bool get isBuyer => !isSeller;
 
   // Singleton instance untuk akses cepat di seluruh widget jika diperlukan
   static AuthRepository? _instance;
@@ -36,6 +40,9 @@ class AuthRepository extends ChangeNotifier {
     }
     return _instance!;
   }
+
+  @visibleForTesting
+  static set instance(AuthRepository? repo) => _instance = repo;
 
   /// Inisialisasi token dari secure storage saat app startup
   Future<bool> init() async {
