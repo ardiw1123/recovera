@@ -30,6 +30,7 @@ Successful API responses use `{ "success": true, "data": ... }`. Errors use `{ "
 - Login: HTTP 200 with the same token shape. Invalid credentials return 401 `INVALID_CREDENTIALS`.
 - Refresh: HTTP 200 with rotated access and refresh tokens. Send `{ "refresh_token": "..." }`; invalid/revoked or expired tokens return 401 (`INVALID_REFRESH_TOKEN` / `EXPIRED_REFRESH_TOKEN`).
 - Logout: HTTP 200; requires `Authorization: Bearer <access_token>`, optional body `{ "refresh_token": "..." }`. Without a refresh token the server revokes all active refresh tokens for the user.
+- Flutter omits the logout body when no refresh token is available and checks the success envelope; the repository still clears local credentials even when a network failure interrupts server logout.
 - Duplicate email: registration returns 409 `EMAIL_ALREADY_EXISTS`.
 - Request/schema validation: HTTP 422 `VALIDATION_ERROR`, with field paths and messages joined in `error.message`. Seller missing company name is HTTP 422 `MISSING_SELLER_INFO`.
 - Protected endpoints use the access token in `Authorization: Bearer <access_token>`; missing/invalid credentials return 401, and role mismatch returns 403 `FORBIDDEN`.
@@ -51,6 +52,12 @@ All routes below are mounted by `backend/app/main.py`. Success responses use the
 | `GET /listings` | Public | Browse listings; supports search, category, location/radius, price, shelf life, sort, and pagination filters |
 | `POST /listings` | Seller | Create listing for an existing product |
 | `GET /listings/my` | Seller | List own listings |
+| `GET /listings/seller/inventory` | Seller | List own inventory, including drafts, with product names and image URLs |
+| `POST /listings/seller/inventory/drafts` | Seller | Create an image-backed product and listing draft; returns automatic validation and price advice |
+| `PATCH /listings/seller/inventory/{listing_id}` | Seller owner | Edit draft product and listing details; valid drafts advance to review |
+| `POST /listings/seller/inventory/{listing_id}/validate` | Seller owner | Run required-field, image, date, quantity, and price-order checks |
+| `POST /listings/seller/inventory/{listing_id}/recommendation` | Seller owner | Get price advice and the accepted recommendation range |
+| `POST /listings/seller/inventory/{listing_id}/publish` | Seller owner | Publish a valid draft; out-of-range prices require `acknowledge_price_warning: true` |
 | `GET /listings/{listing_id}` | Public | Fetch listing details and current auction price |
 | `PATCH /listings/{listing_id}` | Seller owner | Update quantity, minimum price, or status |
 | `POST /listings/{listing_id}/buy` | Buyer | Purchase listing; optional quantity and biometric confirmation |
@@ -69,5 +76,11 @@ All routes below are mounted by `backend/app/main.py`. Success responses use the
 | `GET /health` | Public | Health check |
 
 ### Flutter call coverage
+
+Seller workflow failures include 403 `FORBIDDEN` for buyers or another seller's listing, 404 `LISTING_NOT_FOUND`, 409 `LISTING_NOT_EDITABLE` or `PRICE_WARNING_ACK_REQUIRED`, and 422 `LISTING_VALIDATION_FAILED`. Draft creation requires an image URL and a future expiry date. Public listing search only returns published (`active`) listings.
+
+### Database configuration
+
+Deployed environments must set `SUPABASE_DATABASE_URL` to the server-side Supabase PostgreSQL connection string. `DATABASE_URL` remains an accepted compatibility alias. SQLite is allowed only when `ENVIRONMENT` is `development`, `test`, or `testing`; it is not used by the Flutter local cache, whose tables remain limited to the documented cache and preference records. Never put the connection string in the mobile app or expose a Supabase service key.
 
 At this revision, direct Dio calls in `lib` are limited to auth and profile: register, login, refresh, logout, and `GET /profile`. There are no Flutter API calls yet for product/listing/order/AI/donation/rates/notification/device/feedback workflows; those backend routes exist, but their presence alone does not mean the app currently consumes them. Client alignment should use the mounted routes and schemas above as its implementation source of truth.

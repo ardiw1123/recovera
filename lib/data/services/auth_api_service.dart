@@ -109,10 +109,17 @@ class AuthApiService {
   /// Logout dan revocasi refresh token di backend
   Future<void> logout({String? refreshToken}) async {
     try {
-      await client.post<Map<String, dynamic>>(
-        ApiConstants.logoutEndpoint,
-        data: refreshToken != null ? {'refresh_token': refreshToken} : null,
-      );
+      final response = refreshToken == null || refreshToken.isEmpty
+          ? await client.post<Map<String, dynamic>>(ApiConstants.logoutEndpoint)
+          : await client.post<Map<String, dynamic>>(
+              ApiConstants.logoutEndpoint,
+              data: {'refresh_token': refreshToken},
+            );
+      if (response.data?['success'] != true) {
+        final error = response.data?['error']?['message'] ?? 'Logout gagal';
+        final code = response.data?['error']?['code'] as String?;
+        throw ApiException(error.toString(), code: code);
+      }
     } on DioException catch (e) {
       throw ApiException.fromDioException(e, 'Logout gagal');
     }
