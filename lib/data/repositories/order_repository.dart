@@ -5,6 +5,11 @@ import '../services/local_database_service.dart';
 abstract class RemoteOrderClient {
   Future<List<CachedOrderModel>> fetchRemoteOrders();
   Future<CachedOrderModel> fetchRemoteOrderDetail(int orderId);
+  Future<CachedOrderModel>? buyListing(
+    int listingId, {
+    int qty = 1,
+    bool biometricVerified = true,
+  }) => null;
 }
 
 /// Repository for orders, providing offline caching and coordinates for compass navigation.
@@ -16,6 +21,28 @@ class OrderRepository {
     LocalDatabaseService? localDb,
     this.remoteClient,
   }) : _localDb = localDb ?? LocalDatabaseService();
+
+  /// Buy a listing via backend API and cache the resulting order.
+  Future<CachedOrderModel> buyListing(
+    int listingId, {
+    int qty = 1,
+    bool biometricVerified = true,
+  }) async {
+    final client = remoteClient;
+    if (client == null) {
+      throw StateError('Cannot buy listing: No RemoteOrderClient configured.');
+    }
+    final order = await client.buyListing(
+      listingId,
+      qty: qty,
+      biometricVerified: biometricVerified,
+    );
+    if (order != null) {
+      await _localDb.upsertOrder(order);
+      return order;
+    }
+    throw StateError('Failed to complete purchase.');
+  }
 
   /// Fetch orders, refreshing from network if online, falling back to SQLite `cached_orders`.
   Future<List<CachedOrderModel>> getOrders({

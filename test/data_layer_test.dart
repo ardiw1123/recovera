@@ -15,11 +15,28 @@ class MockRemoteListingClient implements RemoteListingClient {
     double? maxPrice,
     int? minDays,
     String? sort,
+    double? lat,
+    double? lng,
+    double? radiusKm,
+    int? page,
+    int? limit,
   }) async {
     if (shouldThrow) {
       throw Exception('Network unreachable (Offline)');
     }
     return remoteListings;
+  }
+
+  @override
+  Future<CachedListingModel?> fetchListingDetail(int id) async {
+    if (shouldThrow) {
+      throw Exception('Network unreachable (Offline)');
+    }
+    try {
+      return remoteListings.firstWhere((e) => e.id == id);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override

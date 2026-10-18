@@ -135,11 +135,32 @@ def search_listings(
             if radius_km is not None and distance > radius_km:
                 continue
 
+        # Compute recommendation match scoring and pricing metrics
+        days_left = (item.expiry_date - date.today()).days
+        # Match score is based on proximity (closer = higher score) and days to expiry
+        if lat is not None and lng is not None and distance is not None:
+            # Base score decreases with distance; penalize far listings
+            proximity_score = max(0, 1.0 - (distance / 50.0))
+            # Discount factor based on remaining shelf life
+            discount_factor = min(1.0, days_left / 30.0) if days_left > 0 else 0.0
+            match_score = round(proximity_score * discount_factor, 3)
+        else:
+            match_score = None
+
+        # Calculate discount percentage from normal price to start price
+        if item.normal_price and item.normal_price > 0:
+            discount_pct = round(((float(item.normal_price) - cur_price) / float(item.normal_price)) * 100, 2)
+        else:
+            discount_pct = None
+
         results.append({
             "listing": item,
             "current_price": cur_price,
             "next_drop_at": next_drop,
             "distance_km": distance,
+            "match_score": match_score,
+            "discount_pct": discount_pct,
+            "days_to_expiry": days_left,
         })
 
     # Sort evaluation: nearest / cheapest / expiring_soon
