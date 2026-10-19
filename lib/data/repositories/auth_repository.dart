@@ -44,6 +44,12 @@ class AuthRepository extends ChangeNotifier {
   @visibleForTesting
   static set instance(AuthRepository? repo) => _instance = repo;
 
+  @visibleForTesting
+  set currentUserProfile(UserProfile? profile) {
+    _currentUserProfile = profile;
+    notifyListeners();
+  }
+
   /// Inisialisasi token dari secure storage saat app startup
   Future<bool> init() async {
     _currentTokens = await tokenStorage.getTokens();
@@ -148,4 +154,105 @@ class AuthRepository extends ChangeNotifier {
     notifyListeners();
     return profile;
   }
+
+  /// Update profil pengguna ke backend dan sinkronisasi state lokal
+  Future<UserProfile> updateProfile({
+    String? name,
+    String? phone,
+    String? photoUrl,
+    String? companyName,
+    String? address,
+    double? warehouseLat,
+    double? warehouseLng,
+    String? city,
+    String? businessType,
+    double? baseLat,
+    double? baseLng,
+    List<String>? prefCategories,
+    bool? hasColdStorage,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final updated = await authApiService.updateProfile(
+        name: name,
+        phone: phone,
+        photoUrl: photoUrl,
+        companyName: companyName,
+        address: address,
+        warehouseLat: warehouseLat,
+        warehouseLng: warehouseLng,
+        city: city,
+        businessType: businessType,
+        baseLat: baseLat,
+        baseLng: baseLng,
+        prefCategories: prefCategories,
+        hasColdStorage: hasColdStorage,
+      );
+      _currentUserProfile = updated;
+      return updated;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Update lokasi akun buyer/seller (alamat dan koordinat latitude & longitude)
+  Future<UserProfile> updateLocation({
+    required String address,
+    required double latitude,
+    required double longitude,
+    String? city,
+    bool allowOfflineFallback = true,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final updated = await authApiService.updateLocation(
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
+        city: city,
+        isSeller: isSeller,
+      );
+      _currentUserProfile = updated;
+      return updated;
+    } catch (e) {
+      if (allowOfflineFallback) {
+        // Fallback simpan lokasi ke profil lokal saat terjadi gangguan jaringan
+        final current = _currentUserProfile;
+        if (current != null) {
+          final fallbackProfile = current.copyWith(
+            address: address,
+            city: city ?? current.city,
+            baseLat: isSeller ? current.baseLat : latitude,
+            baseLng: isSeller ? current.baseLng : longitude,
+            warehouseLat: isSeller ? latitude : current.warehouseLat,
+            warehouseLng: isSeller ? longitude : current.warehouseLng,
+          );
+          _currentUserProfile = fallbackProfile;
+        } else {
+          _currentUserProfile = UserProfile(
+            id: currentTokens?.userId ?? 0,
+            email: currentTokens?.name ?? '',
+            role: currentUserRole,
+            name: currentTokens?.name ?? 'User',
+            address: address,
+            city: city,
+            baseLat: isSeller ? null : latitude,
+            baseLng: isSeller ? null : longitude,
+            warehouseLat: isSeller ? latitude : null,
+            warehouseLng: isSeller ? longitude : null,
+          );
+        }
+      }
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 }
+
