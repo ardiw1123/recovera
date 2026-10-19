@@ -8,6 +8,7 @@ import '../../../data/repositories/listing_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../models/product_model.dart';
 import '../widgets/product_card.dart';
+import '../../auth/screens/location_management_screen.dart';
 
 /// Dashboard utama bagi pengguna Buyer (Pembeli).
 ///
@@ -41,17 +42,39 @@ class _HomeScreenState extends State<HomeScreen> {
   FoodCategory? _selectedCategory;
   String _selectedSort = 'nearest'; // 'nearest', 'cheapest', 'highest_match'
 
+  double get _effectiveLat =>
+      AuthRepository.instance.currentUserProfile?.baseLat ?? widget.userLat;
+  double get _effectiveLng =>
+      AuthRepository.instance.currentUserProfile?.baseLng ?? widget.userLng;
+
   @override
   void initState() {
     super.initState();
+    AuthRepository.instance.addListener(_onAuthProfileChanged);
     final client = ApiClient();
     _listingRepository = widget.repository ??
         ListingRepository(remoteClient: ListingApiService(client: client));
     _fetchListings();
   }
 
+  void _onAuthProfileChanged() {
+    if (mounted) {
+      setState(() {});
+      _fetchListings(forceRefresh: false);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userLat != widget.userLat || oldWidget.userLng != widget.userLng) {
+      _fetchListings();
+    }
+  }
+
   @override
   void dispose() {
+    AuthRepository.instance.removeListener(_onAuthProfileChanged);
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -67,8 +90,8 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final result = await _listingRepository.getListings(
         forceRefresh: forceRefresh,
-        lat: widget.userLat,
-        lng: widget.userLng,
+        lat: _effectiveLat,
+        lng: _effectiveLng,
         sort: _selectedSort,
         category: _selectedCategory?.label,
         search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
@@ -138,11 +161,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _getBuyerLocationText() {
     final profile = AuthRepository.instance.currentUserProfile;
-    if (profile?.city != null && profile!.city!.isNotEmpty) {
-      return '${profile.city}, Indonesia';
+    final address = profile?.address?.trim();
+    if (address != null && address.isNotEmpty) {
+      return address;
     }
-    if (profile?.address != null && profile!.address!.isNotEmpty) {
-      return profile.address!;
+    final city = profile?.city?.trim();
+    if (city != null && city.isNotEmpty) {
+      return '$city, Indonesia';
     }
     return 'Jakarta Pusat, Indonesia';
   }
@@ -387,71 +412,82 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.location_on_rounded,
-              color: Color(0xFF0284C7),
-              size: 16,
+      child: GestureDetector(
+        key: const Key('home_location_bar_button'),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const LocationManagementScreen(),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Lokasi Pengiriman Anda',
-                    style: GoogleFonts.inter(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF94A3B8),
-                    ),
-                  ),
-                  Text(
-                    locationText,
-                    key: const Key('buyer_location_text'),
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1E293B),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+          );
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.location_on_rounded,
+                color: Color(0xFF0284C7),
+                size: 16,
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE0F2FE),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFBAE6FD)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.radar_rounded, size: 11, color: Color(0xFF0284C7)),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Radius < 15 km',
-                    key: const Key('proximity_radius_badge'),
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0369A1),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Lokasi Pengiriman Anda',
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF94A3B8),
+                      ),
                     ),
-                  ),
-                ],
+                    Text(
+                      locationText,
+                      key: const Key('buyer_location_text'),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1E293B),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0F2FE),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFBAE6FD)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.radar_rounded, size: 11, color: Color(0xFF0284C7)),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Radius < 15 km',
+                      key: const Key('proximity_radius_badge'),
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF0369A1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

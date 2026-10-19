@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/listing_repository.dart';
 import '../home/screens/home_screen.dart';
 import '../stok/screens/stok_screen.dart';
 import '../seller/screens/seller_inventory_screen.dart';
@@ -17,7 +18,18 @@ import '../feedback/screens/saran_kesan_screen.dart';
 ///   dan tombol "+ Tambah" langsung membuka `UploadStockFlowScreen`.
 /// • Buyer (Pembeli): Tab Stok menampilkan `StokScreen` (Katalog lelang pembeli), tanpa akses rute penjual.
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  final ListingRepository? listingRepository;
+  final Widget? stokPage;
+  final Widget? profilePage;
+  final Widget? feedbackPage;
+
+  const MainShell({
+    super.key,
+    this.listingRepository,
+    this.stokPage,
+    this.profilePage,
+    this.feedbackPage,
+  });
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -32,13 +44,22 @@ class _MainShellState extends State<MainShell> {
       listenable: AuthRepository.instance,
       builder: (context, _) {
         final isSeller = AuthRepository.instance.isSeller;
+        final profile = AuthRepository.instance.currentUserProfile;
+        final buyerLat = profile?.baseLat ?? -6.2088;
+        final buyerLng = profile?.baseLng ?? 106.8456;
 
         // Daftar halaman adaptif berdasarkan role
         final pages = <Widget>[
-          isSeller ? const SellerInventoryScreen() : const HomeScreen(),
-          isSeller ? const SellerInventoryScreen() : const StokScreen(),
-          const ProfileScreen(),
-          const SaranKesanScreen(),
+          isSeller
+              ? const SellerInventoryScreen()
+              : HomeScreen(
+                  userLat: buyerLat,
+                  userLng: buyerLng,
+                  repository: widget.listingRepository,
+                ),
+          widget.stokPage ?? (isSeller ? const SellerInventoryScreen() : const StokScreen()),
+          widget.profilePage ?? const ProfileScreen(),
+          widget.feedbackPage ?? const SaranKesanScreen(),
         ];
 
         return Scaffold(
