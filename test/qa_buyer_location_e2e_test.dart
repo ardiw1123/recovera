@@ -5,10 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:recovera/data/data.dart';
-import 'package:recovera/features/auth/models/user_profile.dart';
 import 'package:recovera/features/auth/screens/location_management_screen.dart';
 import 'package:recovera/features/auth/screens/profile_screen.dart';
-import 'package:recovera/features/home/models/product_model.dart';
 import 'package:recovera/features/home/screens/home_screen.dart';
 import 'package:recovera/features/home/widgets/product_card.dart';
 
@@ -502,11 +500,9 @@ void main() {
               '/profile/location': (_) => const LocationManagementScreen(),
             },
             home: HomeScreen(
-              userName: 'Ardi Gunawan',
-              userRole: 'buyer',
-              buyerLat: -7.2575,
-              buyerLng: 112.7521,
-              listingRepository: listingRepo,
+              userLat: -7.2575,
+              userLng: 112.7521,
+              repository: listingRepo,
             ),
           ),
         );
