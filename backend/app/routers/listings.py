@@ -75,52 +75,78 @@ async def create_seller_inventory_draft(
     seller_user: RequireSellerDep,
     payload: Annotated[SellerInventoryDraftCreate, Body()],
 ) -> dict:
-    seller = db.query(Seller).filter(Seller.user_id == seller_user.id).first()
-    if not seller:
-        raise AppException("SELLER_NOT_FOUND", "Seller profile is not configured", status.HTTP_400_BAD_REQUEST)
-    if payload.expiry_date <= date.today():
-        raise AppException("INVALID_EXPIRY_DATE", "Expiry date must be in the future", status.HTTP_422_UNPROCESSABLE_ENTITY)
+    try:
+        seller = db.query(Seller).filter(Seller.user_id == seller_user.id).first()
+        if not seller:
+            raise AppException("SELLER_NOT_FOUND", "Seller profile is not configured", status.HTTP_400_BAD_REQUEST)
+        
+        if payload.expiry_date <= date.today():
+            raise AppException("INVALID_EXPIRY_DATE", "Expiry date must be in the future", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if payload.qty <= 0:
+            raise AppException("INVALID_QUANTITY", "Quantity must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if payload.normal_price <= 0 or payload.min_price <= 0:
+            raise AppException("INVALID_PRICE", "Prices must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if payload.min_price > payload.normal_price:
+            raise AppException("INVALID_PRICE_RANGE", "Minimum price cannot exceed normal price", status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-    product = db.query(Product).filter(Product.sku == payload.sku).first()
-    if product is None:
-        product = Product(
-            sku=payload.sku, barcode=payload.barcode, name=payload.name.strip(),
-            brand=payload.brand, category=payload.category.strip(),
-            storage_type=payload.storage_type, default_unit=payload.default_unit,
-            image_url=str(payload.image_url),
+        product = db.query(Product).filter(Product.sku == payload.sku).first()
+        if product is None:
+            product = Product(
+                sku=payload.sku, 
+                barcode=payload.barcode, 
+                name=payload.name.strip(),
+                brand=payload.brand, 
+                category=payload.category.strip(),
+                storage_type=payload.storage_type, 
+                default_unit=payload.default_unit,
+                image_url=str(payload.image_url) if payload.image_url else None,
+            )
+            db.add(product)
+            db.flush()
+        elif payload.image_url and not product.image_url:
+            product.image_url = str(payload.image_url)
+
+        suggested = calculate_price_advice(
+            normal_price=payload.normal_price,
+            expiry_date_str=payload.expiry_date.isoformat(),
+            category=payload.category,
+            qty=payload.qty,
         )
-        db.add(product)
-        db.flush()
-    elif not product.image_url:
-        product.image_url = str(payload.image_url)
-
-    suggested = calculate_price_advice(
-        normal_price=payload.normal_price,
-        expiry_date_str=payload.expiry_date.isoformat(),
-        category=payload.category,
-        qty=payload.qty,
-    )
-    now = datetime.now(timezone.utc)
-    listing = Listing(
-        product_id=product.id, seller_id=seller.id, batch_number=payload.batch_number,
-        qty=payload.qty, normal_price=payload.normal_price,
-        start_price=suggested.suggested_price, min_price=payload.min_price,
-        drop_interval_minutes=60, drop_percentage=2.5,
-        expiry_date=payload.expiry_date, auction_start_at=now,
-        auction_end_at=datetime.combine(payload.expiry_date, datetime.min.time(), tzinfo=timezone.utc),
-        status="draft",
-    )
-    if listing.min_price > listing.start_price:
-        raise AppException("INVALID_MIN_PRICE", "Minimum price cannot exceed the recommended starting price", status.HTTP_422_UNPROCESSABLE_ENTITY)
-    db.add(listing)
-    db.commit()
-    db.refresh(listing)
-    errors = _validate_inventory_listing(listing)
-    return wrap_success({
-        "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
-        "validation": {"valid": not errors, "errors": errors},
-        "price_recommendation": suggested.model_dump(),
-    })
+        now = datetime.now(timezone.utc)
+        listing = Listing(
+            product_id=product.id, seller_id=seller.id, batch_number=payload.batch_number,
+            qty=payload.qty, normal_price=payload.normal_price,
+            start_price=suggested.suggested_price, min_price=payload.min_price,
+            drop_interval_minutes=60, drop_percentage=2.5,
+            expiry_date=payload.expiry_date, auction_start_at=now,
+            auction_end_at=datetime.combine(payload.expiry_date, datetime.min.time(), tzinfo=timezone.utc),
+            status="draft",
+        )
+        if listing.min_price > listing.start_price:
+            raise AppException("INVALID_MIN_PRICE", "Minimum price cannot exceed the recommended starting price", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        db.add(listing)
+        db.commit()
+        db.refresh(listing)
+        errors = _validate_inventory_listing(listing)
+        return wrap_success({
+            "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
+            "validation": {"valid": not errors, "errors": errors},
+            "price_recommendation": suggested.model_dump(),
+        })
+    except AppException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise AppException(
+            "DRAFT_CREATION_FAILED", 
+            f"Failed to create inventory draft: {str(e)}", 
+            status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @router.patch("/seller/inventory/{listing_id}")
@@ -130,28 +156,64 @@ async def update_seller_inventory_draft(
     listing_id: Annotated[int, Path(ge=1)],
     payload: Annotated[SellerInventoryDraftUpdate, Body()],
 ) -> dict:
-    _, listing = _owned_listing(db, seller_user.id, listing_id)
-    if listing.status not in {"draft", "review"}:
-        raise AppException("LISTING_NOT_EDITABLE", "Only drafts can be edited", status.HTTP_409_CONFLICT)
-    values = payload.model_dump(exclude_unset=True)
-    for field in ("name", "category", "storage_type", "default_unit", "image_url", "brand"):
-        if field in values:
-            value = values[field]
-            setattr(listing.product, field, str(value) if field == "image_url" and value else value)
-    for field in ("batch_number", "qty", "normal_price", "start_price", "min_price", "expiry_date"):
-        if field in values:
-            setattr(listing, field, values[field])
-    errors = _validate_inventory_listing(listing)
-    if errors:
-        listing.status = "draft"
-    else:
-        listing.status = "review"
-    db.commit()
-    db.refresh(listing)
-    return wrap_success({
-        "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
-        "validation": {"valid": not errors, "errors": errors},
-    })
+    try:
+        _, listing = _owned_listing(db, seller_user.id, listing_id)
+        if listing.status not in {"draft", "review"}:
+            raise AppException("LISTING_NOT_EDITABLE", "Only drafts can be edited", status.HTTP_409_CONFLICT)
+        
+        values = payload.model_dump(exclude_unset=True)
+        
+        # Update product fields
+        for field in ("name", "category", "storage_type", "default_unit", "image_url", "brand"):
+            if field in values:
+                value = values[field]
+                if field == "image_url" and value:
+                    setattr(listing.product, field, str(value))
+                elif field == "image_url" and value is None:
+                    # Allow clearing image_url
+                    pass
+                else:
+                    setattr(listing.product, field, value)
+        
+        # Update listing fields with validation
+        if "qty" in values and values["qty"] <= 0:
+            raise AppException("INVALID_QUANTITY", "Quantity must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if "normal_price" in values and values["normal_price"] <= 0:
+            raise AppException("INVALID_PRICE", "Normal price must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if "min_price" in values and values["min_price"] <= 0:
+            raise AppException("INVALID_PRICE", "Minimum price must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if "expiry_date" in values and values["expiry_date"] <= date.today():
+            raise AppException("INVALID_EXPIRY_DATE", "Expiry date must be in the future", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        for field in ("batch_number", "qty", "normal_price", "start_price", "min_price", "expiry_date"):
+            if field in values:
+                setattr(listing, field, values[field])
+        
+        errors = _validate_inventory_listing(listing)
+        if errors:
+            listing.status = "draft"
+        else:
+            listing.status = "review"
+        
+        db.commit()
+        db.refresh(listing)
+        return wrap_success({
+            "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
+            "validation": {"valid": not errors, "errors": errors},
+        })
+    except AppException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise AppException(
+            "DRAFT_UPDATE_FAILED",
+            f"Failed to update inventory draft: {str(e)}",
+            status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @router.post("/seller/inventory/{listing_id}/validate")
