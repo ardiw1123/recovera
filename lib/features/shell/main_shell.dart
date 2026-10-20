@@ -7,6 +7,7 @@ import '../../data/repositories/listing_repository.dart';
 import '../home/screens/home_screen.dart';
 import '../stok/screens/stok_screen.dart';
 import '../seller/screens/seller_inventory_screen.dart';
+import '../seller/repositories/seller_repository.dart';
 import '../seller/screens/upload_stock_flow_screen.dart';
 import '../auth/screens/profile_screen.dart';
 import '../feedback/screens/saran_kesan_screen.dart';
@@ -19,6 +20,7 @@ import '../feedback/screens/saran_kesan_screen.dart';
 /// • Buyer (Pembeli): Tab Stok dihilangkan sepenuhnya dari antarmuka pembeli (hanya Home, Profil, Saran).
 class MainShell extends StatefulWidget {
   final ListingRepository? listingRepository;
+  final SellerRepository? sellerRepository;
   final Widget? stokPage;
   final Widget? profilePage;
   final Widget? feedbackPage;
@@ -26,6 +28,7 @@ class MainShell extends StatefulWidget {
   const MainShell({
     super.key,
     this.listingRepository,
+    this.sellerRepository,
     this.stokPage,
     this.profilePage,
     this.feedbackPage,
@@ -51,8 +54,8 @@ class _MainShellState extends State<MainShell> {
         // Daftar halaman adaptif berdasarkan role (Buyer tidak memiliki tab Stok)
         final pages = isSeller
             ? <Widget>[
-                const SellerInventoryScreen(),
-                widget.stokPage ?? const SellerInventoryScreen(),
+                SellerInventoryScreen(repository: widget.sellerRepository),
+                widget.stokPage ?? SellerInventoryScreen(repository: widget.sellerRepository),
                 widget.profilePage ?? const ProfileScreen(),
                 widget.feedbackPage ?? const SaranKesanScreen(),
               ]
@@ -100,73 +103,85 @@ class _MainShellState extends State<MainShell> {
   // ── Bottom Nav Row untuk Penjual (Sesuai seller-inventory-screen.png) ─────
   Widget _buildSellerNavRow() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _NavItem(
-          icon: Icons.home_outlined,
-          activeIcon: Icons.home_rounded,
-          label: 'Beranda',
-          isActive: _currentIndex == 0,
-          onTap: () => setState(() => _currentIndex = 0),
+        Expanded(
+          child: _NavItem(
+            icon: Icons.home_outlined,
+            activeIcon: Icons.home_rounded,
+            label: 'Beranda',
+            isActive: _currentIndex == 0,
+            onTap: () => setState(() => _currentIndex = 0),
+          ),
         ),
-        _NavItem(
-          icon: Icons.inventory_2_outlined,
-          activeIcon: Icons.inventory_2_rounded,
-          label: 'Stok',
-          isActive: _currentIndex == 1,
-          onTap: () => setState(() => _currentIndex = 1),
+        Expanded(
+          child: _NavItem(
+            icon: Icons.inventory_2_outlined,
+            activeIcon: Icons.inventory_2_rounded,
+            label: 'Stok',
+            isActive: _currentIndex == 1,
+            onTap: () => setState(() => _currentIndex = 1),
+          ),
         ),
         // Tombol Tambah di tengah
-        GestureDetector(
-          key: const Key('nav_seller_add_stock'),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const UploadStockFlowScreen(),
-              ),
-            );
-          },
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.add_circle_outline_rounded,
-                  size: 24,
-                  color: AppColors.primary,
+        Expanded(
+          child: GestureDetector(
+            key: const Key('nav_seller_add_stock'),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const UploadStockFlowScreen(),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Tambah',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+              );
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.add_circle_outline_rounded,
+                    size: 24,
                     color: AppColors.primary,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Tambah',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-        _NavItem(
-          icon: Icons.person_outline_rounded,
-          activeIcon: Icons.person_rounded,
-          label: 'Profil',
-          isActive: _currentIndex == 2,
-          onTap: () => setState(() => _currentIndex = 2),
+        Expanded(
+          child: _NavItem(
+            icon: Icons.person_outline_rounded,
+            activeIcon: Icons.person_rounded,
+            label: 'Profil',
+            isActive: _currentIndex == 2,
+            onTap: () => setState(() => _currentIndex = 2),
+          ),
         ),
-        _NavItem(
-          icon: Icons.chat_bubble_outline_rounded,
-          activeIcon: Icons.chat_bubble_rounded,
-          label: 'Saran',
-          isActive: _currentIndex == 3,
-          onTap: () => setState(() => _currentIndex = 3),
+        Expanded(
+          child: _NavItem(
+            icon: Icons.chat_bubble_outline_rounded,
+            activeIcon: Icons.chat_bubble_rounded,
+            label: 'Saran',
+            isActive: _currentIndex == 3,
+            onTap: () => setState(() => _currentIndex = 3),
+          ),
         ),
       ],
     );
@@ -229,7 +244,7 @@ class _NavItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         decoration: BoxDecoration(
           color: isActive
               ? AppColors.primary.withValues(alpha: 0.1)
@@ -245,12 +260,15 @@ class _NavItem extends StatelessWidget {
               color: isActive ? AppColors.primary : AppColors.slateText,
             ),
             const SizedBox(height: 2),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? AppColors.primary : AppColors.slateText,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActive ? AppColors.primary : AppColors.slateText,
+                ),
               ),
             ),
           ],

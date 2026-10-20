@@ -454,7 +454,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
 
     return Container(
       color: const Color(0xFFF8FAFC),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(steps.length * 2 - 1, (i) {
@@ -508,17 +508,23 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                stepLabel,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight:
-                      isActive || isDone ? FontWeight.w700 : FontWeight.w500,
-                  color: isDone
-                      ? const Color(0xFF10B981)
-                      : (isActive
-                          ? const Color(0xFF0284C7)
-                          : const Color(0xFF94A3B8)),
+              SizedBox(
+                width: 48,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    stepLabel,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight:
+                          isActive || isDone ? FontWeight.w700 : FontWeight.w500,
+                      color: isDone
+                          ? const Color(0xFF10B981)
+                          : (isActive
+                              ? const Color(0xFF0284C7)
+                              : const Color(0xFF94A3B8)),
+                    ),
+                  ),
                 ),
               ),
             ],

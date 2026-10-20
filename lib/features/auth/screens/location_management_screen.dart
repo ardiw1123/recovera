@@ -641,10 +641,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           const SizedBox(height: 10),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.gps_fixed_rounded, size: 14, color: AppColors.secondary),
                   const SizedBox(width: 4),
@@ -692,15 +696,20 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Peta Interaktif Google Maps',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.darkNavy,
+            Expanded(
+              child: Text(
+                'Peta Interaktif Google Maps',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.darkNavy,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 8),
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   'Simulasi Izin Ditolak',
@@ -1308,19 +1317,22 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.check_rounded, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Simpan Lokasi Pengiriman',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+            : FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.check_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Simpan Lokasi Pengiriman',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
       ),
     );

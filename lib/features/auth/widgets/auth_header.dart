@@ -27,7 +27,8 @@ class AuthHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final h = height ?? MediaQuery.of(context).size.height * 0.29;
+    final h = height ??
+        (MediaQuery.of(context).size.height * 0.29).clamp(170.0, 260.0);
 
     return Container(
       height: h,
@@ -59,15 +60,20 @@ class AuthHeader extends StatelessWidget {
               ),
 
               // ── Konten Tengah (opsional) ─────────────────────────────
-              // bottom: 52 supaya logo naik cukup dan tidak terpotong
-              // oleh OverlappingSheet yang menimpa 28px dari bawah header
-              if (child != null) ...[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 52),
-                  child: child,
-                ),
-              ] else
-                const SizedBox(height: 52),
+              // Menggunakan Expanded + FittedBox agar responsif di layar mungil
+              if (child != null)
+                Expanded(
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.only(bottom: 32),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: child!,
+                    ),
+                  ),
+                )
+              else
+                const Spacer(),
             ],
           ),
         ),
