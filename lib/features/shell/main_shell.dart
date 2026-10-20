@@ -16,7 +16,7 @@ import '../feedback/screens/saran_kesan_screen.dart';
 /// Beradaptasi sesuai role pengguna:
 /// • Seller (Penjual): Tab Stok menampilkan `SellerInventoryScreen` ("Stok Saya" sesuai referensi tetap)
 ///   dan tombol "+ Tambah" langsung membuka `UploadStockFlowScreen`.
-/// • Buyer (Pembeli): Tab Stok menampilkan `StokScreen` (Katalog lelang pembeli), tanpa akses rute penjual.
+/// • Buyer (Pembeli): Tab Stok dihilangkan sepenuhnya dari antarmuka pembeli (hanya Home, Profil, Saran).
 class MainShell extends StatefulWidget {
   final ListingRepository? listingRepository;
   final Widget? stokPage;
@@ -48,19 +48,23 @@ class _MainShellState extends State<MainShell> {
         final buyerLat = profile?.baseLat ?? -6.2088;
         final buyerLng = profile?.baseLng ?? 106.8456;
 
-        // Daftar halaman adaptif berdasarkan role
-        final pages = <Widget>[
-          isSeller
-              ? const SellerInventoryScreen()
-              : HomeScreen(
+        // Daftar halaman adaptif berdasarkan role (Buyer tidak memiliki tab Stok)
+        final pages = isSeller
+            ? <Widget>[
+                const SellerInventoryScreen(),
+                widget.stokPage ?? const SellerInventoryScreen(),
+                widget.profilePage ?? const ProfileScreen(),
+                widget.feedbackPage ?? const SaranKesanScreen(),
+              ]
+            : <Widget>[
+                HomeScreen(
                   userLat: buyerLat,
                   userLng: buyerLng,
                   repository: widget.listingRepository,
                 ),
-          widget.stokPage ?? (isSeller ? const SellerInventoryScreen() : const StokScreen()),
-          widget.profilePage ?? const ProfileScreen(),
-          widget.feedbackPage ?? const SaranKesanScreen(),
-        ];
+                widget.profilePage ?? const ProfileScreen(),
+                widget.feedbackPage ?? const SaranKesanScreen(),
+              ];
 
         return Scaffold(
           body: IndexedStack(
@@ -168,7 +172,7 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  // ── Bottom Nav Row untuk Pembeli (Default 4 tab) ─────────────────────────
+  // ── Bottom Nav Row untuk Pembeli (Role guard: Tab Stok dihilangkan sepenuhnya) ──
   Widget _buildBuyerNavRow() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -181,25 +185,18 @@ class _MainShellState extends State<MainShell> {
           onTap: () => setState(() => _currentIndex = 0),
         ),
         _NavItem(
-          icon: Icons.inventory_2_outlined,
-          activeIcon: Icons.inventory_2_rounded,
-          label: 'Stok',
-          isActive: _currentIndex == 1,
-          onTap: () => setState(() => _currentIndex = 1),
-        ),
-        _NavItem(
           icon: Icons.person_outline_rounded,
           activeIcon: Icons.person_rounded,
           label: 'Profil',
-          isActive: _currentIndex == 2,
-          onTap: () => setState(() => _currentIndex = 2),
+          isActive: _currentIndex == 1,
+          onTap: () => setState(() => _currentIndex = 1),
         ),
         _NavItem(
           icon: Icons.chat_bubble_outline_rounded,
           activeIcon: Icons.chat_bubble_rounded,
           label: 'Saran',
-          isActive: _currentIndex == 3,
-          onTap: () => setState(() => _currentIndex = 3),
+          isActive: _currentIndex == 2,
+          onTap: () => setState(() => _currentIndex = 2),
         ),
       ],
     );
