@@ -116,6 +116,7 @@ class ListingRepository {
           maxPrice: maxPrice,
           minDays: minDays,
           sort: sort,
+          radiusKm: radiusKm,
         );
         return ListingResult(
           listings: cachedItems,
@@ -132,6 +133,7 @@ class ListingRepository {
       maxPrice: maxPrice,
       minDays: minDays,
       sort: sort,
+      radiusKm: radiusKm,
     );
 
     // If cache is empty and remote client is available, try fetching once

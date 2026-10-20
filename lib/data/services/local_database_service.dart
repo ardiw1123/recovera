@@ -53,6 +53,7 @@ class LocalDatabaseService {
     double? maxPrice,
     int? minDays,
     String? sort,
+    double? radiusKm,
   }) async {
     final db = await _db;
 
@@ -91,6 +92,10 @@ class LocalDatabaseService {
       final minDate = DateTime.now().add(Duration(days: minDays)).toIso8601String().substring(0, 10);
       whereClauses.add('${DatabaseConstants.colListingExpiryDate} >= ?');
       whereArgs.add(minDate);
+    }
+    if (radiusKm != null && radiusKm > 0) {
+      whereClauses.add('(${DatabaseConstants.colListingDistanceKm} IS NULL OR ${DatabaseConstants.colListingDistanceKm} <= ?)');
+      whereArgs.add(radiusKm);
     }
 
     // Sorting
