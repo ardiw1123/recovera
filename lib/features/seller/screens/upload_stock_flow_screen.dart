@@ -754,11 +754,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       if (!mounted) return;
       setState(() {
         _isPickingImage = false;
-        _imageError = 'Gagal mengakses galeri: ';
+        _imageError = 'Gagal mengakses galeri: $e';
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal mengakses galeri perangkat: '),
+          content: Text('Gagal mengakses galeri perangkat: $e'),
           backgroundColor: AppColors.error,
         ),
       );
