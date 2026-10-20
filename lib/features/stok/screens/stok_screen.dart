@@ -19,7 +19,9 @@ import '../../home/widgets/empty_state_view.dart';
 ///  • Result count + sort pill
 ///  • Product card list / empty state
 class StokScreen extends StatefulWidget {
-  const StokScreen({super.key});
+  const StokScreen({super.key, this.listingRepository});
+
+  final ListingRepository? listingRepository;
 
   @override
   State<StokScreen> createState() => _StokScreenState();
@@ -42,10 +44,10 @@ class _StokScreenState extends State<StokScreen> {
   @override
   void initState() {
     super.initState();
-    final client = ApiClient();
-    _listingRepository = ListingRepository(
-      remoteClient: ListingApiService(client: client),
-    );
+    _listingRepository = widget.listingRepository ??
+        ListingRepository(
+          remoteClient: ListingApiService(client: ApiClient()),
+        );
     _fetchListings();
   }
 
@@ -448,15 +450,19 @@ class _StokScreenState extends State<StokScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'KATEGORI PANGAN B2B',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF94A3B8),
-                    letterSpacing: 0.8,
+                Expanded(
+                  child: Text(
+                    'KATEGORI PANGAN B2B',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF94A3B8),
+                      letterSpacing: 0.8,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () {
                     setState(() {
@@ -673,35 +679,43 @@ class _StokScreenState extends State<StokScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Text(
-                'Menampilkan $count barang',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1E293B),
-                ),
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Menampilkan $count barang',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 4,
+                    height: 4,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFCBD5E1),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'B2B Verified',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Container(
-                width: 5,
-                height: 5,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFCBD5E1),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'B2B Verified',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: const Color(0xFF64748B),
-                ),
-              ),
-            ],
+            ),
           ),
+          const SizedBox(width: 8),
           GestureDetector(
             onTap: _openFilterSheet,
             child: Container(
