@@ -3,7 +3,7 @@ Semua angka bisnis diubah DI SINI, bukan di dalam fungsi."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MODEL_DIR = ROOT / "models"
+MODEL_DIR = Path(__file__).resolve().parent / "artifacts"
 DATA_DIR = ROOT / "data"
 
 # ---------- Hard rules (guardrail, tidak boleh dilanggar model) ----------

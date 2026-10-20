@@ -1,6 +1,9 @@
 """Pembangun fitur TUNGGAL untuk training & serving (mencegah training-serving skew)."""
 import pandas as pd
-from .config import CAT_LEVELS
+try:
+    from .config import CAT_LEVELS
+except ImportError:
+    from app.ai.config import CAT_LEVELS
 
 
 class FeatureError(ValueError):

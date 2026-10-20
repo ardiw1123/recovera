@@ -50,6 +50,7 @@ class Offer(Base):
     days_to_expiry = Column(Integer, nullable=False)
     offered_discount_pct = Column(Numeric(4, 2), nullable=False)
     status = Column(String(20), default="sent", nullable=False)
+    selection_source = Column(String(20), default="model", nullable=False)
     sent_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     responded_at = Column(DateTime(timezone=True), nullable=True)
 

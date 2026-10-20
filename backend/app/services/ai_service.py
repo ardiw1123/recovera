@@ -2,8 +2,12 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from app.config import get_settings
+from app.models.listing import Listing, Offer
+from app.models.notification import Notification
+from app.models.user import Buyer
 from app.schemas.ai import InvoiceOcrResponse, InvoiceParsedItem, PriceAdviceResponse
 from app.services.listing_service import get_initial_discount_percentage
+from sqlalchemy.orm import Session
 
 settings = get_settings()
 
@@ -97,8 +101,11 @@ def calculate_price_advice(
         return PriceAdviceResponse(
             suggested_price=suggested_price,
             discount_pct=discount_pct,
+            min_price_guardrail=min_price if min_price > 0 else round(normal_price * 0.3, 2),
             rationale=rationale,
             next_drop_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+            source=advice.source,
+            model_version=advice.model_version,
         )
 
     # ── Fallback rule-based murni (tanpa engine, mis. unit test) ────────────
@@ -111,6 +118,124 @@ def calculate_price_advice(
     return PriceAdviceResponse(
         suggested_price=suggested_price,
         discount_pct=discount_pct,
+        min_price_guardrail=min_price if min_price > 0 else round(normal_price * 0.3, 2),
         rationale=rationale,
         next_drop_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+        source="rule",
+        model_version=None,
     )
+
+
+def match_and_create_offers_for_listing(
+    db: Session,
+    listing: Listing,
+    ai_engine=None,
+    top_k: int = 5,
+) -> list[Offer]:
+    """
+    Dipanggil saat listing diaktifkan / dipublish:
+    1. Filter & ranking buyer potensial via AI Engine (LightGBM ranking / rule fallback).
+    2. Simpan record penawaran ke tabel `offers`.
+    3. Buat notifikasi in-app untuk buyer terpilih.
+    """
+    if ai_engine is None:
+        return []
+
+    seller = listing.seller
+    if not seller or seller.warehouse_lat is None or seller.warehouse_lng is None:
+        return []
+
+    # 1. Ambil kandidat buyer dari database
+    buyers = db.query(Buyer).all()
+    if not buyers:
+        return []
+
+    buyers_data = []
+    buyer_user_map = {}
+    for b in buyers:
+        if b.base_lat is None or b.base_lng is None:
+            continue
+        buyers_data.append({
+            "buyer_id": b.id,
+            "base_lat": float(b.base_lat),
+            "base_lng": float(b.base_lng),
+            "max_radius_km": float(b.max_radius_km or 15),
+            "has_cold_storage": bool(b.has_cold_storage),
+            "pref_categories": b.pref_categories or [],
+            "business_type": b.business_type or "resto",
+            "total_orders_completed": int(b.total_orders_completed or 0),
+            "payment_reliability_score": float(b.payment_reliability_score or 1.0),
+        })
+        buyer_user_map[b.id] = b.user_id
+
+    if not buyers_data:
+        return []
+
+    import pandas as pd
+    buyers_df = pd.DataFrame(buyers_data)
+
+    today = date.today()
+    days_to_expiry = max(0, (listing.expiry_date - today).days)
+    normal_p = float(listing.normal_price)
+    start_p = float(listing.start_price)
+    offered_discount_pct = round(((normal_p - start_p) / normal_p) * 100, 2) if normal_p > 0 else 0.0
+
+    product = listing.product
+    listing_dict = {
+        "warehouse_lat": float(seller.warehouse_lat),
+        "warehouse_lng": float(seller.warehouse_lng),
+        "days_to_expiry": days_to_expiry,
+        "offered_discount_pct": offered_discount_pct,
+        "storage_type": product.storage_type if product else "ambient",
+        "category": product.category if product else "Canned",
+    }
+
+    # 2. Match pembeli menggunakan ranking model (Top-k)
+    matched = ai_engine.match_buyers(listing_dict, buyers_df, k=top_k)
+    if not matched:
+        return {"total_offers_sent": 0, "top_buyers": []}
+
+    created_offers = []
+    top_buyers_summary = []
+    for m in matched:
+        buyer_id = int(m["buyer_id"])
+        sel_source = m.get("selection_source", "model")
+        offer = Offer(
+            listing_id=listing.id,
+            buyer_id=buyer_id,
+            match_score=float(m["match_score"]),
+            distance_km=float(m["distance_km"]),
+            days_to_expiry=days_to_expiry,
+            offered_discount_pct=offered_discount_pct,
+            status="sent",
+            selection_source=sel_source,
+        )
+        db.add(offer)
+        created_offers.append(offer)
+        top_buyers_summary.append({
+            "buyer_id": buyer_id,
+            "match_score": round(float(m["match_score"]), 3),
+            "distance_km": round(float(m["distance_km"]), 2),
+            "selection_source": sel_source,
+        })
+
+        # 3. Notifikasi in-app untuk pembeli
+        user_id = buyer_user_map.get(buyer_id)
+        if user_id:
+            prod_name = product.name if product else "Produk Terpilih"
+            notif = Notification(
+                user_id=user_id,
+                title="Penawaran Eksklusif Produk Baru!",
+                body=(
+                    f"Penawaran spesial: {prod_name} dengan diskon {offered_discount_pct:.0f}% "
+                    f"hanya berjarak {m['distance_km']} km dari lokasimu."
+                ),
+                type="offer",
+            )
+            db.add(notif)
+
+    db.commit()
+    return {
+        "total_offers_sent": len(created_offers),
+        "top_buyers": top_buyers_summary,
+    }

@@ -10,11 +10,18 @@ import numpy as np
 import pandas as pd
 import sklearn
 
-from .config import (BAND_PP, HEADROOM_PP, MODEL_DIR, PRICING_CATEGORICAL, PRICING_FEATURES,
-                     RANKING_CATEGORICAL, RANKING_FEATURES, TOP_K)
-from .features import make_matrix
-from .guardrails import clip_discount, filter_eligible_buyers, must_divert
-from .rules import rule_start_discount, weighted_rank_score
+try:
+    from .config import (BAND_PP, HEADROOM_PP, MODEL_DIR, PRICING_CATEGORICAL, PRICING_FEATURES,
+                         RANKING_CATEGORICAL, RANKING_FEATURES, TOP_K)
+    from .features import make_matrix
+    from .guardrails import clip_discount, filter_eligible_buyers, must_divert
+    from .rules import rule_start_discount, weighted_rank_score
+except ImportError:
+    from app.ai.config import (BAND_PP, HEADROOM_PP, MODEL_DIR, PRICING_CATEGORICAL, PRICING_FEATURES,
+                             RANKING_CATEGORICAL, RANKING_FEATURES, TOP_K)
+    from app.ai.features import make_matrix
+    from app.ai.guardrails import clip_discount, filter_eligible_buyers, must_divert
+    from app.ai.rules import rule_start_discount, weighted_rank_score
 
 log = logging.getLogger("recovera.ai")
 
@@ -109,7 +116,38 @@ class AIEngine:
         if scores is None:
             scores = weighted_rank_score(cand).to_numpy()
         cand = cand.assign(match_score=np.round(scores, 3)).sort_values("match_score", ascending=False)
-        top = cand.head(k)
-        return [dict(buyer_id=r["buyer_id"], match_score=float(r["match_score"]),
-                     distance_km=round(float(r["distance_km"]), 2), source=source,
-                     model_version=version) for _, r in top.iterrows()]
+        
+        # Aturan Eksplorasi: 4 Model + 1 Explore agar bebas dari selection bias
+        result = []
+        if len(cand) <= k:
+            for _, r in cand.iterrows():
+                result.append(dict(
+                    buyer_id=int(r["buyer_id"]),
+                    match_score=float(r["match_score"]),
+                    distance_km=round(float(r["distance_km"]), 2),
+                    selection_source="model",
+                    source=source,
+                    model_version=version,
+                ))
+        else:
+            model_top = cand.head(k - 1)
+            for _, r in model_top.iterrows():
+                result.append(dict(
+                    buyer_id=int(r["buyer_id"]),
+                    match_score=float(r["match_score"]),
+                    distance_km=round(float(r["distance_km"]), 2),
+                    selection_source="model",
+                    source=source,
+                    model_version=version,
+                ))
+            remaining = cand.iloc[k - 1:]
+            explore_pick = remaining.sample(n=1, random_state=None).iloc[0]
+            result.append(dict(
+                buyer_id=int(explore_pick["buyer_id"]),
+                match_score=float(explore_pick["match_score"]),
+                distance_km=round(float(explore_pick["distance_km"]), 2),
+                selection_source="explore",
+                source=source,
+                model_version=version,
+            ))
+        return result

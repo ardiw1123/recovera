@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
-from fastapi import APIRouter, Body, Path, Query, status
+from fastapi import APIRouter, Body, Path, Query, Request, status
+from fastapi.concurrency import run_in_threadpool
 
 from app.core.dependencies import CurrentUserDep, DbSessionDep, RequireBuyerDep, RequireSellerDep
 from app.core.exceptions import AppException
@@ -20,7 +21,10 @@ from app.schemas.listing import (
 )
 from app.schemas.order import OrderResponse
 from app.schemas.product import ProductResponse
-from app.services.ai_service import calculate_price_advice
+from app.services.ai_service import (
+    calculate_price_advice,
+    match_and_create_offers_for_listing,
+)
 from app.services.listing_service import (
     calculate_current_dutch_price,
     format_multi_timezone,
@@ -189,6 +193,7 @@ async def recommend_seller_inventory_price(
 
 @router.post("/seller/inventory/{listing_id}/publish", response_model=ResponseEnvelope[ListingResponse])
 async def publish_seller_inventory_listing(
+    request: Request,
     db: DbSessionDep,
     seller_user: RequireSellerDep,
     listing_id: Annotated[int, Path(ge=1)],
@@ -198,16 +203,37 @@ async def publish_seller_inventory_listing(
     errors = _validate_inventory_listing(listing)
     if errors:
         raise AppException("LISTING_VALIDATION_FAILED", "; ".join(errors), status.HTTP_422_UNPROCESSABLE_ENTITY)
+    
+    ai_engine = getattr(request.app.state, "ai", None)
     advice = calculate_price_advice(
-        normal_price=float(listing.normal_price), expiry_date_str=listing.expiry_date.isoformat(),
-        category=listing.product.category, qty=listing.qty,
+        normal_price=float(listing.normal_price),
+        expiry_date_str=listing.expiry_date.isoformat(),
+        category=listing.product.category,
+        qty=listing.qty,
+        ai_engine=ai_engine,
     )
     if not 0.8 * advice.suggested_price <= float(listing.start_price) <= 1.2 * advice.suggested_price and not payload.acknowledge_price_warning:
         raise AppException("PRICE_WARNING_ACK_REQUIRED", "Acknowledge the out-of-range price warning or adjust the starting price", status.HTTP_409_CONFLICT)
+    
     listing.status = "active"
     db.commit()
     db.refresh(listing)
-    return wrap_success(_format_listing_response(listing, *calculate_current_dutch_price(listing)))
+
+    # ── AI Ranking: Match Top-5 buyers & create offers ───────────────────────
+    matching_summary = {"total_offers_sent": 0, "top_buyers": []}
+    if ai_engine is not None:
+        matching_summary = await run_in_threadpool(
+            match_and_create_offers_for_listing,
+            db=db,
+            listing=listing,
+            ai_engine=ai_engine,
+            top_k=5,
+        )
+
+    return wrap_success({
+        "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
+        "matching_summary": matching_summary,
+    })
 
 
 def _format_listing_response(item: Listing, cur_price: float, next_drop: str | None, distance: float | None = None,
@@ -297,9 +323,9 @@ async def list_listings(
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,
-    response_model=ResponseEnvelope[ListingResponse],
 )
 async def create_listing(
+    request: Request,
     db: DbSessionDep,
     current_seller: RequireSellerDep,
     payload: Annotated[ListingCreate, Body()],
@@ -380,8 +406,23 @@ async def create_listing(
     db.commit()
     db.refresh(listing)
 
+    # ── AI Ranking: Match Top-5 buyers & create offers ───────────────────────
+    ai_engine = getattr(request.app.state, "ai", None)
+    matching_summary = {"total_offers_sent": 0, "top_buyers": []}
+    if ai_engine is not None:
+        matching_summary = await run_in_threadpool(
+            match_and_create_offers_for_listing,
+            db=db,
+            listing=listing,
+            ai_engine=ai_engine,
+            top_k=5,
+        )
+
     cur_price, next_drop = calculate_current_dutch_price(listing)
-    return wrap_success(_format_listing_response(listing, cur_price, next_drop))
+    return wrap_success({
+        "listing": _format_listing_response(listing, cur_price, next_drop),
+        "matching_summary": matching_summary,
+    })
 
 
 @router.get(

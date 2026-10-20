@@ -2,8 +2,12 @@
 import json
 import numpy as np
 import pandas as pd
-from .config import COLD_CHAIN_STORAGE, DIVERSION_DAYS, MAX_RADIUS_KM
-from .rules import max_discount_for_floor
+try:
+    from .config import COLD_CHAIN_STORAGE, DIVERSION_DAYS, MAX_RADIUS_KM
+    from .rules import max_discount_for_floor
+except ImportError:
+    from app.ai.config import COLD_CHAIN_STORAGE, DIVERSION_DAYS, MAX_RADIUS_KM
+    from app.ai.rules import max_discount_for_floor
 
 
 def haversine_km(lat1, lng1, lat2, lng2):
