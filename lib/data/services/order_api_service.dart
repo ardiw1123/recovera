@@ -52,4 +52,33 @@ class OrderApiService implements RemoteOrderClient {
       throw ApiException.fromDioException(e, 'Gagal memuat detail pesanan');
     }
   }
+
+  @override
+  Future<CachedOrderModel> buyListing(
+    int listingId, {
+    int qty = 1,
+    bool biometricVerified = true,
+  }) async {
+    try {
+      final response = await client.post<Map<String, dynamic>>(
+        '/listings/$listingId/buy',
+        data: {
+          'qty': qty,
+          'biometric_verified': biometricVerified,
+        },
+      );
+
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error = body?['error']?['message'] ?? 'Gagal membeli produk';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+
+      return CachedOrderModel.fromApiResponse(
+          body['data'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memproses pembelian');
+    }
+  }
 }

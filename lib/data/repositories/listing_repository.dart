@@ -12,10 +12,18 @@ abstract class RemoteListingClient {
     double? maxPrice,
     int? minDays,
     String? sort,
+    double? lat,
+    double? lng,
+    double? radiusKm,
+    int? page,
+    int? limit,
   });
 
   /// Upload a draft listing to backend API. Returns created server listing ID.
   Future<int> uploadDraftListing(DraftListingModel draft);
+
+  /// Fetch a single listing detail from backend API.
+  Future<CachedListingModel?> fetchListingDetail(int id) async => null;
 }
 
 /// Result object wrapping listing query to indicate whether data is fresh or from SQLite cache.
@@ -74,6 +82,9 @@ class ListingRepository {
     double? maxPrice,
     int? minDays,
     String? sort,
+    double? lat,
+    double? lng,
+    double? radiusKm,
   }) async {
     final client = remoteClient;
     // If remote client is configured and refresh requested, try fetching from network
@@ -85,6 +96,9 @@ class ListingRepository {
           maxPrice: maxPrice,
           minDays: minDays,
           sort: sort,
+          lat: lat,
+          lng: lng,
+          radiusKm: radiusKm,
         );
 
         // Update local cache
@@ -129,6 +143,9 @@ class ListingRepository {
           maxPrice: maxPrice,
           minDays: minDays,
           sort: sort,
+          lat: lat,
+          lng: lng,
+          radiusKm: radiusKm,
         );
         await _localDb.upsertListings(remoteItems);
         return ListingResult(listings: remoteItems, isFromCache: false);
@@ -140,9 +157,32 @@ class ListingRepository {
     return ListingResult(listings: cached, isFromCache: true);
   }
 
-  /// Get a single listing by ID, checking local cache first.
-  Future<CachedListingModel?> getListingById(int id) async {
-    return await _localDb.getListingById(id);
+  /// Get a single listing by ID, checking remote detail if [forceRefresh] is true, else checking local cache first.
+  Future<CachedListingModel?> getListingById(int id, {bool forceRefresh = false}) async {
+    final client = remoteClient;
+    if (client != null && forceRefresh) {
+      try {
+        final remoteDetail = await client.fetchListingDetail(id);
+        if (remoteDetail != null) {
+          await _localDb.upsertListings([remoteDetail]);
+          return remoteDetail;
+        }
+      } catch (_) {}
+    }
+
+    final cached = await _localDb.getListingById(id);
+    if (cached != null) return cached;
+
+    if (client != null) {
+      try {
+        final remoteDetail = await client.fetchListingDetail(id);
+        if (remoteDetail != null) {
+          await _localDb.upsertListings([remoteDetail]);
+          return remoteDetail;
+        }
+      } catch (_) {}
+    }
+    return null;
   }
 
   /// Manually cache a list of listings into SQLite.

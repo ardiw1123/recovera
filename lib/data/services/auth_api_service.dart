@@ -109,10 +109,17 @@ class AuthApiService {
   /// Logout dan revocasi refresh token di backend
   Future<void> logout({String? refreshToken}) async {
     try {
-      await client.post<Map<String, dynamic>>(
-        ApiConstants.logoutEndpoint,
-        data: refreshToken != null ? {'refresh_token': refreshToken} : null,
-      );
+      final response = refreshToken == null || refreshToken.isEmpty
+          ? await client.post<Map<String, dynamic>>(ApiConstants.logoutEndpoint)
+          : await client.post<Map<String, dynamic>>(
+              ApiConstants.logoutEndpoint,
+              data: {'refresh_token': refreshToken},
+            );
+      if (response.data?['success'] != true) {
+        final error = response.data?['error']?['message'] ?? 'Logout gagal';
+        final code = response.data?['error']?['code'] as String?;
+        throw ApiException(error.toString(), code: code);
+      }
     } on DioException catch (e) {
       throw ApiException.fromDioException(e, 'Logout gagal');
     }
@@ -137,4 +144,80 @@ class AuthApiService {
       throw ApiException.fromDioException(e, 'Gagal memuat profil');
     }
   }
+
+  /// Update profil pengguna (nama, telepon, alamat, koordinat base_lat/base_lng, dsb.)
+  Future<UserProfile> updateProfile({
+    String? name,
+    String? phone,
+    String? photoUrl,
+    String? companyName,
+    String? address,
+    double? warehouseLat,
+    double? warehouseLng,
+    String? city,
+    String? businessType,
+    double? baseLat,
+    double? baseLng,
+    List<String>? prefCategories,
+    bool? hasColdStorage,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name;
+    if (phone != null) payload['phone'] = phone;
+    if (photoUrl != null) payload['photo_url'] = photoUrl;
+    if (companyName != null) payload['company_name'] = companyName;
+    if (address != null) payload['address'] = address;
+    if (warehouseLat != null) payload['warehouse_lat'] = warehouseLat;
+    if (warehouseLng != null) payload['warehouse_lng'] = warehouseLng;
+    if (city != null) payload['city'] = city;
+    if (businessType != null) payload['business_type'] = businessType;
+    if (baseLat != null) payload['base_lat'] = baseLat;
+    if (baseLng != null) payload['base_lng'] = baseLng;
+    if (prefCategories != null) payload['pref_categories'] = prefCategories;
+    if (hasColdStorage != null) payload['has_cold_storage'] = hasColdStorage;
+
+    try {
+      final response = await client.patch<Map<String, dynamic>>(
+        ApiConstants.profileEndpoint,
+        data: payload,
+      );
+
+      final data = response.data;
+      if (data == null || data['success'] != true) {
+        final error = data?['error']?['message'] ?? 'Gagal memperbarui profil';
+        final code = data?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+
+      return UserProfile.fromJson(data['data'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memperbarui profil');
+    }
+  }
+
+  /// Update alamat dan koordinat lokasi pengguna (buyer: base_lat/base_lng, seller: warehouse_lat/warehouse_lng)
+  Future<UserProfile> updateLocation({
+    required String address,
+    required double latitude,
+    required double longitude,
+    String? city,
+    bool isSeller = false,
+  }) async {
+    if (isSeller) {
+      return updateProfile(
+        address: address,
+        warehouseLat: latitude,
+        warehouseLng: longitude,
+        city: city,
+      );
+    } else {
+      return updateProfile(
+        address: address,
+        baseLat: latitude,
+        baseLng: longitude,
+        city: city,
+      );
+    }
+  }
 }
+

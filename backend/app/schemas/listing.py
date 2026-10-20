@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from datetime import date
+
+from pydantic import BaseModel, Field, HttpUrl
 from app.schemas.product import ProductResponse
 
 
@@ -35,6 +37,9 @@ class ListingResponse(BaseModel):
     warehouse_lng: float | None = None
     warehouse_city: str | None = None
     distance_km: float | None = None
+    match_score: float | None = None
+    discount_pct: float | None = None
+    days_to_expiry: int | None = None
 
 
 class ListingDetailResponse(ListingResponse):
@@ -64,3 +69,38 @@ class ListingUpdate(BaseModel):
 class ListingBuyRequest(BaseModel):
     qty: int = Field(default=1, gt=0)
     biometric_verified: bool = True
+
+
+class SellerInventoryDraftCreate(BaseModel):
+    sku: str = Field(min_length=1, max_length=50)
+    name: str = Field(min_length=1, max_length=150)
+    category: str = Field(min_length=1, max_length=50)
+    storage_type: str = Field(min_length=1, max_length=20)
+    default_unit: str = Field(min_length=1, max_length=20)
+    image_url: HttpUrl
+    brand: str | None = Field(default=None, max_length=100)
+    barcode: str | None = Field(default=None, max_length=50)
+    batch_number: str = Field(min_length=1, max_length=50)
+    qty: int = Field(gt=0)
+    normal_price: float = Field(gt=0)
+    min_price: float = Field(gt=0)
+    expiry_date: date
+
+
+class SellerInventoryDraftUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=150)
+    category: str | None = Field(default=None, min_length=1, max_length=50)
+    storage_type: str | None = Field(default=None, min_length=1, max_length=20)
+    default_unit: str | None = Field(default=None, min_length=1, max_length=20)
+    image_url: HttpUrl | None = None
+    brand: str | None = Field(default=None, max_length=100)
+    batch_number: str | None = Field(default=None, min_length=1, max_length=50)
+    qty: int | None = Field(default=None, gt=0)
+    normal_price: float | None = Field(default=None, gt=0)
+    start_price: float | None = Field(default=None, gt=0)
+    min_price: float | None = Field(default=None, gt=0)
+    expiry_date: date | None = None
+
+
+class SellerPublishRequest(BaseModel):
+    acknowledge_price_warning: bool = False

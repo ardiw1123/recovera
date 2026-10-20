@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,13 +21,23 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 7
 
-    database_url: str = "sqlite:///./recovera.db"
+    database_url: str = Field(
+        default="sqlite:///./recovera.db",
+        validation_alias=AliasChoices("SUPABASE_DATABASE_URL", "DATABASE_URL"),
+        description="Supabase PostgreSQL connection string for deployed environments",
+    )
     cors_origins: str = "*"
 
     gemini_api_key: str = ""
     cloudinary_url: str = ""
     fcm_server_key: str = ""
     web3_rpc_url: str = "https://rpc.bot-chain.testnet"
+
+    @model_validator(mode="after")
+    def require_postgres_outside_local_development(self):
+        if self.environment.lower() not in {"development", "test", "testing"} and self.database_url.startswith("sqlite"):
+            raise ValueError("SUPABASE_DATABASE_URL must point to Supabase PostgreSQL outside local development")
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../widgets/auth_widgets.dart';
+import 'location_management_screen.dart';
 import 'login_screen.dart';
 
 /// PBI-03 — Layar Profil & Keamanan Akun Recovera
@@ -39,28 +40,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final profile = AuthRepository.instance.currentUserProfile;
-    final tokens = AuthRepository.instance.currentTokens;
+    return ListenableBuilder(
+      listenable: AuthRepository.instance,
+      builder: (context, _) {
+        final profile = AuthRepository.instance.currentUserProfile;
+        final tokens = AuthRepository.instance.currentTokens;
 
-    final company = profile?.companyName ??
-        profile?.name ??
-        tokens?.name ??
-        _defaultCompany;
-    final role = profile?.role != null
-        ? (profile!.role == 'seller'
-            ? 'Distributor (Seller)'
-            : 'UMKM Kuliner (Buyer)')
-        : (tokens?.role == 'seller'
-            ? 'Distributor (Seller)'
-            : _defaultRole);
-    final city = profile?.city ?? _defaultCity;
+        final company = profile?.companyName ??
+            profile?.name ??
+            tokens?.name ??
+            _defaultCompany;
+        final role = profile?.role != null
+            ? (profile!.role == 'seller'
+                ? 'Distributor (Seller)'
+                : 'UMKM Kuliner (Buyer)')
+            : (tokens?.role == 'seller'
+                ? 'Distributor (Seller)'
+                : _defaultRole);
+        final city = profile?.city ?? _defaultCity;
 
-    return Scaffold(
-      backgroundColor: AppColors.canvasBg,
-      body: Stack(
-        children: [
-          Column(
+        return Scaffold(
+          backgroundColor: AppColors.canvasBg,
+          body: Stack(
             children: [
+              Column(
+                children: [
               // ── Header Biru ────────────────────────────────────────
               _ProfileHeader(context: context),
 
@@ -158,6 +162,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _FloatingAvatar(context: context),
         ],
       ),
+    );
+      },
     );
   }
 
@@ -411,8 +417,18 @@ class _VerifiedBadge extends StatelessWidget {
 class _ProfileMenuList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final profile = AuthRepository.instance.currentUserProfile;
+    final address = profile?.address?.trim();
+    final city = profile?.city?.trim();
+    final locationSubtitle = (address != null && address.isNotEmpty)
+        ? address
+        : (city != null && city.isNotEmpty
+            ? '$city, Indonesia'
+            : 'Atur Lokasi Pengiriman');
+
     final items = [
       _ProfileMenuItem(
+        key: const Key('menu_business_info'),
         icon: Icons.business_rounded,
         iconBg: const Color(0xFFEFF6FF),
         iconColor: AppColors.primary,
@@ -420,13 +436,23 @@ class _ProfileMenuList extends StatelessWidget {
         onTap: () {},
       ),
       _ProfileMenuItem(
+        key: const Key('menu_location_and_delivery'),
         icon: Icons.location_on_outlined,
         iconBg: const Color(0xFFE0F7FA),
         iconColor: AppColors.secondary,
         label: 'Lokasi & Pengiriman',
-        onTap: () {},
+        subtitle: locationSubtitle,
+        subtitleColor: AppColors.secondary,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const LocationManagementScreen(),
+            ),
+          );
+        },
       ),
       _ProfileMenuItem(
+        key: const Key('menu_security_biometrics'),
         icon: Icons.lock_outline_rounded,
         iconBg: AppColors.successBg,
         iconColor: const Color(0xFF059669),
@@ -436,6 +462,7 @@ class _ProfileMenuList extends StatelessWidget {
         onTap: () {},
       ),
       _ProfileMenuItem(
+        key: const Key('menu_feedback'),
         icon: Icons.chat_bubble_outline_rounded,
         iconBg: const Color(0xFFEEF2FF),
         iconColor: const Color(0xFF6366F1),
@@ -454,6 +481,7 @@ class _ProfileMenuList extends StatelessWidget {
 
 class _ProfileMenuItem extends StatefulWidget {
   const _ProfileMenuItem({
+    super.key,
     required this.icon,
     required this.iconBg,
     required this.iconColor,

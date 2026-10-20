@@ -28,7 +28,6 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure database schema is initialized on startup
     init_db()
     yield
 

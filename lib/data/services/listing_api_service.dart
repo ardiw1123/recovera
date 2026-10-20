@@ -18,6 +18,11 @@ class ListingApiService implements RemoteListingClient {
     double? maxPrice,
     int? minDays,
     String? sort,
+    double? lat,
+    double? lng,
+    double? radiusKm,
+    int? page,
+    int? limit,
   }) async {
     final queryParams = <String, dynamic>{};
     if (search != null && search.trim().isNotEmpty) {
@@ -34,6 +39,21 @@ class ListingApiService implements RemoteListingClient {
     }
     if (sort != null && sort.trim().isNotEmpty) {
       queryParams['sort'] = sort.trim();
+    }
+    if (lat != null) {
+      queryParams['lat'] = lat;
+    }
+    if (lng != null) {
+      queryParams['lng'] = lng;
+    }
+    if (radiusKm != null && radiusKm > 0) {
+      queryParams['radius_km'] = radiusKm;
+    }
+    if (page != null && page > 0) {
+      queryParams['page'] = page;
+    }
+    if (limit != null && limit > 0) {
+      queryParams['limit'] = limit;
     }
 
     try {
@@ -57,6 +77,25 @@ class ListingApiService implements RemoteListingClient {
           .toList();
     } on DioException catch (e) {
       throw ApiException.fromDioException(e, 'Gagal memuat katalog lelang');
+    }
+  }
+
+  @override
+  Future<CachedListingModel> fetchListingDetail(int id) async {
+    try {
+      final response = await client.get<Map<String, dynamic>>('/listings/$id');
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error =
+            body?['error']?['message'] ?? 'Gagal memuat detail listing';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+
+      return CachedListingModel.fromApiResponse(
+          body['data'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memuat detail listing');
     }
   }
 
