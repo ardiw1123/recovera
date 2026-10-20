@@ -441,28 +441,36 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '1 Hari (Urgent)',
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF94A3B8),
+                  Flexible(
+                    child: Text(
+                      '1 Hari (Urgent)',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF94A3B8),
+                      ),
                     ),
                   ),
-                  Text(
-                    '14 Hari',
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
+                  Flexible(
+                    child: Text(
+                      '14 Hari',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
-                  Text(
-                    '30 Hari',
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF94A3B8),
+                  Flexible(
+                    child: Text(
+                      '30 Hari',
+                      textAlign: TextAlign.right,
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF94A3B8),
+                      ),
                     ),
                   ),
                 ],
@@ -545,15 +553,18 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              '3. RADIUS PENEMUAN GUDANG',
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF0F172A),
-                letterSpacing: 0.8,
+            Expanded(
+              child: Text(
+                '3. RADIUS PENEMUAN GUDANG',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF0F172A),
+                  letterSpacing: 0.8,
+                ),
               ),
             ),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
@@ -614,36 +625,47 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '5 km',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF94A3B8),
+              Flexible(
+                child: Text(
+                  '5 km',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF94A3B8),
+                  ),
                 ),
               ),
-              Text(
-                '15 km (Default)',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: _radiusKm == 15.0 ? AppColors.primary : const Color(0xFF94A3B8),
+              Flexible(
+                child: Text(
+                  '15 km (Default)',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: _radiusKm == 15.0 ? AppColors.primary : const Color(0xFF94A3B8),
+                  ),
                 ),
               ),
-              Text(
-                '50 km',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF94A3B8),
+              Flexible(
+                child: Text(
+                  '50 km',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF94A3B8),
+                  ),
                 ),
               ),
-              Text(
-                '100 km',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF94A3B8),
+              Flexible(
+                child: Text(
+                  '100 km',
+                  textAlign: TextAlign.right,
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF94A3B8),
+                  ),
                 ),
               ),
             ],

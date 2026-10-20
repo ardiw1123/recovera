@@ -283,7 +283,7 @@ void main() {
           selectedCategories: const {},
           selectedExpiryPreset: 'all',
           selectedSort: 'cheapest',
-          onApply: (cats, exp, sort) {},
+          onApply: (cats, exp, sort, dist) {},
         ),
       );
       await testScreenSize(tester, sheet, compactSize);

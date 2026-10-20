@@ -522,8 +522,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 TextButton(
                   key: const Key('btn_deny_location_permission'),
@@ -542,7 +545,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
                 ElevatedButton.icon(
                   key: const Key('btn_grant_location_permission'),
                   icon: const Icon(Icons.my_location_rounded, size: 14),
@@ -1042,12 +1044,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             children: [
               const Icon(Icons.pin_drop_outlined, size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
-              Text(
-                'Koordinat Geografis Pin Peta',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.darkNavy,
+              Expanded(
+                child: Text(
+                  'Koordinat Geografis Pin Peta',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.darkNavy,
+                  ),
                 ),
               ),
             ],
@@ -1074,12 +1078,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             children: [
               const Icon(Icons.tune_rounded, size: 18, color: AppColors.primary),
               const SizedBox(width: 8),
-              Text(
-                'Input Koordinat Manual (Latitude & Longitude)',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.darkNavy,
+              Expanded(
+                child: Text(
+                  'Input Koordinat Manual (Latitude & Longitude)',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.darkNavy,
+                  ),
                 ),
               ),
             ],
