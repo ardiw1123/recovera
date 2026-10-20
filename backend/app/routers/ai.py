@@ -1,5 +1,6 @@
 from typing import Annotated
-from fastapi import APIRouter, Body, File, UploadFile, status
+from fastapi import APIRouter, Body, File, Request, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 
 from app.core.dependencies import RequireSellerDep
 from app.core.exceptions import AppException
@@ -44,13 +45,20 @@ async def extract_invoice(
     response_model=ResponseEnvelope[PriceAdviceResponse],
 )
 async def get_price_advice(
+    request: Request,
     _: RequireSellerDep,
     payload: Annotated[PriceAdviceRequest, Body()],
 ) -> dict:
-    advice = calculate_price_advice(
+    engine = getattr(request.app.state, "ai", None)
+    advice = await run_in_threadpool(
+        calculate_price_advice,
         normal_price=payload.normal_price,
         expiry_date_str=payload.expiry_date,
         category=payload.category,
         qty=payload.qty,
+        storage_type=payload.storage_type,
+        min_price=payload.min_price,
+        ai_engine=engine,
     )
     return wrap_success(advice.model_dump())
+

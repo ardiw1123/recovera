@@ -24,6 +24,8 @@ class PriceAdviceRequest(BaseModel):
     expiry_date: str
     category: str | None = None
     qty: int = Field(default=1, gt=0)
+    storage_type: str = Field(default="ambient", description="ambient | chilled | frozen")
+    min_price: float = Field(default=0.0, ge=0.0, description="Harga minimum seller, 0 = tidak ada floor")
 
 
 class PriceAdviceResponse(BaseModel):
@@ -31,3 +33,5 @@ class PriceAdviceResponse(BaseModel):
     discount_pct: float
     rationale: str
     next_drop_at: str
+    source: str = "rule"                  # "ml" | "rule"
+    model_version: str | None = None      # versi model jika source="ml"
