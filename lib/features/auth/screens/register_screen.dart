@@ -416,34 +416,37 @@ class _OfficialBadge extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         // ── Badge ───────────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(50),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF34D399),
-                  shape: BoxShape.circle,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(50),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF34D399),
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Pendaftaran Mitra Resmi Recovera',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.white,
+                const SizedBox(width: 6),
+                Text(
+                  'Pendaftaran Mitra Resmi Recovera',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.white,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -480,6 +483,7 @@ class _RoleDropdown extends StatelessWidget {
         ),
         DropdownButtonFormField<String>(
           initialValue: value,
+          isExpanded: true,
           onChanged: onChanged,
           decoration: InputDecoration(
             filled: true,
@@ -510,7 +514,10 @@ class _RoleDropdown extends StatelessWidget {
           items: options
               .map((o) => DropdownMenuItem<String>(
                     value: o['value'],
-                    child: Text(o['label']!),
+                    child: Text(
+                      o['label']!,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ))
               .toList(),
         ),

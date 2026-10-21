@@ -150,9 +150,11 @@ class AuthRepository extends ChangeNotifier {
   /// Memuat profil pengguna dari API terautentikasi
   Future<UserProfile> fetchProfile() async {
     final profile = await authApiService.getProfile();
-    _currentUserProfile = profile;
+    if (profile.id != 0 || profile.email.isNotEmpty || profile.name.isNotEmpty || _currentUserProfile == null) {
+      _currentUserProfile = profile;
+    }
     notifyListeners();
-    return profile;
+    return _currentUserProfile ?? profile;
   }
 
   /// Update profil pengguna ke backend dan sinkronisasi state lokal

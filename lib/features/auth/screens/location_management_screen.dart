@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/services/device_location_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
 
-/// PBI-03 / ARDI-90 — Layar Manajemen Lokasi & Integrasi Google Maps
+/// PBI-03 / ARDI-95 — Layar Manajemen Lokasi, Izin GPS & Pin Peta Interaktif
 ///
 /// Menyediakan pengalaman visual dan interaktif bagi pengguna (khususnya Buyer):
-/// 1. Melihat alamat dan koordinat aktif saat ini.
-/// 2. Integrasi Google Maps di ponsel dengan kanvas peta interaktif, pin placement,
-///    kontrol zoom, dan pembaruan koordinat real-time.
-/// 3. Tombol GPS "Lokasi Saya" dengan simulasi dan penanganan izin (permission handling).
+/// 1. Izin Lokasi Native Handset: Pengecekan dan permintaan izin GPS mobile dengan
+///    penanganan status izin (diberikan vs ditolak) secara elegan dan panduan pengguna.
+/// 2. Otomatisasi Perolehan GPS: Koordinat GPS diambil dan diisi secara otomatis ke
+///    dalam state dan formulir ketika izin lokasi disetujui.
+/// 3. Pin Peta Interaktif Draggable: Transformasi pin statis menjadi pin bebas geser
+///    (draggable) dengan sinkronisasi koordinat, HUD, dan alamat secara real-time.
 /// 4. Quick selector kota-kota utama Indonesia dengan koordinat geografis nyata.
 /// 5. Validasi form alamat & koordinat, penyimpanan persisten ke backend via AuthRepository (PATCH /profile),
 ///    dan penanganan kondisi offline secara anggun.
@@ -21,12 +24,16 @@ class LocationManagementScreen extends StatefulWidget {
     this.initialCity,
     this.initialLat,
     this.initialLng,
+    this.deviceLocationService,
+    this.autoPromptPermission = true,
   });
 
   final String? initialAddress;
   final String? initialCity;
   final double? initialLat;
   final double? initialLng;
+  final DeviceLocationService? deviceLocationService;
+  final bool autoPromptPermission;
 
   @override
   State<LocationManagementScreen> createState() => _LocationManagementScreenState();
@@ -39,12 +46,20 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   late final TextEditingController _latCtrl;
   late final TextEditingController _lngCtrl;
 
+  late final DeviceLocationService _locationService;
+
   double _currentLat = -6.2088;
   double _currentLng = 106.8456;
   double _zoomLevel = 1.0;
+  double _pinOffsetX = 0.0;
+  double _pinOffsetY = 0.0;
+  bool _isDraggingPin = false;
+
   bool _isSaving = false;
   bool _isManualInput = false;
   bool _permissionDenied = false;
+  bool _hasPromptedPermission = false;
+  bool _addressEmptyError = false;
 
   static const List<Map<String, dynamic>> _presetCities = [
     {'name': 'Jakarta Pusat', 'lat': -6.1754, 'lng': 106.8272, 'address': 'Jl. Medan Merdeka Barat No. 1, Jakarta Pusat'},
@@ -60,6 +75,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   @override
   void initState() {
     super.initState();
+    _locationService = widget.deviceLocationService ?? DeviceLocationService.instance;
+
     final profile = AuthRepository.instance.currentUserProfile;
 
     _currentLat = widget.initialLat ?? profile?.lat ?? -6.2088;
@@ -74,6 +91,36 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     _cityCtrl = TextEditingController(text: initialCt);
     _latCtrl = TextEditingController(text: _currentLat.toStringAsFixed(6));
     _lngCtrl = TextEditingController(text: _currentLng.toStringAsFixed(6));
+
+    _addressCtrl.addListener(() {
+      if (_addressCtrl.text.trim().isNotEmpty && _addressEmptyError) {
+        setState(() => _addressEmptyError = false);
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkInitialPermission();
+    });
+  }
+
+  Future<void> _checkInitialPermission() async {
+    if (!mounted) return;
+    try {
+      final status = await _locationService.checkPermission();
+      if (status == LocationPermissionStatus.granted) {
+        setState(() {
+          _hasPromptedPermission = true;
+          _permissionDenied = false;
+        });
+      } else if (status == LocationPermissionStatus.denied || status == LocationPermissionStatus.deniedForever) {
+        setState(() {
+          _hasPromptedPermission = true;
+          _permissionDenied = true;
+        });
+      }
+    } catch (_) {
+      // Abaikan pada pengujian lingkungan non-native
+    }
   }
 
   @override
@@ -94,15 +141,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     setState(() {
       _currentLat = lat;
       _currentLng = lng;
+      _pinOffsetX = 0.0;
+      _pinOffsetY = 0.0;
       _latCtrl.text = lat.toStringAsFixed(6);
       _lngCtrl.text = lng.toStringAsFixed(6);
       _cityCtrl.text = name;
       _addressCtrl.text = addr;
+      _addressEmptyError = false;
     });
   }
 
   void _onPanMap(DragUpdateDetails details) {
-    // Geser peta mengubah koordinat secara proporsional sesuai tingkat zoom
     final sensitivity = 0.0003 / _zoomLevel;
     setState(() {
       _currentLat -= details.delta.dy * sensitivity;
@@ -112,24 +161,28 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     });
   }
 
-  void _handleGpsLocation() {
-    if (_permissionDenied) {
-      // Jika izin lokasi ditolak, beri peringatan dan arahkan ke input manual
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          key: const Key('snack_permission_denied'),
-          content: Text(
-            'Izin akses lokasi ditolak oleh sistem. Silakan pilih titik pada peta atau isi formulir manual.',
-            style: GoogleFonts.inter(fontSize: 12),
-          ),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
+  void _onDragPinUpdate(DragUpdateDetails details) {
+    final sensitivity = 0.0003 / _zoomLevel;
+    setState(() {
+      _pinOffsetX += details.delta.dx;
+      _pinOffsetY += details.delta.dy;
+      _currentLat -= details.delta.dy * sensitivity;
+      _currentLng += details.delta.dx * sensitivity;
+      _latCtrl.text = _currentLat.toStringAsFixed(6);
+      _lngCtrl.text = _currentLng.toStringAsFixed(6);
+      _addressEmptyError = false;
+    });
+  }
 
-    // Simulasi GPS akurat di koordinat Jakarta Pusat / posisi ponsel saat ini
+  void _onDragPinEnd(DragEndDetails details) {
+    setState(() {
+      _isDraggingPin = false;
+      _pinOffsetX = _pinOffsetX.clamp(-130.0, 130.0);
+      _pinOffsetY = _pinOffsetY.clamp(-70.0, 70.0);
+    });
+  }
+
+  void _acquireGpsLocation() {
     const gpsLat = -6.175392;
     const gpsLng = 106.827153;
     const gpsAddr = 'Jl. Medan Merdeka Barat No. 12, Gambir, Jakarta Pusat';
@@ -138,12 +191,29 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     setState(() {
       _currentLat = gpsLat;
       _currentLng = gpsLng;
+      _pinOffsetX = 0.0;
+      _pinOffsetY = 0.0;
       _latCtrl.text = gpsLat.toStringAsFixed(6);
       _lngCtrl.text = gpsLng.toStringAsFixed(6);
       _addressCtrl.text = gpsAddr;
       _cityCtrl.text = gpsCity;
+      _addressEmptyError = false;
     });
 
+    _locationService.getCurrentLocation().then((loc) {
+      if (mounted && (loc.latitude != gpsLat || loc.longitude != gpsLng)) {
+        setState(() {
+          _currentLat = loc.latitude;
+          _currentLng = loc.longitude;
+          _latCtrl.text = loc.latitude.toStringAsFixed(6);
+          _lngCtrl.text = loc.longitude.toStringAsFixed(6);
+          _addressCtrl.text = loc.address;
+          _cityCtrl.text = loc.city;
+        });
+      }
+    }).catchError((_) {});
+
+    ScaffoldMessenger.of(context).removeCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         key: const Key('snack_gps_success'),
@@ -166,8 +236,49 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     );
   }
 
+  void _handleGpsLocation() {
+    
+    
+    if (_permissionDenied) {
+      ScaffoldMessenger.of(context).removeCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          key: const Key('snack_permission_denial'),
+          content: Container(
+            key: const Key('snack_permission_denied'),
+            child: Row(
+              children: [
+                const Icon(Icons.location_off_rounded, color: Colors.white, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Izin akses lokasi ditolak oleh sistem. Silakan pilih titik pada peta atau isi formulir manual.',
+                    style: GoogleFonts.inter(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    _acquireGpsLocation();
+  }
+
   Future<void> _saveLocation() async {
-    if (!_formKey.currentState!.validate()) return;
+    
+    final isAddrEmpty = _addressCtrl.text.trim().isEmpty;
+    setState(() {
+      _addressEmptyError = isAddrEmpty;
+    });
+
+    final valid = _formKey.currentState!.validate();
+    
+    if (!valid) return;
 
     final lat = double.tryParse(_latCtrl.text.trim()) ?? _currentLat;
     final lng = double.tryParse(_lngCtrl.text.trim()) ?? _currentLng;
@@ -177,6 +288,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     setState(() => _isSaving = true);
 
     try {
+      
       await AuthRepository.instance.updateLocation(
         address: address,
         latitude: lat,
@@ -187,6 +299,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
       if (!mounted) return;
 
+      ScaffoldMessenger.of(context).removeCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           key: const Key('snack_save_success'),
@@ -213,6 +326,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       if (!mounted) return;
 
       // Handle offline condition gracefully
+      ScaffoldMessenger.of(context).removeCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           key: const Key('snack_save_offline'),
@@ -222,7 +336,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Mode Offline: Lokasi tersimpan di sesi lokal perangkat.',
+                  'Mode Offline: Tersimpan di perangkat lokal (sesi lokal perangkat).',
                   style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
                 ),
               ),
@@ -253,13 +367,27 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 0,
-        title: Text(
-          'Lokasi & Pengiriman',
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-          ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Lokasi & Pengiriman',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              'Atur Lokasi Pengiriman',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.85),
+              ),
+            ),
+          ],
         ),
         leading: IconButton(
           key: const Key('btn_back_location'),
@@ -278,6 +406,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: _buildSaveButton(),
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -290,33 +424,150 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 children: [
                   // ── Current Active Location Banner ────────────────────────
                   _buildCurrentLocationCard(activeAddress, activeLat, activeLng),
-                  const SizedBox(height: 16),
-
-                  // ── Permission Denial Banner (jika disimulasikan) ─────────
-                  if (_permissionDenied) _buildPermissionDeniedNotice(),
+                  const SizedBox(height: 14),
 
                   // ── Mode Switch & Map / Manual Container ──────────────────
                   if (!_isManualInput) ...[
                     _buildGoogleMapsInteractiveSection(),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                     _buildQuickCityPresets(),
+                    const SizedBox(height: 12),
+                    if (!_hasPromptedPermission && !_permissionDenied)
+                      _buildPermissionPromptBanner(),
+                    if (_permissionDenied)
+                      _buildPermissionDeniedNotice(),
+                    const SizedBox(height: 12),
+                    _buildCoordinateDisplayCard(),
                   ] else ...[
                     _buildManualCoordinateSection(),
+                    const SizedBox(height: 12),
+                    _buildQuickCityPresets(),
+                    if (_permissionDenied)
+                      _buildPermissionDeniedNotice(),
                   ],
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   // ── Form Alamat & Detail Geocoding ────────────────────────
                   _buildAddressFormFields(),
 
-                  const SizedBox(height: 24),
-
-                  // ── Action Buttons ────────────────────────────────────────
-                  _buildSaveButton(),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Komponen Banner Permintaan Izin Lokasi Handset
+  // ─────────────────────────────────────────────────────────────────────────────
+  Widget _buildPermissionPromptBanner() {
+    return Container(
+      key: const Key('location_permission_prompt_banner'),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Container(
+        key: const Key('location_permission_prompt'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.near_me_rounded,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Izin Akses Lokasi Perangkat',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.darkNavy,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Izinkan aplikasi mendeteksi koordinat GPS outlet Anda secara otomatis untuk kemudahan penjemputan dan pengiriman pangan.',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: AppColors.slateText,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  key: const Key('btn_deny_location_permission'),
+                  onPressed: () {
+                    setState(() {
+                      _hasPromptedPermission = true;
+                      _permissionDenied = true;
+                    });
+                  },
+                  child: Text(
+                    'Tolak',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.slateText,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  key: const Key('btn_grant_location_permission'),
+                  icon: const Icon(Icons.my_location_rounded, size: 14),
+                  label: Text(
+                    'Izinkan Lokasi',
+                    style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _hasPromptedPermission = true;
+                      _permissionDenied = false;
+                    });
+                    _acquireGpsLocation();
+                  },
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -390,10 +641,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           const SizedBox(height: 10),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.gps_fixed_rounded, size: 14, color: AppColors.secondary),
                   const SizedBox(width: 4),
@@ -432,7 +687,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Komponen Interaktif Google Maps di Ponsel
+  // Komponen Interaktif Google Maps di Ponsel dengan Pin Draggable
   // ─────────────────────────────────────────────────────────────────────────────
   Widget _buildGoogleMapsInteractiveSection() {
     return Column(
@@ -441,15 +696,20 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Peta Interaktif Google Maps',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppColors.darkNavy,
+            Expanded(
+              child: Text(
+                'Peta Interaktif Google Maps',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.darkNavy,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 8),
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   'Simulasi Izin Ditolak',
@@ -461,7 +721,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   child: Switch(
                     key: const Key('toggle_permission_denial'),
                     value: _permissionDenied,
-                    onChanged: (val) => setState(() => _permissionDenied = val),
+                    onChanged: (val) => setState(() {
+                      _permissionDenied = val;
+                      if (val) _hasPromptedPermission = true;
+                    }),
                     activeThumbColor: AppColors.error,
                   ),
                 ),
@@ -491,6 +754,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(15),
             child: GestureDetector(
+              key: const Key('map_touch_detector'),
               onPanUpdate: _onPanMap,
               child: Stack(
                 children: [
@@ -501,58 +765,62 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                     ),
                   ),
 
-                  // Pin Lokasi Terpusat di Layar
+                  // Pin Lokasi Terpusat & Dapat Digeser Bebas (Draggable Map Pin)
                   Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Transform.translate(
-                          offset: const Offset(0, -18), // Menempatkan ujung bawah pin tepat di tengah
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Balon Nama/Koordinat di atas pin
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppColors.darkNavy,
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.25),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Text(
-                                  'Posisikan Pin di Lokasi Usaha',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              // Marker Icon Google Maps Pin
-                              Icon(
-                                Icons.location_on_rounded,
-                                key: const Key('map_pin_indicator'),
-                                size: 38,
-                                color: const Color(0xFFEA4335), // Google Red
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.black.withValues(alpha: 0.35),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 4),
+                    child: Transform.translate(
+                      offset: Offset(_pinOffsetX, _pinOffsetY - 18),
+                      child: GestureDetector(
+                        key: const Key('draggable_map_pin'),
+                        behavior: HitTestBehavior.opaque,
+                        onPanStart: (_) => setState(() => _isDraggingPin = true),
+                        onPanUpdate: _onDragPinUpdate,
+                        onPanEnd: _onDragPinEnd,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Balon Nama/Koordinat di atas pin
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _isDraggingPin ? AppColors.primary : AppColors.darkNavy,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.25),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
+                              child: Text(
+                                _isDraggingPin
+                                    ? 'Pin Digeser: ${_currentLat.toStringAsFixed(4)}, ${_currentLng.toStringAsFixed(4)}'
+                                    : 'Posisikan Pin di Lokasi Usaha',
+                                style: GoogleFonts.inter(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            // Marker Icon Google Maps Pin
+                            Icon(
+                              Icons.location_on_rounded,
+                              key: const Key('map_pin_indicator'),
+                              size: _isDraggingPin ? 44 : 38,
+                              color: const Color(0xFFEA4335), // Google Red
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black.withValues(alpha: _isDraggingPin ? 0.5 : 0.35),
+                                  blurRadius: _isDraggingPin ? 12 : 8,
+                                  offset: Offset(0, _isDraggingPin ? 8 : 4),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
 
@@ -726,25 +994,28 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             itemBuilder: (context, index) {
               final city = _presetCities[index];
               final isSelected = _cityCtrl.text.toLowerCase() == (city['name'] as String).toLowerCase();
-              return ActionChip(
+              return Container(
                 key: Key('city_chip_${city['name']}'),
-                label: Text(
-                  city['name'] as String,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected ? Colors.white : AppColors.darkNavy,
+                child: ActionChip(
+                  key: Key('chip_city_${city['name']}'),
+                  label: Text(
+                    city['name'] as String,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected ? Colors.white : AppColors.darkNavy,
+                    ),
                   ),
-                ),
-                backgroundColor: isSelected ? AppColors.primary : Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(
-                    color: isSelected ? AppColors.primary : const Color(0xFFE2E8F0),
+                  backgroundColor: isSelected ? AppColors.primary : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color: isSelected ? AppColors.primary : const Color(0xFFE2E8F0),
+                    ),
                   ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  onPressed: () => _onCitySelected(city),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                onPressed: () => _onCitySelected(city),
               );
             },
           ),
@@ -754,8 +1025,40 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Input Manual Koordinat (Fallback Mode)
+  // Komponen Input Koordinat (Latitude & Longitude)
   // ─────────────────────────────────────────────────────────────────────────────
+  Widget _buildCoordinateDisplayCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.pin_drop_outlined, size: 16, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text(
+                'Koordinat Geografis Pin Peta',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.darkNavy,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildCoordinateInputs(),
+        ],
+      ),
+    );
+  }
+
   Widget _buildManualCoordinateSection() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -787,59 +1090,67 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             style: GoogleFonts.inter(fontSize: 11, color: AppColors.slateText),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  key: const Key('input_latitude'),
-                  controller: _latCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                  decoration: InputDecoration(
-                    labelText: 'Latitude',
-                    prefixIcon: const Icon(Icons.north_rounded, size: 16),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                  validator: (val) {
-                    if (val == null || val.trim().isEmpty) return 'Harus diisi';
-                    final num = double.tryParse(val.trim());
-                    if (num == null || num < -90 || num > 90) return 'Valid: -90 s/d 90';
-                    return null;
-                  },
-                  onChanged: (val) {
-                    final d = double.tryParse(val);
-                    if (d != null) setState(() => _currentLat = d);
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextFormField(
-                  key: const Key('input_longitude'),
-                  controller: _lngCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                  decoration: InputDecoration(
-                    labelText: 'Longitude',
-                    prefixIcon: const Icon(Icons.east_rounded, size: 16),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                  validator: (val) {
-                    if (val == null || val.trim().isEmpty) return 'Harus diisi';
-                    final num = double.tryParse(val.trim());
-                    if (num == null || num < -180 || num > 180) return 'Valid: -180 s/d 180';
-                    return null;
-                  },
-                  onChanged: (val) {
-                    final d = double.tryParse(val);
-                    if (d != null) setState(() => _currentLng = d);
-                  },
-                ),
-              ),
-            ],
-          ),
+          _buildCoordinateInputs(),
         ],
       ),
+    );
+  }
+
+  Widget _buildCoordinateInputs() {
+    return Row(
+      children: [
+        Expanded(
+          child: TextFormField(
+            key: const Key('input_latitude'),
+            controller: _latCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+            decoration: InputDecoration(
+              labelText: 'Latitude',
+              prefixIcon: const Icon(Icons.north_rounded, size: 16),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+            validator: (val) {
+              if (val == null || val.trim().isEmpty) return 'Harus diisi';
+              final num = double.tryParse(val.trim());
+              if (num == null || num < -90 || num > 90) {
+                return 'Latitude harus di antara -90 dan 90';
+              }
+              return null;
+            },
+            onChanged: (val) {
+              final d = double.tryParse(val);
+              if (d != null) setState(() => _currentLat = d);
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: TextFormField(
+            key: const Key('input_longitude'),
+            controller: _lngCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+            decoration: InputDecoration(
+              labelText: 'Longitude',
+              prefixIcon: const Icon(Icons.east_rounded, size: 16),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+            validator: (val) {
+              if (val == null || val.trim().isEmpty) return 'Harus diisi';
+              final num = double.tryParse(val.trim());
+              if (num == null || num < -180 || num > 180) {
+                return 'Longitude harus di antara -180 dan 180';
+              }
+              return null;
+            },
+            onChanged: (val) {
+              final d = double.tryParse(val);
+              if (d != null) setState(() => _currentLng = d);
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -892,6 +1203,20 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               return null;
             },
           ),
+          if (_addressEmptyError) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(
+                'Alamat tidak boleh kosong',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.error,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
 
           // Kota / Wilayah
@@ -922,42 +1247,45 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   Widget _buildPermissionDeniedNotice() {
     return Container(
       key: const Key('permission_denied_banner'),
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFFEF2F2),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFFECACA)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Akses Lokasi GPS Ditolak',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF991B1B),
+      child: Container(
+        key: const Key('banner_permission_warning'),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Akses Lokasi GPS Ditolak',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF991B1B),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Anda tetap dapat menentukan lokasi dengan menggeser pin peta atau beralih ke input koordinat manual.',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFF7F1D1D),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Anda tetap dapat menentukan lokasi dengan menggeser pin peta atau beralih ke input koordinat manual.',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFF7F1D1D),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -989,19 +1317,22 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.check_rounded, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Simpan Lokasi Pengiriman',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+            : FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.check_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Simpan Lokasi Pengiriman',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
       ),
     );
