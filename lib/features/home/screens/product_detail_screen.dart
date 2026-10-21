@@ -505,12 +505,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                       if (listing.brand != null) ...[
                         const SizedBox(width: 8),
-                        Text(
-                          '•  ${listing.brand!}',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF64748B),
+                        Flexible(
+                          child: Text(
+                            '•  ${listing.brand!}',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF64748B),
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -822,15 +825,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'HARGA LIKUIDASI SAAT INI',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF94A3B8),
-                  letterSpacing: 0.5,
+              Flexible(
+                child: Text(
+                  'HARGA LIKUIDASI SAAT INI',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF94A3B8),
+                    letterSpacing: 0.5,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 'Hemat ${listing.effectiveDiscountPercent}%',
                 style: GoogleFonts.inter(
@@ -842,37 +849,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                'Rp ${_formatPrice(listing.currentPrice)}',
-                style: GoogleFonts.inter(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.primary,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  'Rp ${_formatPrice(listing.currentPrice)}',
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primary,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '/ ${listing.defaultUnit}',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF64748B),
+                const SizedBox(width: 4),
+                Text(
+                  '/ ${listing.defaultUnit}',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF64748B),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Rp ${_formatPrice(listing.normalPrice)}',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: const Color(0xFF94A3B8),
-                  decoration: TextDecoration.lineThrough,
+                const SizedBox(width: 10),
+                Text(
+                  'Rp ${_formatPrice(listing.normalPrice)}',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: const Color(0xFF94A3B8),
+                    decoration: TextDecoration.lineThrough,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           Container(height: 1, color: const Color(0xFFF1F5F9)),
@@ -910,27 +921,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Kuantitas Pembelian',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1E293B),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Kuantitas Pembelian',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1E293B),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Tersedia: ${listing.qty} ${listing.defaultUnit}',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: const Color(0xFF64748B),
+                const SizedBox(height: 2),
+                Text(
+                  'Tersedia: ${listing.qty} ${listing.defaultUnit}',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Container(
             decoration: BoxDecoration(
               border: Border.all(color: const Color(0xFFCBD5E1)),
@@ -984,12 +998,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             children: [
               const Icon(Icons.verified_user_rounded, color: Color(0xFF10B981), size: 18),
               const SizedBox(width: 8),
-              Text(
-                'Distributor Terverifikasi',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF10B981),
+              Flexible(
+                child: Text(
+                  'Distributor Terverifikasi',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF10B981),
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -1071,12 +1088,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 label,
                 style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B)),
               ),
-              Text(
-                value,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1E293B),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  value,
+                  textAlign: TextAlign.end,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF1E293B),
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

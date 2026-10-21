@@ -93,24 +93,30 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.tune_rounded,
-                          size: 16,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Filter & Urutkan',
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.tune_rounded,
+                            size: 16,
+                            color: AppColors.primary,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Filter & Urutkan',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF0F172A),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     GestureDetector(
                       onTap: _reset,
                       child: Text(
@@ -211,16 +217,20 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              '1. KATEGORI PRODUK (MULTI‑SELECT)',
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF0F172A),
-                letterSpacing: 0.8,
+            Expanded(
+              child: Text(
+                '1. KATEGORI PRODUK (MULTI‑SELECT)',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF0F172A),
+                  letterSpacing: 0.8,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (_categories.isNotEmpty)
+            if (_categories.isNotEmpty) ...[
+              const SizedBox(width: 8),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -237,6 +247,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                   ),
                 ),
               ),
+            ],
           ],
         ),
         const SizedBox(height: 12),
@@ -333,16 +344,20 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              '2. SISA HARI KEDALUWARSA',
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF0F172A),
-                letterSpacing: 0.8,
+            Expanded(
+              child: Text(
+                '2. SISA HARI KEDALUWARSA',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF0F172A),
+                  letterSpacing: 0.8,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (_expiryPreset != 'all')
+            if (_expiryPreset != 'all') ...[
+              const SizedBox(width: 8),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -359,6 +374,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                   ),
                 ),
               ),
+            ],
           ],
         ),
         const SizedBox(height: 6),
@@ -476,12 +492,15 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             ),
           ),
           alignment: Alignment.center,
-          child: Text(
-            isSelected ? '$label ✓' : label,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              color: isSelected ? AppColors.primary : const Color(0xFF334155),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              isSelected ? '$label ✓' : label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? AppColors.primary : const Color(0xFF334155),
+              ),
             ),
           ),
         ),
