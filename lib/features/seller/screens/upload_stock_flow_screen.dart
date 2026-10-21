@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
@@ -17,9 +20,15 @@ class UploadStockFlowScreen extends StatefulWidget {
   const UploadStockFlowScreen({
     super.key,
     this.repository,
+    this.imagePicker,
+    this.onPickImage,
+    this.initialImageUrl,
   });
 
   final SellerRepository? repository;
+  final ImagePicker? imagePicker;
+  final Future<XFile?> Function()? onPickImage;
+  final String? initialImageUrl;
 
   @override
   State<UploadStockFlowScreen> createState() => _UploadStockFlowScreenState();
@@ -27,6 +36,13 @@ class UploadStockFlowScreen extends StatefulWidget {
 
 class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
   late final SellerRepository _repository;
+  late final ImagePicker _imagePicker;
+  XFile? _pickedFile;
+  XFile? get pickedFile => _pickedFile;
+  Uint8List? _imageBytes;
+  String? _imagePath;
+  bool _isPickingImage = false;
+  String? _imageError;
 
   int _currentStep = 1; // 1: Produk, 2: Validasi, 3: Harga, 4: Review
 
@@ -69,6 +85,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? SellerRepository.instance;
+    _imagePicker = widget.imagePicker ?? ImagePicker();
+    if (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty) {
+      _imageUrl = widget.initialImageUrl!;
+      _imagePath = widget.initialImageUrl!;
+    }
   }
 
   @override
@@ -118,12 +139,12 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       category: _selectedCategory,
       defaultUnit: _selectedUnit,
       storageType: 'chilled',
-      imageUrl: _imageUrl,
+      imageUrl: (_imagePath != null && _imagePath!.isNotEmpty) ? _imagePath! : _imageUrl,
       brand: _brandController.text.trim(),
       batchNumber: _batchNumberController.text.trim(),
       qty: qty,
       normalPrice: normalPrice,
-      minPrice: normalPrice * 0.4,
+      minPrice: (normalPrice * 0.3).roundToDouble(),
       expiryDate: expStr,
     );
 
@@ -696,10 +717,239 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     );
   }
 
+  /// Membuka galeri native perangkat untuk memilih foto produk
+  Future<void> _pickImageFromGallery() async {
+    setState(() {
+      _isPickingImage = true;
+      _imageError = null;
+    });
+
+    try {
+      final XFile? image;
+      if (widget.onPickImage != null) {
+        image = await widget.onPickImage!();
+      } else {
+        image = await _imagePicker.pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 1920,
+          maxHeight: 1920,
+          imageQuality: 85,
+        );
+      }
+
+      if (image != null) {
+        final selectedFile = image;
+        final bytes = await selectedFile.readAsBytes();
+        final pickedPath = selectedFile.path;
+        if (!mounted) return;
+        setState(() {
+          _pickedFile = selectedFile;
+          _imageBytes = bytes;
+          _imagePath = pickedPath;
+          _imageUrl = pickedPath.isNotEmpty ? pickedPath : _imageUrl;
+          _isPickingImage = false;
+          _imageError = null;
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _isPickingImage = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isPickingImage = false;
+        _imageError = 'Gagal mengakses galeri: $e';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengakses galeri perangkat: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   Widget _buildPhotoUploadBox() {
+    final bool hasImage = _imageBytes != null ||
+        (_imagePath != null && _imagePath!.isNotEmpty) ||
+        (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty);
+
+    if (_isPickingImage) {
+      return Container(
+        key: const Key('photo_upload_loading'),
+        width: double.infinity,
+        height: 180,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F9FF),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFF38BDF8),
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(
+              width: 36,
+              height: 36,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Color(0xFF0284C7),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Membuka Galeri Perangkat...',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF03045E),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Memproses foto produk pilihan Anda',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (hasImage) {
+      return Container(
+        key: const Key('photo_upload_preview_container'),
+        width: double.infinity,
+        height: 200,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFF10B981),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16.5),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Image preview
+              _buildSelectedImageWidget(),
+
+
+
+              // Gradient scrim
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 60,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.65),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Status badge top-left
+              Positioned(
+                top: 10,
+                left: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF059669).withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Foto Galeri Terpilih',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Change photo button bottom-right
+              Positioned(
+                bottom: 10,
+                right: 10,
+                child: Material(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    key: const Key('btn_change_photo'),
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _pickImageFromGallery,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.photo_library_outlined,
+                            size: 16,
+                            color: Color(0xFF0284C7),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Ganti Foto',
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF0284C7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+
+            ],
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       key: const Key('photo_upload_tap_target'),
-      onTap: _showPhotoSelectDialog,
+      onTap: _pickImageFromGallery,
       child: Container(
         width: double.infinity,
         height: 160,
@@ -722,14 +972,14 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.camera_alt_outlined,
+                Icons.photo_library_outlined,
                 size: 26,
                 color: Color(0xFF0284C7),
               ),
             ),
             const SizedBox(height: 10),
             Text(
-              'Tap untuk upload foto',
+              'Pilih Foto dari Galeri',
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -744,70 +994,94 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 color: const Color(0xFF64748B),
               ),
             ),
+            if (_imageError != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _imageError!,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: AppColors.error,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  void _showPhotoSelectDialog() {
-    final controller = TextEditingController(text: _imageUrl);
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Pilih Foto Produk',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Gunakan URL gambar produk atau pilih preset terverifikasi:',
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.slateText),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: _buildInputDecoration(hint: 'https://.../gambar.jpg'),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
+  Widget _buildSelectedImageWidget() {
+    if (_imageBytes != null) {
+      return Image.memory(
+        _imageBytes!,
+        key: const Key('photo_upload_preview_image'),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImageFallback(),
+      );
+    }
+    if (_imagePath != null && _imagePath!.isNotEmpty) {
+      if (_imagePath!.startsWith('http://') || _imagePath!.startsWith('https://')) {
+        return Image.network(
+          _imagePath!,
+          key: const Key('photo_upload_preview_image'),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _buildImageFallback(),
+        );
+      }
+      return Image.file(
+        File(_imagePath!),
+        key: const Key('photo_upload_preview_image'),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImageFallback(),
+      );
+    }
+    if (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty) {
+      return Image.network(
+        widget.initialImageUrl!,
+        key: const Key('photo_upload_preview_image'),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImageFallback(),
+      );
+    }
+    return _buildImageFallback();
+  }
+
+  Widget _buildImageFallback() {
+    return Container(
+      color: const Color(0xFFE0F2FE),
+      child: Center(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxHeight < 80) {
+              return const Icon(
+                Icons.image_outlined,
+                size: 28,
+                color: Color(0xFF0284C7),
+              );
+            }
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                ActionChip(
-                  label: const Text('Susu UHT'),
-                  onPressed: () => controller.text =
-                      'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500',
+                const Icon(
+                  Icons.image_outlined,
+                  size: 36,
+                  color: Color(0xFF0284C7),
                 ),
-                ActionChip(
-                  label: const Text('Tepung Terigu'),
-                  onPressed: () => controller.text =
-                      'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=500',
-                ),
-                ActionChip(
-                  label: const Text('Minyak Goreng'),
-                  onPressed: () => controller.text =
-                      'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=500',
+                const SizedBox(height: 6),
+                Text(
+                  'Foto Terpilih',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF03045E),
+                  ),
                 ),
               ],
-            ),
-          ],
+            );
+          },
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                setState(() => _imageUrl = controller.text.trim());
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
       ),
     );
   }
@@ -2074,17 +2348,12 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           ),
           child: Row(
             children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0F2FE),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.local_drink_rounded,
-                  size: 32,
-                  color: Color(0xFF0284C7),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  width: 64,
+                  height: 64,
+                  child: _buildSelectedImageWidget(),
                 ),
               ),
               const SizedBox(width: 14),
