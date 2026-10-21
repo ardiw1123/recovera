@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/listing_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../../home/models/product_model.dart';
@@ -40,6 +41,7 @@ class _StokScreenState extends State<StokScreen> {
   Set<FoodCategory> _selectedCategories = {};
   String _expiryPreset = 'all';
   String _sortKey = 'cheapest';
+  double _radiusKm = 15.0;
 
   @override
   void initState() {
@@ -154,11 +156,13 @@ class _StokScreenState extends State<StokScreen> {
         selectedCategories: _selectedCategories,
         selectedExpiryPreset: _expiryPreset,
         selectedSort: _sortKey,
-        onApply: (cats, expiry, sort) {
+        selectedRadiusKm: _radiusKm,
+        onApply: (cats, expiry, sort, radius) {
           setState(() {
             _selectedCategories = cats;
             _expiryPreset = expiry;
             _sortKey = sort;
+            _radiusKm = radius;
           });
         },
       ),
@@ -175,6 +179,56 @@ class _StokScreenState extends State<StokScreen> {
   // ── Build ─────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    // Role Guard: Stok screen is strictly for sellers
+    if (!AuthRepository.instance.isSeller) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          title: Text(
+            'Stok Lelang',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.gpp_bad_rounded,
+                  size: 64,
+                  color: AppColors.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Akses Terbatas: Khusus Penjual',
+                  key: const Key('stok_buyer_access_restricted_title'),
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0F172A),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Fitur manajemen stok lelang hanya dapat diakses oleh akun penjual.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: AppColors.slateText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final products = _filteredProducts;
 
     return Scaffold(

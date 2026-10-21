@@ -8,23 +8,27 @@ import '../models/product_model.dart';
 /// Menampilkan:
 /// 1. Kategori Produk (multi‑select)
 /// 2. Sisa Hari Kedaluwarsa (preset chips)
-/// 3. Urutkan Berdasarkan (radio)
+/// 3. Radius Penemuan Gudang (interactive slider & preset tiers)
+/// 4. Urutkan Berdasarkan (radio)
 class FilterBottomSheet extends StatefulWidget {
   const FilterBottomSheet({
     super.key,
     required this.selectedCategories,
     required this.selectedExpiryPreset,
     required this.selectedSort,
+    this.selectedRadiusKm = 15.0,
     required this.onApply,
   });
 
   final Set<FoodCategory> selectedCategories;
   final String selectedExpiryPreset; // '1-7', '8-14', '15-30', 'all'
   final String selectedSort; // 'cheapest', 'expiry', 'discount', 'nearest'
+  final double selectedRadiusKm;
   final void Function(
     Set<FoodCategory> categories,
     String expiryPreset,
     String sort,
+    double radiusKm,
   ) onApply;
 
   @override
@@ -35,6 +39,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   late Set<FoodCategory> _categories;
   late String _expiryPreset;
   late String _sort;
+  late double _radiusKm;
 
   @override
   void initState() {
@@ -42,6 +47,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     _categories = Set.from(widget.selectedCategories);
     _expiryPreset = widget.selectedExpiryPreset;
     _sort = widget.selectedSort;
+    _radiusKm = widget.selectedRadiusKm;
   }
 
   void _reset() {
@@ -49,15 +55,16 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
       _categories.clear();
       _expiryPreset = 'all';
       _sort = 'cheapest';
+      _radiusKm = 15.0;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.76,
+      initialChildSize: 0.82,
       minChildSize: 0.5,
-      maxChildSize: 0.92,
+      maxChildSize: 0.95,
       builder: (context, scrollController) {
         return Container(
           decoration: const BoxDecoration(
@@ -118,6 +125,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     ),
                     const SizedBox(width: 8),
                     GestureDetector(
+                      key: const Key('btn_reset_filter_sheet'),
                       onTap: _reset,
                       child: Text(
                         'Reset',
@@ -143,6 +151,8 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     _buildCategorySection(),
                     const SizedBox(height: 24),
                     _buildExpirySection(),
+                    const SizedBox(height: 24),
+                    _buildDistanceSection(),
                     const SizedBox(height: 24),
                     _buildSortSection(),
                     const SizedBox(height: 16),
@@ -173,8 +183,9 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton.icon(
+                      key: const Key('btn_apply_filter_sheet'),
                       onPressed: () {
-                        widget.onApply(_categories, _expiryPreset, _sort);
+                        widget.onApply(_categories, _expiryPreset, _sort, _radiusKm);
                         Navigator.pop(context);
                       },
                       icon: const Icon(Icons.check_rounded, size: 18),
@@ -522,7 +533,172 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Section 3: Urutkan Berdasarkan (Radio)
+  // Section 3: Radius Penemuan Gudang (Interactive Slider & Presets)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildDistanceSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(height: 1, color: const Color(0xFFF1F5F9)),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '3. RADIUS PENEMUAN GUDANG',
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0F172A),
+                letterSpacing: 0.8,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${_radiusKm.toInt()} km',
+                key: const Key('filter_radius_badge_text'),
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Atur jangkauan pencarian produk lelang dari gudang sekitar lokasi Anda',
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: const Color(0xFF64748B),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Slider control
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: AppColors.primary,
+            inactiveTrackColor: const Color(0xFFE2E8F0),
+            thumbColor: AppColors.primary,
+            overlayColor: AppColors.primary.withValues(alpha: 0.15),
+            trackHeight: 6,
+            valueIndicatorColor: AppColors.primary,
+            valueIndicatorTextStyle: GoogleFonts.inter(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+          child: Slider(
+            key: const Key('filter_distance_slider'),
+            value: _radiusKm.clamp(5.0, 100.0),
+            min: 5.0,
+            max: 100.0,
+            divisions: 19,
+            label: '${_radiusKm.toInt()} km',
+            onChanged: (val) {
+              setState(() => _radiusKm = val);
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '5 km',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF94A3B8),
+                ),
+              ),
+              Text(
+                '15 km (Default)',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: _radiusKm == 15.0 ? AppColors.primary : const Color(0xFF94A3B8),
+                ),
+              ),
+              Text(
+                '50 km',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF94A3B8),
+                ),
+              ),
+              Text(
+                '100 km',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF94A3B8),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Quick distance preset tier chips
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _distancePresetChip(5, '5 km'),
+            _distancePresetChip(10, '10 km'),
+            _distancePresetChip(15, '15 km'),
+            _distancePresetChip(20, '20 km'),
+            _distancePresetChip(30, '30 km'),
+            _distancePresetChip(50, '50 km'),
+            _distancePresetChip(100, '100 km'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _distancePresetChip(int km, String label) {
+    final isSelected = _radiusKm.toInt() == km;
+    return GestureDetector(
+      key: Key('filter_distance_chip_$km'),
+      onTap: () => setState(() => _radiusKm = km.toDouble()),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF0F9FF) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Text(
+          isSelected ? '$label ✓' : label,
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? AppColors.primary : const Color(0xFF334155),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Section 4: Urutkan Berdasarkan (Radio)
   // ═══════════════════════════════════════════════════════════════════════════
 
   Widget _buildSortSection() {
@@ -532,7 +708,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
         Container(height: 1, color: const Color(0xFFF1F5F9)),
         const SizedBox(height: 16),
         Text(
-          '3. URUTKAN BERDASARKAN',
+          '4. URUTKAN BERDASARKAN',
           style: GoogleFonts.inter(
             fontSize: 10,
             fontWeight: FontWeight.w700,
@@ -571,7 +747,8 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
           icon: Icons.near_me_rounded,
           iconBg: const Color(0xFFECFDF5),
           iconColor: const Color(0xFF059669),
-          title: 'Jarak Gudang Terdekat (<15 km)',
+          title: 'Jarak Gudang Terdekat',
+          subtitle: 'Prioritas gudang terdekat dalam jangkauan',
         ),
       ],
     );

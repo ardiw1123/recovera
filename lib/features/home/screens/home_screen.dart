@@ -8,6 +8,7 @@ import '../../../data/repositories/listing_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../models/product_model.dart';
 import '../widgets/product_card.dart';
+import '../widgets/filter_bottom_sheet.dart';
 import '../../auth/screens/location_management_screen.dart';
 
 /// Dashboard utama bagi pengguna Buyer (Pembeli).
@@ -20,11 +21,13 @@ class HomeScreen extends StatefulWidget {
     this.repository,
     this.userLat = -6.2088,
     this.userLng = 106.8456,
+    this.initialRadiusKm = 15.0,
   });
 
   final ListingRepository? repository;
   final double userLat;
   final double userLng;
+  final double initialRadiusKm;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -40,7 +43,10 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _errorMessage;
 
   FoodCategory? _selectedCategory;
+  Set<FoodCategory> _selectedCategories = {};
+  String _selectedExpiryPreset = 'all';
   String _selectedSort = 'nearest'; // 'nearest', 'cheapest', 'highest_match'
+  late double _selectedRadius;
 
   double get _effectiveLat =>
       AuthRepository.instance.currentUserProfile?.baseLat ?? widget.userLat;
@@ -50,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedRadius = widget.initialRadiusKm;
     AuthRepository.instance.addListener(_onAuthProfileChanged);
     final client = ApiClient();
     _listingRepository = widget.repository ??
@@ -95,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
         sort: _selectedSort,
         category: _selectedCategory?.label,
         search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
+        radiusKm: _selectedRadius,
       );
 
       if (mounted) {
@@ -139,7 +147,168 @@ class _HomeScreenState extends State<HomeScreen> {
           .toList();
     }
 
+    if (_selectedExpiryPreset == '1-7') {
+      items = items.where((p) => p.daysUntilExpiry <= 7).toList();
+    } else if (_selectedExpiryPreset == '8-14') {
+      items = items.where((p) => p.daysUntilExpiry <= 14).toList();
+    } else if (_selectedExpiryPreset == '15-30') {
+      items = items.where((p) => p.daysUntilExpiry <= 30).toList();
+    }
+
+    if (_selectedRadius > 0) {
+      items = items
+          .where((item) => item.distanceKm == null || item.distanceKm! <= _selectedRadius)
+          .toList();
+    }
+
     return items;
+  }
+
+
+  void _openFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FilterBottomSheet(
+        selectedCategories: _selectedCategory != null
+            ? {_selectedCategory!}
+            : _selectedCategories,
+        selectedExpiryPreset: _selectedExpiryPreset,
+        selectedSort: _selectedSort,
+        selectedRadiusKm: _selectedRadius,
+        onApply: (cats, expiry, sort, radius) {
+          setState(() {
+            _selectedCategories = cats;
+            _selectedCategory = cats.isNotEmpty ? cats.first : null;
+            _selectedExpiryPreset = expiry;
+            _selectedSort = sort;
+            _selectedRadius = radius;
+          });
+          _fetchListings();
+        },
+      ),
+    );
+  }
+
+  Widget _buildActiveFilterBanner() {
+    return Container(
+      key: const Key('home_active_filter_banner'),
+      margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F9FF),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFBAE6FD)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_alt_rounded, size: 14, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Text(
+            'Filter: ',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  if (_selectedRadius != 15.0)
+                    Container(
+                      key: const Key('chip_active_radius'),
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF93C5FD)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Jarak: ${_selectedRadius.toInt()} km',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF1E40AF),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          GestureDetector(
+                            key: const Key('btn_clear_radius_filter'),
+                            onTap: () {
+                              setState(() => _selectedRadius = 15.0);
+                              _fetchListings();
+                            },
+                            child: const Icon(Icons.close_rounded, size: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_selectedExpiryPreset != 'all')
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF93C5FD)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Exp: $_selectedExpiryPreset Hari',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF1E40AF),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() => _selectedExpiryPreset = 'all');
+                              _fetchListings();
+                            },
+                            child: const Icon(Icons.close_rounded, size: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          GestureDetector(
+            key: const Key('btn_reset_active_filters_banner'),
+            onTap: () {
+              setState(() {
+                _selectedRadius = 15.0;
+                _selectedExpiryPreset = 'all';
+                _selectedCategory = null;
+                _selectedCategories.clear();
+              });
+              _fetchListings();
+            },
+            child: Text(
+              'Reset',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFDC2626),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _getBuyerGreeting() {
@@ -261,6 +430,12 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: _buildCategoryChips(),
               ),
+
+              // ── Active Filter Banner Indicator ────────────────────────────
+              if (_selectedRadius != 15.0 || _selectedExpiryPreset != 'all')
+                SliverToBoxAdapter(
+                  child: _buildActiveFilterBanner(),
+                ),
 
               // ── Proximity Recommendation Header ───────────────────────────
               SliverToBoxAdapter(
@@ -467,28 +642,32 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0F2FE),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFBAE6FD)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.radar_rounded, size: 11, color: Color(0xFF0284C7)),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Radius < 15 km',
-                      key: const Key('proximity_radius_badge'),
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF0369A1),
+              GestureDetector(
+                key: const Key('btn_proximity_filter'),
+                onTap: _openFilterSheet,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0F2FE),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFBAE6FD)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.radar_rounded, size: 11, color: Color(0xFF0284C7)),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Radius < ${_selectedRadius.toInt()} km',
+                        key: const Key('proximity_radius_badge'),
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF0369A1),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -576,6 +755,49 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(width: 8),
+          GestureDetector(
+            key: const Key('btn_home_filter'),
+            onTap: _openFilterSheet,
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: _selectedRadius != 15.0 || _selectedCategory != null || _selectedExpiryPreset != 'all'
+                    ? AppColors.primary.withValues(alpha: 0.1)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _selectedRadius != 15.0 || _selectedCategory != null || _selectedExpiryPreset != 'all'
+                      ? AppColors.primary
+                      : const Color(0xFFCBD5E1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.tune_rounded,
+                    color: _selectedRadius != 15.0 || _selectedCategory != null || _selectedExpiryPreset != 'all'
+                        ? AppColors.primary
+                        : const Color(0xFF64748B),
+                    size: 20,
+                  ),
+                  if (_selectedRadius != 15.0) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_selectedRadius.toInt()}km',
+                      key: const Key('filter_active_radius_badge_text'),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           Container(
             height: 44,
             decoration: BoxDecoration(
@@ -585,7 +807,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: PopupMenuButton<String>(
               key: const Key('btn_home_sort_menu'),
-              icon: const Icon(Icons.tune_rounded, color: AppColors.primary, size: 20),
+              icon: const Icon(Icons.swap_vert_rounded, color: AppColors.primary, size: 20),
               tooltip: 'Urutkan',
               onSelected: (val) {
                 setState(() => _selectedSort = val);
@@ -839,7 +1061,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 _searchCtrl.clear();
                 setState(() {
                   _selectedCategory = null;
+                  _selectedCategories.clear();
                   _selectedSort = 'nearest';
+                  _selectedRadius = 15.0;
+                  _selectedExpiryPreset = 'all';
                 });
                 _fetchListings();
               },
