@@ -9,6 +9,7 @@ import '../stok/screens/stok_screen.dart';
 import '../seller/screens/seller_inventory_screen.dart';
 import '../seller/screens/upload_stock_flow_screen.dart';
 import '../auth/screens/profile_screen.dart';
+import '../auth/screens/login_screen.dart';
 import '../feedback/screens/saran_kesan_screen.dart';
 
 /// PBI-05 & Seller Journey — Bottom Navigation Bar
@@ -164,6 +165,14 @@ class _MainShellState extends State<MainShell> {
           isActive: _currentIndex == 3,
           onTap: () => setState(() => _currentIndex = 3),
         ),
+        _NavItem(
+          icon: Icons.logout_rounded,
+          activeIcon: Icons.logout_rounded,
+          label: 'Keluar',
+          isActive: false,
+          iconColor: AppColors.error,
+          onTap: () => _showLogoutDialog(context),
+        ),
       ],
     );
   }
@@ -201,8 +210,73 @@ class _MainShellState extends State<MainShell> {
           isActive: _currentIndex == 3,
           onTap: () => setState(() => _currentIndex = 3),
         ),
+        _NavItem(
+          icon: Icons.logout_rounded,
+          activeIcon: Icons.logout_rounded,
+          label: 'Keluar',
+          isActive: false,
+          iconColor: AppColors.error,
+          onTap: () => _showLogoutDialog(context),
+        ),
       ],
     );
+  }
+
+  Future<void> _showLogoutDialog(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.logout_rounded, color: AppColors.error, size: 24),
+            const SizedBox(width: 8),
+            Text(
+              'Konfirmasi Keluar',
+              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        content: Text(
+          'Apakah Anda yakin ingin keluar dari akun Recovera?',
+          style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF475569)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Batal',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Keluar',
+              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await AuthRepository.instance.logout();
+      if (!context.mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 }
 
@@ -217,6 +291,7 @@ class _NavItem extends StatelessWidget {
     required this.label,
     required this.isActive,
     required this.onTap,
+    this.iconColor,
   });
 
   final IconData icon;
@@ -224,15 +299,17 @@ class _NavItem extends StatelessWidget {
   final String label;
   final bool isActive;
   final VoidCallback onTap;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
+    final color = iconColor ?? (isActive ? AppColors.primary : AppColors.slateText);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: isActive
               ? AppColors.primary.withValues(alpha: 0.1)
@@ -245,7 +322,7 @@ class _NavItem extends StatelessWidget {
             Icon(
               isActive ? (activeIcon ?? icon) : icon,
               size: 22,
-              color: isActive ? AppColors.primary : AppColors.slateText,
+              color: color,
             ),
             const SizedBox(height: 2),
             Text(
@@ -253,7 +330,7 @@ class _NavItem extends StatelessWidget {
               style: GoogleFonts.inter(
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? AppColors.primary : AppColors.slateText,
+                color: color,
               ),
             ),
           ],

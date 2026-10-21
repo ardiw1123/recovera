@@ -39,6 +39,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   String? _errorMessage;
   int _selectedQty = 1;
   bool _isPurchasing = false;
+  String _selectedCurrency = 'IDR'; // 'IDR', 'USD', 'EUR', 'GBP'
+  String _selectedTimezone = 'WIB';  // 'WIB', 'WITA', 'WIT', 'London'
 
   @override
   void initState() {
@@ -751,46 +753,206 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  // ── Dutch Auction Banner ──────────────────────────────────────────────────
+  // ── Dutch Auction Banner & Konversi 4 Zona Waktu (US-10 / PB-063) ──────────
   Widget _buildDutchAuctionBanner(Listing listing) {
+    final now = DateTime.now();
+    final interval = listing.dropIntervalMinutes > 0 ? listing.dropIntervalMinutes : 15;
+    final nextDropTime = now.add(Duration(minutes: interval));
+
+    final tzMap = {
+      'WIB': {'label': 'WIB (UTC+7)', 'offset': 7},
+      'WITA': {'label': 'WITA (UTC+8)', 'offset': 8},
+      'WIT': {'label': 'WIT (UTC+9)', 'offset': 9},
+      'London': {'label': 'London (GMT)', 'offset': 0},
+    };
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFFF0F9FF),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFBAE6FD)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: const BoxDecoration(
-              color: Color(0xFF0284C7),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.trending_down_rounded, color: Colors.white, size: 16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0284C7).withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
-          const SizedBox(width: 12),
-          Expanded(
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0284C7),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.trending_down_rounded, color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Lelang Dutch Aktif',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF0369A1),
+                      ),
+                    ),
+                    Text(
+                      'Harga turun otomatis berkala setiap $interval menit (${listing.dropPercentage}%). Amankan stok sebelum dibeli mitra lain!',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: const Color(0xFF0284C7),
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE0F2FE)),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Lelang Dutch Aktif',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0369A1),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.access_time_filled_rounded, size: 14, color: Color(0xFF0284C7)),
+                        const SizedBox(width: 6),
+                        Text(
+                          'JADWAL DROP & WAKTU LELANG',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF0369A1),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0F2FE),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '4 Zona Waktu',
+                        style: GoogleFonts.inter(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF0284C7),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Zona Waktu Selector Chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: tzMap.keys.map((tzKey) {
+                      final isSelected = _selectedTimezone == tzKey;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ChoiceChip(
+                          selected: isSelected,
+                          label: Text(
+                            tzMap[tzKey]!['label'] as String,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                              color: isSelected ? Colors.white : const Color(0xFF0369A1),
+                            ),
+                          ),
+                          selectedColor: const Color(0xFF0284C7),
+                          backgroundColor: const Color(0xFFF0F9FF),
+                          side: BorderSide(
+                            color: isSelected ? const Color(0xFF0284C7) : const Color(0xFFBAE6FD),
+                          ),
+                          onSelected: (_) => setState(() => _selectedTimezone = tzKey),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Harga turun otomatis berkala setiap ${listing.dropIntervalMinutes} menit (${listing.dropPercentage}%). Segera amankan stok sebelum dibeli mitra lain!',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    color: const Color(0xFF0284C7),
-                    height: 1.3,
+                const SizedBox(height: 10),
+                // Waktu Terpilih Detail
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Penurunan Harga Berikutnya:',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: const Color(0xFF475569),
+                        ),
+                      ),
+                      Text(
+                        _formatTimeInZone(nextDropTime, _selectedTimezone),
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Ringkasan 4 zona waktu sekaligus
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: tzMap.entries.map((entry) {
+                    final tz = entry.key;
+                    final formatted = _formatTimeShort(nextDropTime, tz);
+                    final isHighlighted = tz == _selectedTimezone;
+                    return Column(
+                      children: [
+                        Text(
+                          tz,
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: isHighlighted ? const Color(0xFF0284C7) : const Color(0xFF64748B),
+                          ),
+                        ),
+                        Text(
+                          formatted,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w600,
+                            color: isHighlighted ? const Color(0xFF0284C7) : const Color(0xFF334155),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
               ],
             ),
@@ -800,8 +962,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  // ── Pricing Breakdown & Currency Reference ────────────────────────────────
+  // ── Pricing Breakdown & Konversi Multi-Mata Uang (US-09 / PB-062) ──────────
   Widget _buildPricingCard(Listing listing) {
+    final currencies = [
+      {'code': 'IDR', 'symbol': 'Rp', 'name': 'Rupiah', 'rate': 1.0},
+      {'code': 'USD', 'symbol': '\$', 'name': 'Dolar AS', 'rate': 15800.0},
+      {'code': 'EUR', 'symbol': '€', 'name': 'Euro', 'rate': 17200.0},
+      {'code': 'GBP', 'symbol': '£', 'name': 'Pound', 'rate': 20000.0},
+    ];
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -810,8 +979,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
             offset: const Offset(0, 2),
           ),
         ],
@@ -831,23 +1000,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   letterSpacing: 0.5,
                 ),
               ),
-              Text(
-                'Hemat ${listing.effectiveDiscountPercent}%',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFDC2626),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Hemat ${listing.effectiveDiscountPercent}%',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFDC2626),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
+          // Price Display in Selected Currency
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                'Rp ${_formatPrice(listing.currentPrice)}',
+                _formatPriceInCurrency(listing.currentPrice, _selectedCurrency),
                 style: GoogleFonts.inter(
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
@@ -865,7 +1042,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
               const SizedBox(width: 10),
               Text(
-                'Rp ${_formatPrice(listing.normalPrice)}',
+                _formatPriceInCurrency(listing.normalPrice, _selectedCurrency),
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: const Color(0xFF94A3B8),
@@ -874,24 +1051,104 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Container(height: 1, color: const Color(0xFFF1F5F9)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Icon(Icons.currency_exchange_rounded, size: 12, color: Color(0xFF64748B)),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Acuan Impor: ~ \$${(listing.currentPrice / 15800).toStringAsFixed(2)} USD • €${(listing.currentPrice / 17200).toStringAsFixed(2)} EUR',
+          const SizedBox(height: 12),
+          // Currency Switcher Chips
+          Text(
+            'PILIH MATA UANG (VALAS EKSPOR/IMPOR):',
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF64748B),
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: currencies.map((c) {
+                final code = c['code'] as String;
+                final symbol = c['symbol'] as String;
+                final isSelected = _selectedCurrency == code;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    selected: isSelected,
+                    avatar: Text(
+                      symbol,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: isSelected ? Colors.white : AppColors.primary,
+                      ),
+                    ),
+                    label: Text(
+                      code,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                        color: isSelected ? Colors.white : const Color(0xFF1E293B),
+                      ),
+                    ),
+                    selectedColor: AppColors.primary,
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    side: BorderSide(
+                      color: isSelected ? AppColors.primary : const Color(0xFFCBD5E1),
+                    ),
+                    onSelected: (_) => setState(() => _selectedCurrency = code),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Info Kurs Acuan
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.currency_exchange_rounded, size: 13, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Kurs Acuan Valas (B2B Recovera):',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF334155),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '1 USD = Rp 15.800  •  1 EUR = Rp 17.200  •  1 GBP = Rp 20.000',
                   style: GoogleFonts.inter(
                     fontSize: 10,
                     color: const Color(0xFF64748B),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-              ),
-            ],
+                if (_selectedCurrency != 'IDR') ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Rumus: Rp ${_formatPrice(listing.currentPrice)} ÷ ${_getRate(_selectedCurrency).toInt()} = ${_formatPriceInCurrency(listing.currentPrice, _selectedCurrency)}',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
       ),
@@ -1223,5 +1480,71 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final m = dt.month.toString().padLeft(2, '0');
     final y = dt.year;
     return '$d/$m/$y';
+  }
+
+  double _getRate(String currency) {
+    switch (currency) {
+      case 'USD':
+        return 15800.0;
+      case 'EUR':
+        return 17200.0;
+      case 'GBP':
+        return 20000.0;
+      case 'IDR':
+      default:
+        return 1.0;
+    }
+  }
+
+  String _formatPriceInCurrency(double priceIdr, String currency) {
+    switch (currency) {
+      case 'USD':
+        return '\$${(priceIdr / 15800.0).toStringAsFixed(2)} USD';
+      case 'EUR':
+        return '€${(priceIdr / 17200.0).toStringAsFixed(2)} EUR';
+      case 'GBP':
+        return '£${(priceIdr / 20000.0).toStringAsFixed(2)} GBP';
+      case 'IDR':
+      default:
+        return 'Rp ${_formatPrice(priceIdr)}';
+    }
+  }
+
+  String _formatTimeInZone(DateTime dt, String zone) {
+    final utc = dt.toUtc();
+    switch (zone) {
+      case 'WITA':
+        final target = utc.add(const Duration(hours: 8));
+        return '${target.hour.toString().padLeft(2, '0')}:${target.minute.toString().padLeft(2, '0')} WITA (UTC+8)';
+      case 'WIT':
+        final target = utc.add(const Duration(hours: 9));
+        return '${target.hour.toString().padLeft(2, '0')}:${target.minute.toString().padLeft(2, '0')} WIT (UTC+9)';
+      case 'London':
+        final target = utc;
+        return '${target.hour.toString().padLeft(2, '0')}:${target.minute.toString().padLeft(2, '0')} GMT (London, UTC+0)';
+      case 'WIB':
+      default:
+        final target = utc.add(const Duration(hours: 7));
+        return '${target.hour.toString().padLeft(2, '0')}:${target.minute.toString().padLeft(2, '0')} WIB (UTC+7)';
+    }
+  }
+
+  String _formatTimeShort(DateTime dt, String zone) {
+    final utc = dt.toUtc();
+    switch (zone) {
+      case 'WITA':
+        final target = utc.add(const Duration(hours: 8));
+        return '${target.hour.toString().padLeft(2, '0')}:${target.minute.toString().padLeft(2, '0')}';
+      case 'WIT':
+        final target = utc.add(const Duration(hours: 9));
+        return '${target.hour.toString().padLeft(2, '0')}:${target.minute.toString().padLeft(2, '0')}';
+      case 'London':
+        final target = utc;
+        return '${target.hour.toString().padLeft(2, '0')}:${target.minute.toString().padLeft(2, '0')}';
+      case 'WIB':
+      default:
+        final target = utc.add(const Duration(hours: 7));
+        return '${target.hour.toString().padLeft(2, '0')}:${target.minute.toString().padLeft(2, '0')}';
+    }
   }
 }

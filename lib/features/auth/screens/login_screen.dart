@@ -274,7 +274,46 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: _handleLogin,
                             isLoading: _isLoading,
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 10),
+
+                          // ── Tombol Masuk Cepat / Demo Bypass ───────────
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 48),
+                              side: const BorderSide(color: AppColors.primary, width: 1.5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(50),
+                              ),
+                            ),
+                            icon: const Icon(
+                              Icons.flash_on_rounded,
+                              color: AppColors.primary,
+                              size: 18,
+                            ),
+                            label: Text(
+                              'Masuk Cepat (Mode Demo / Bypass)',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            onPressed: () {
+                              AuthRepository.instance.loginAsDemo(
+                                role: 'buyer',
+                                name: _emailCtrl.text.trim().isNotEmpty
+                                    ? _emailCtrl.text.trim().split('@').first
+                                    : 'Gevinta (Demo)',
+                              );
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const MainShell(),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 20),
 
                           // ── Sign up Redirect ─────────────────────────
                           Center(

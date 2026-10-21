@@ -5,6 +5,7 @@ import '../../../data/repositories/auth_repository.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/auth_widgets.dart';
 import 'login_screen.dart';
+import '../../shell/main_shell.dart';
 
 /// PBI-03 — Layar Registrasi B2B Recovera
 ///
@@ -81,7 +82,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Akun berhasil dibuat! Silakan login.',
+          content: Text('Selamat datang di Recovera!',
               style: GoogleFonts.inter(fontSize: 13, color: AppColors.white)),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
@@ -91,7 +92,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        MaterialPageRoute(builder: (_) => const MainShell()),
       );
     } catch (e) {
       if (!mounted) return;
@@ -288,6 +289,54 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             label: 'Buat Akun',
                             onPressed: _handleRegister,
                             isLoading: _isLoading,
+                          ),
+                          const SizedBox(height: 10),
+
+                          // ── Tombol Masuk Cepat / Demo Bypass ───────────
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 48),
+                              side: const BorderSide(color: AppColors.primary, width: 1.5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(50),
+                              ),
+                            ),
+                            icon: const Icon(
+                              Icons.flash_on_rounded,
+                              color: AppColors.primary,
+                              size: 18,
+                            ),
+                            label: Text(
+                              'Masuk Cepat (Mode Demo / Bypass)',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            onPressed: () {
+                              final enteredName = _namaCtrl.text.trim();
+                              final name = enteredName.isNotEmpty
+                                  ? enteredName
+                                  : 'Gevinta (Demo)';
+                              final enteredCompany = _companyCtrl.text.trim();
+                              final companyName = enteredCompany.isNotEmpty
+                                  ? enteredCompany
+                                  : (_selectedRole == 'seller'
+                                      ? 'PT Sumber Pangan (Distributor)'
+                                      : 'Restoran Berkah Rasa');
+                              AuthRepository.instance.loginAsDemo(
+                                role: _selectedRole,
+                                name: name,
+                                companyName: companyName,
+                              );
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const MainShell(),
+                                ),
+                              );
+                            },
                           ),
                           const SizedBox(height: 20),
 

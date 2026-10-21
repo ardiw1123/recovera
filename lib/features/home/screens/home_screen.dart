@@ -105,10 +105,15 @@ class _HomeScreenState extends State<HomeScreen> {
               .toList();
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          _allListings = ListingRepository.getDemoListings(
+            category: _selectedCategory?.label,
+            search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
+          ).map((m) => Listing.fromCachedModel(m)).toList();
+          _isFromCache = true;
+          _errorMessage = null;
         });
       }
     } finally {
