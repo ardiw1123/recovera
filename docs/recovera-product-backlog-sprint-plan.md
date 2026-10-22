@@ -27,7 +27,7 @@ Dokumen ini menjamin seluruh kriteria wajib evaluasi UAS terpenuhi secara seimba
 | **9** | **Minimal 2 Sensor Fisik** | **Magnetometer** (Kompas penjemputan barang ke gudang) & **Accelerometer / Gyroscope** (Shake-to-refresh & Tilt Mini-Game). | **Anggota 3** | To Do |
 | **10** | **Integrasi AI / LLM** | Multimodal Gemini API (Ekstraksi teks faktur fisik $\rightarrow$ auto-fill form lelang) & AI Pricing Advisor rationale. | **Ardi** | In Progress |
 | **11** | **Mini Game Sederhana** | Mini-game edukasi "Food Saver Challenge" berbasis sensor kemiringan; skor tersimpan di SQLite `game_scores`. | **Anggota 3** | To Do |
-| **12** | **Pencarian & Pemilihan** | Search bar (nama/merek) + filter multi-kategori (Dairy, Frozen, dll) + filter radius + sorting (termurah/terdekat). | **Gevi** | In Progress |
+| **12** | **Pencarian & Pemilihan** | Search bar (nama/merek) + filter multi-kategori (Dairy, Frozen, dll) + filter radius + sorting (termurah/terdekat). | **Gevi** | Done |
 | **13** | **Notifikasi Mobile** | Push notification FCM untuk penawaran top-5 buyer lelang & local notification saat status order berubah. | **Ardi** | To Do |
 | **14** | **Blockchain Sederhana** | Bukti transaksi order & sertifikat ESG dicatat on-chain via hash transaksi di BOT Chain Testnet / Block Explorer. | **Ardi** | To Do |
 
@@ -88,7 +88,7 @@ Dokumen ini menjamin seluruh kriteria wajib evaluasi UAS terpenuhi secara seimba
 #### PBI-09: Pencarian, Penyaringan (Filter) & Urutan (Sort) Katalog
 * **User Story:** Sebagai pembeli, saya ingin mencari bahan baku murah berdasarkan kategori, sisa umur, dan jarak terdekat.
 * **Kriteria Terima (AC):** Search bar (case-insensitive); filter kategori (Dairy, Flour, Oil, Frozen, Canned); filter sisa hari kedaluwarsa; sort terdekat & termurah.
-* **PIC:** Gevi | **Status:** `IN PROGRESS`
+* **PIC:** Gevi | **Status:** `DONE`
 
 #### PBI-10: Tampilan Peta LBS Gudang Seller
 * **User Story:** Sebagai pembeli, saya ingin melihat sebaran lokasi gudang seller di sekitar saya pada peta.

@@ -131,7 +131,13 @@ class ListingRepository {
 
         // Fallback ke demo listings saat offline / Web tanpa SQLite driver
         return ListingResult(
-          listings: getDemoListings(search: search, category: category),
+          listings: getDemoListings(
+            search: search,
+            category: category,
+            radiusKm: radiusKm,
+            minDays: minDays,
+            sort: sort,
+          ),
           isFromCache: true,
         );
       }
@@ -173,7 +179,13 @@ class ListingRepository {
 
     // Fallback default ke demo listings
     return ListingResult(
-      listings: getDemoListings(search: search, category: category),
+      listings: getDemoListings(
+        search: search,
+        category: category,
+        radiusKm: radiusKm,
+        minDays: minDays,
+        sort: sort,
+      ),
       isFromCache: true,
     );
   }
@@ -223,6 +235,9 @@ class ListingRepository {
   static List<CachedListingModel> getDemoListings({
     String? category,
     String? search,
+    double? radiusKm,
+    int? minDays,
+    String? sort,
   }) {
     final now = DateTime.now();
     final items = [
@@ -247,7 +262,7 @@ class ListingRepository {
         brand: 'Ultra Milk',
         category: 'Dairy',
         storageType: 'ambient',
-        defaultUnit: 'kotak',
+        defaultUnit: 'box',
         sellerCompany: 'PT Sumber Pangan Abadi',
         warehouseLat: -7.7058,
         warehouseLng: 110.6053,
@@ -309,7 +324,7 @@ class ListingRepository {
         brand: 'Bimoli',
         category: 'Oil',
         storageType: 'ambient',
-        defaultUnit: 'pouch',
+        defaultUnit: 'box',
         sellerCompany: 'CV Distribusi Utama',
         warehouseLat: -7.6980,
         warehouseLng: 110.5980,
@@ -371,7 +386,7 @@ class ListingRepository {
         brand: 'Kraft',
         category: 'Dairy',
         storageType: 'chilled',
-        defaultUnit: 'kotak',
+        defaultUnit: 'box',
         sellerCompany: 'PT Sumber Pangan Abadi',
         warehouseLat: -7.7058,
         warehouseLng: 110.6053,
@@ -394,6 +409,21 @@ class ListingRepository {
         (l.brand?.toLowerCase().contains(q) ?? false) ||
         l.category.toLowerCase().contains(q)
       ).toList();
+    }
+    if (radiusKm != null) {
+      filtered = filtered.where((l) => (l.distanceKm ?? 0) <= radiusKm).toList();
+    }
+    if (minDays != null) {
+      filtered = filtered.where((l) => (l.daysToExpiry ?? 0) <= minDays).toList();
+    }
+    if (sort == 'cheapest') {
+      filtered.sort((a, b) => a.currentPrice.compareTo(b.currentPrice));
+    } else if (sort == 'expiring_soon' || sort == 'expiring') {
+      filtered.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+    } else if (sort == 'highest_match') {
+      filtered.sort((a, b) => (b.discountPct ?? 0).compareTo(a.discountPct ?? 0));
+    } else if (sort == 'nearest') {
+      filtered.sort((a, b) => (a.distanceKm ?? 999).compareTo(b.distanceKm ?? 999));
     }
     return filtered;
   }

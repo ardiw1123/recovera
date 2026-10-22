@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -66,13 +67,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   void initState() {
     super.initState();
     final client = ApiClient();
-    _listingRepository = widget.listingRepository ??
+    _listingRepository =
+        widget.listingRepository ??
         ListingRepository(remoteClient: ListingApiService(client: client));
-    _orderRepository = widget.orderRepository ??
+    _orderRepository =
+        widget.orderRepository ??
         OrderRepository(remoteClient: OrderApiService(client: client));
 
     if (widget.listing != null) {
       _listing = widget.listing;
+      _selectedQty = _getMinOrderQty(_listing!);
     } else if (widget.listingId != null) {
       _loadListingDetail(widget.listingId!);
     }
@@ -126,18 +130,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         final cached = await AppPrefsRepository().getLastCurrencyRates();
         if (cached.isNotEmpty && mounted) {
           setState(() {
-            if (cached['USD'] != null && cached['USD']! > 0) _rateUSD = 1.0 / cached['USD']!;
-            if (cached['EUR'] != null && cached['EUR']! > 0) _rateEUR = 1.0 / cached['EUR']!;
-            if (cached['GBP'] != null && cached['GBP']! > 0) _rateGBP = 1.0 / cached['GBP']!;
+            if (cached['USD'] != null && cached['USD']! > 0)
+              _rateUSD = 1.0 / cached['USD']!;
+            if (cached['EUR'] != null && cached['EUR']! > 0)
+              _rateEUR = 1.0 / cached['EUR']!;
+            if (cached['GBP'] != null && cached['GBP']! > 0)
+              _rateGBP = 1.0 / cached['GBP']!;
           });
         }
       } catch (_) {}
 
       // 2. Coba panggil Public Open Exchange Rate API (Live Market Rate)
-      final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 4),
-        receiveTimeout: const Duration(seconds: 4),
-      ));
+      final dio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+        ),
+      );
 
       try {
         final response = await dio.get('https://open.er-api.com/v6/latest/IDR');
@@ -230,12 +239,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     });
 
     try {
-      final cachedModel =
-          await _listingRepository.getListingById(id, forceRefresh: true);
+      final cachedModel = await _listingRepository.getListingById(
+        id,
+        forceRefresh: true,
+      );
       if (mounted) {
         if (cachedModel != null) {
           setState(() {
             _listing = Listing.fromCachedModel(cachedModel);
+            _selectedQty = _getMinOrderQty(_listing!);
           });
         } else {
           setState(() {
@@ -254,6 +266,118 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  // ── Helper Unit & Kuantitas Minimum (MOQ) ──────────────────────────────────
+  String _getDisplayUnit(Listing listing) {
+    final unit = listing.defaultUnit.toLowerCase().trim();
+    if (unit == 'pouch' || unit == 'box' || unit == 'kotak') {
+      return 'box';
+    }
+    return listing.defaultUnit.isNotEmpty ? listing.defaultUnit : 'box';
+  }
+
+  int _getMinOrderQty(Listing listing) {
+    if (listing.qty > 0 && listing.qty < 5) {
+      return listing.qty;
+    }
+    return 5;
+  }
+
+  void _decrementQty(Listing listing) {
+    final minQty = _getMinOrderQty(listing);
+    final unit = _getDisplayUnit(listing);
+
+    if (_selectedQty <= minQty) {
+      // Error handling saat pembeli mencoba mengurangi di bawah batas minimum
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFFDC2626),
+          elevation: 4,
+          duration: const Duration(seconds: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          content: Row(
+            children: [
+              const Icon(
+                Icons.info_outline_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Jumlah pembelian tidak bisa kurang dari minimal $minQty $unit.',
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _selectedQty--);
+  }
+
+  void _incrementQty(Listing listing) {
+    final maxQty = listing.qty > 0 ? listing.qty : 100;
+    final unit = _getDisplayUnit(listing);
+
+    if (_selectedQty >= maxQty) {
+      // Error handling saat pembeli mencoba melebihi batas stok
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFFD97706),
+          elevation: 4,
+          duration: const Duration(seconds: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          content: Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Jumlah telah mencapai batas stok maksimal ($maxQty $unit).',
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _selectedQty++);
+  }
+
+  // ── Helper Harga Tier Lelang ───────────────────────────────────────────────
+  double _getActiveTierPrice(Listing listing) {
+    if (listing.currentPrice == 12000.0 || listing.currentPrice <= 0) {
+      return 9000.0;
+    }
+    return listing.currentPrice;
   }
 
   // ── Helper Kalkulasi Mata Uang ──────────────────────────────────────────────
@@ -276,9 +400,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       return 'Rp ${_formatPriceInt(idrPrice)}';
     }
     final converted = _convertPrice(idrPrice, currency);
-    final symbol = currency == 'USD'
-        ? '\$'
-        : (currency == 'EUR' ? '€' : '£');
+    final symbol = currency == 'USD' ? '\$' : (currency == 'EUR' ? '€' : '£');
     return '$symbol${converted.toStringAsFixed(2)}';
   }
 
@@ -376,9 +498,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Widget _buildConfirmationBottomSheet(BuildContext ctx, Listing listing) {
     final tz = _getTzInfo(_selectedTimezone);
-    final unitPriceFormatted =
-        _formatPriceDisplay(listing.currentPrice, _selectedCurrency);
-    final totalIdr = listing.currentPrice * _selectedQty;
+    final tierPrice = _getActiveTierPrice(listing);
+    final unitPriceFormatted = _formatPriceDisplay(
+      tierPrice,
+      _selectedCurrency,
+    );
+    final totalIdr = tierPrice * _selectedQty;
     final totalUsd = (totalIdr / _rateUSD).toStringAsFixed(2);
     final totalEur = (totalIdr / _rateEUR).toStringAsFixed(2);
 
@@ -450,24 +575,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
             child: Column(
               children: [
-                _sheetRow('Item & Lot', '${listing.productName} ($_selectedQty ${listing.defaultUnit})'),
+                _sheetRow(
+                  'Item & Lot',
+                  '${listing.productName} ($_selectedQty ${_getDisplayUnit(listing)})',
+                ),
                 const Divider(height: 16, color: Color(0xFFE2E8F0)),
                 _sheetRow(
                   'Harga Satuan Terkunci',
-                  '$unitPriceFormatted / ${listing.defaultUnit}',
+                  '$unitPriceFormatted / ${_getDisplayUnit(listing)}',
                   valueColor: AppColors.primary,
                   isBold: true,
                 ),
                 const SizedBox(height: 8),
                 _sheetRow(
-                  'Ekuivalen Valas Aktif',
-                  '≈ \$${(listing.currentPrice / _rateUSD).toStringAsFixed(2)} USD (Kurs Rp ${_formatPriceInt(_rateUSD)})',
-                  isMono: true,
-                ),
-                const SizedBox(height: 8),
-                _sheetRow(
-                  'Batas Pengambilan (4-TZ)',
-                  'Sebelum ${tz['pickup']} ${tz['code']} (15:00 London BST)',
+                  'Batas Pengambilan',
+                  'Sebelum ${tz['pickup']} ${tz['code']}',
                   valueColor: const Color(0xFFDC2626),
                   isBold: true,
                 ),
@@ -485,26 +607,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         color: const Color(0xFF0F172A),
                       ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Rp ${_formatPriceInt(totalIdr)}',
-                          style: GoogleFonts.inter(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        Text(
-                          '≈ \$$totalUsd USD / €$totalEur EUR',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      'Rp ${_formatPriceInt(totalIdr)}',
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ],
                 ),
@@ -521,8 +630,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.verified_rounded,
-                    size: 16, color: Color(0xFF16A34A)),
+                const Icon(
+                  Icons.verified_rounded,
+                  size: 16,
+                  color: Color(0xFF16A34A),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -594,8 +706,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _sheetRow(String label, String value,
-      {Color? valueColor, bool isBold = false, bool isMono = false}) {
+  Widget _sheetRow(
+    String label,
+    String value, {
+    Color? valueColor,
+    bool isBold = false,
+    bool isMono = false,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -664,7 +781,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Row(
             children: [
               Container(
@@ -673,15 +792,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   color: Color(0xFFECFDF5),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check_circle_rounded,
-                    color: Color(0xFF10B981), size: 28),
+                child: const Icon(
+                  Icons.check_circle_rounded,
+                  color: Color(0xFF10B981),
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'Lelang Berhasil Dikunci!',
                   style: GoogleFonts.inter(
-                      fontSize: 16, fontWeight: FontWeight.w800),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
@@ -691,9 +815,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Pesanan likuidasi pangan Anda telah dicatat oleh smart contract Recovera.',
+                'Pesanan likuidasi pangan Anda telah berhasil diverifikasi oleh sistem Recovera.',
                 style: GoogleFonts.inter(
-                    fontSize: 12, color: const Color(0xFF64748B)),
+                  fontSize: 12,
+                  color: const Color(0xFF64748B),
+                ),
               ),
               const SizedBox(height: 14),
               Container(
@@ -709,12 +835,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     const SizedBox(height: 6),
                     _dialogRow('Produk', listing.productName),
                     const SizedBox(height: 6),
-                    _dialogRow('Jumlah', '$_selectedQty ${listing.defaultUnit}'),
+                    _dialogRow(
+                      'Jumlah',
+                      '$_selectedQty ${_getDisplayUnit(listing)}',
+                    ),
                     const SizedBox(height: 6),
-                    _dialogRow('Total', 'Rp ${_formatPriceInt(order.totalPrice)}'),
+                    _dialogRow(
+                      'Total',
+                      'Rp ${_formatPriceInt(order.totalPrice)}',
+                    ),
                     const SizedBox(height: 6),
-                    _dialogRow('Batas Ambil', '21:00 WIB (15:00 London)',
-                        isHighlight: true),
+                    _dialogRow('Batas Ambil', '21:00 WIB', isHighlight: true),
                   ],
                 ),
               ),
@@ -725,7 +856,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               onPressed: () {
                 Navigator.of(ctx).pop();
@@ -734,7 +866,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               child: Text(
                 'Selesai',
                 style: GoogleFonts.inter(
-                    color: Colors.white, fontWeight: FontWeight.w700),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -749,7 +883,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B)),
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: const Color(0xFF64748B),
+          ),
         ),
         Text(
           value,
@@ -768,9 +905,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_errorMessage != null || _listing == null) {
@@ -805,13 +940,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             CustomScrollView(
               slivers: [
                 // ── App Header / Sub-Header Control Bar ──────────────────────────
-                SliverToBoxAdapter(
-                  child: _buildSubHeader(listing),
-                ),
+                SliverToBoxAdapter(child: _buildSubHeader(listing)),
 
                 // ── Main Content Body ──────────────────────────────────────────
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 150),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
                       // 1. Product Hero Card
@@ -866,7 +999,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: Color(0xFF0F172A),
+            ),
             onPressed: () => Navigator.of(context).pop(),
           ),
           Expanded(
@@ -926,13 +1062,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
           const SizedBox(width: 4),
           IconButton(
-            icon: const Icon(Icons.share_outlined,
-                size: 20, color: Color(0xFF64748B)),
+            icon: const Icon(
+              Icons.share_outlined,
+              size: 20,
+              color: Color(0xFF64748B),
+            ),
             onPressed: () {},
           ),
           IconButton(
-            icon: const Icon(Icons.bookmark_border_rounded,
-                size: 22, color: Color(0xFF64748B)),
+            icon: const Icon(
+              Icons.bookmark_border_rounded,
+              size: 22,
+              color: Color(0xFF64748B),
+            ),
             onPressed: () {},
           ),
         ],
@@ -966,7 +1108,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: listing.imageUrl != null &&
+                  child:
+                      listing.imageUrl != null &&
                           listing.imageUrl!.startsWith('http')
                       ? Image.network(
                           listing.imageUrl!,
@@ -1001,7 +1144,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.primary,
                           borderRadius: BorderRadius.circular(20),
@@ -1015,8 +1160,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.gavel_rounded,
-                                size: 14, color: Colors.white),
+                            const Icon(
+                              Icons.gavel_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               'Dutch Auction Aktif',
@@ -1032,7 +1180,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 9, vertical: 5),
+                          horizontal: 9,
+                          vertical: 5,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF97316),
                           borderRadius: BorderRadius.circular(20),
@@ -1055,7 +1205,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   right: 12,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(20),
@@ -1069,8 +1221,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.verified_rounded,
-                            size: 14, color: Color(0xFF10B981)),
+                        const Icon(
+                          Icons.verified_rounded,
+                          size: 14,
+                          color: Color(0xFF10B981),
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'QC Grade A',
@@ -1114,8 +1269,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.warehouse_rounded,
-                              size: 15, color: Color(0xFFE2E8F0)),
+                          const Icon(
+                            Icons.warehouse_rounded,
+                            size: 15,
+                            color: Color(0xFFE2E8F0),
+                          ),
                           const SizedBox(width: 5),
                           Expanded(
                             child: Text(
@@ -1144,8 +1302,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.verified_user_rounded,
-                        size: 18, color: AppColors.primary),
+                    const Icon(
+                      Icons.verified_user_rounded,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'Layak Konsumsi',
@@ -1177,8 +1338,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return Container(
       color: const Color(0xFFE2E8F0),
       child: const Center(
-        child: Icon(Icons.inventory_2_rounded,
-            size: 64, color: Color(0xFF94A3B8)),
+        child: Icon(
+          Icons.inventory_2_rounded,
+          size: 64,
+          color: Color(0xFF94A3B8),
+        ),
       ),
     );
   }
@@ -1187,14 +1351,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   // 2. INTERACTIVE MULTI-CURRENCY SECTION (PB-062 / US-09)
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildCurrencySection(Listing listing) {
-    final floorPrice = listing.minPrice > 0 ? listing.minPrice : 7500.0;
-    final currentFormatted =
-        _formatPriceDisplay(listing.currentPrice, _selectedCurrency);
-    final normalFormatted =
-        _formatPriceDisplay(listing.normalPrice, _selectedCurrency);
+    final activePrice = _getActiveTierPrice(listing);
+    final originalPrice = listing.normalPrice > 0
+        ? listing.normalPrice
+        : 15000.0;
+    final currentFormatted = _formatPriceDisplay(
+      activePrice,
+      _selectedCurrency,
+    );
+    final normalFormatted = _formatPriceDisplay(
+      originalPrice,
+      _selectedCurrency,
+    );
+    final discountPercent = originalPrice > activePrice
+        ? (((originalPrice - activePrice) / originalPrice) * 100).round()
+        : 40;
 
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1206,116 +1379,137 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Row: Price & Floor Price
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Harga Penawaran Saat Ini (Tier 2)',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          currentFormatted,
-                          style: GoogleFonts.inter(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.primary,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '/ ${listing.defaultUnit}',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: const Color(0xFF64748B),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          normalFormatted,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: const Color(0xFF94A3B8),
-                            decoration: TextDecoration.lineThrough,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDCFCE7),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'Hemat -${listing.effectiveDiscountPercent}%',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF16A34A),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Ribbon / Label Pita Tier Aktif ──────────────────────────────
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF005D90), Color(0xFF0284C7)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              child: Row(
                 children: [
+                  const Icon(
+                    Icons.bookmark_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 6),
                   Text(
-                    'Floor Price Guard',
+                    'TIER 2 • HARGA PENAWARAN SAAT INI',
                     style: GoogleFonts.inter(
                       fontSize: 11,
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Rp ${_formatPriceInt(floorPrice)}',
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0F172A),
+                      color: Colors.white,
+                      letterSpacing: 0.5,
                     ),
                   ),
-                  Text(
-                    'Batas Bawah Lelang',
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFF97316),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Lelang Berjalan',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
-        ],
+            ),
+
+            // ── Detail Harga ────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        currentFormatted,
+                        style: GoogleFonts.inter(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.primary,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '/ ${_getDisplayUnit(listing)}',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Text(
+                        'Harga Awal: ',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                      Text(
+                        normalFormatted,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: const Color(0xFF94A3B8),
+                          decoration: TextDecoration.lineThrough,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDCFCE7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Hemat -$discountPercent%',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF16A34A),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1355,8 +1549,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       color: Color(0xFFE0F2FE),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.trending_down_rounded,
-                        size: 18, color: Color(0xFF0284C7)),
+                    child: const Icon(
+                      Icons.trending_down_rounded,
+                      size: 18,
+                      color: Color(0xFF0284C7),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -1370,8 +1567,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ],
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: const Color(0xFFCDE5FF),
                   borderRadius: BorderRadius.circular(6),
@@ -1512,7 +1708,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
           const SizedBox(height: 16),
 
-          // 4-Timezone Interactive Selector (PB-063 / US-10)
+          // Jadwal Lelang & Batas Pengambilan (Waktu Jam Sekarang Dihilangkan Sesuai Request)
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -1524,55 +1720,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.schedule_rounded,
-                            size: 16, color: AppColors.primary),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Jadwal Lelang & Batas Pengambilan',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF0F172A),
-                          ),
-                        ),
-                      ],
+                    const Icon(
+                      Icons.schedule_rounded,
+                      size: 16,
+                      color: AppColors.primary,
                     ),
-                    Row(
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF0284C7),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${tz['now']} ${tz['code']} (${tz['offset']})',
-                          style: GoogleFonts.robotoMono(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0284C7),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
+                    const SizedBox(width: 6),
                     Text(
-                      'Zona Waktu Operasional: $_selectedTimezone • Diatur di Profil',
+                      'Jadwal Lelang & Batas Pengambilan',
                       style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0F172A),
                       ),
                     ),
                   ],
@@ -1717,201 +1877,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-
-
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.info_outline_rounded,
-                        size: 14, color: Color(0xFF0284C7)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Batas akhir lelang tersinkronisasi UTC. Jam audit ESG menyertakan stempel zona London (BST/UTC+1) untuk sertifikasi standar global GHG Scope 3.',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          color: const Color(0xFF64748B),
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ],
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // Price Stepping Tiers Visual Timeline
-          Text(
-            'Jadwal Penurunan Bertahap (Dutch Stepping)',
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _buildTierRow(
-            icon: Icons.check_circle_rounded,
-            iconColor: const Color(0xFF94A3B8),
-            title: 'Tier 1: Hari 10 - 8',
-            subtitle: 'Selesai dieksekusi',
-            price: 'Rp 11.250',
-            isDone: true,
-          ),
-          const SizedBox(height: 6),
-          _buildTierRow(
-            icon: Icons.play_circle_fill_rounded,
-            iconColor: AppColors.primary,
-            title: 'Tier 2: Hari 7 - 5',
-            badge: 'SEKARANG',
-            subtitle: 'Aktif hingga 18:00 WIB (12:00 BST)',
-            price: 'Rp 9.000',
-            isActive: true,
-          ),
-          const SizedBox(height: 6),
-          _buildTierRow(
-            icon: Icons.update_rounded,
-            iconColor: const Color(0xFF64748B),
-            title: 'Tier 3: Hari 4 - 2',
-            subtitle: 'Pemicu otomatis berikutnya',
-            price: 'Rp 8.250',
-          ),
-          const SizedBox(height: 6),
-          _buildTierRow(
-            icon: Icons.security_rounded,
-            iconColor: const Color(0xFFF97316),
-            title: 'Tier 4: < 48 Jam',
-            subtitle: 'Floor Price Minimum',
-            price: 'Rp 7.500',
-            isWarning: true,
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFEF2F2),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFFECACA)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.volunteer_activism_rounded,
-                    size: 15, color: Color(0xFFDC2626)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '< 14 Hari Kedaluwarsa: Pengalihan 100% donasi food bank via FoodCycle ID.',
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFDC2626),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _buildTierRow({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required String price,
-    String? badge,
-    bool isDone = false,
-    bool isActive = false,
-    bool isWarning = false,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: isActive
-            ? const Color(0xFFE0F2FE)
-            : (isDone ? const Color(0xFFF8FAFC) : Colors.white),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isActive
-              ? const Color(0xFFBAE6FD)
-              : const Color(0xFFE2E8F0),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: iconColor),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        title,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-                          color: isActive
-                              ? AppColors.primary
-                              : (isDone
-                                  ? const Color(0xFF64748B)
-                                  : const Color(0xFF1E293B)),
-                        ),
-                      ),
-                      if (badge != null) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 5, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            badge,
-                            style: GoogleFonts.inter(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      color: isWarning
-                          ? const Color(0xFFF97316)
-                          : const Color(0xFF64748B),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          Text(
-            price,
-            style: GoogleFonts.robotoMono(
-              fontSize: 12,
-              fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-              color: isActive
-                  ? AppColors.primary
-                  : (isDone
-                      ? const Color(0xFF94A3B8)
-                      : const Color(0xFF0F172A)),
             ),
           ),
         ],
@@ -1920,7 +1886,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 4. BATCH TECHNICAL SPECIFICATIONS & WAREHOUSE
+  // 4. BATCH TECHNICAL SPECIFICATIONS & WAREHOUSE (SIMPLIFIED & INTUITIVE)
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildBatchSpecifications(Listing listing) {
     return Container(
@@ -1958,11 +1924,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.inventory_2_rounded,
-                        size: 13, color: Color(0xFF16A34A)),
+                    const Icon(
+                      Icons.inventory_2_rounded,
+                      size: 13,
+                      color: Color(0xFF16A34A),
+                    ),
                     const SizedBox(width: 4),
                     Text(
-                      '${listing.qty} ${listing.defaultUnit} Ready',
+                      'Stok: ${listing.qty} ${_getDisplayUnit(listing)}',
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -1974,133 +1943,123 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+
+          _buildSimpleSpecRow(
+            icon: Icons.shopping_basket_outlined,
+            label: 'Minimal Pembelian',
+            value:
+                '${_getMinOrderQty(listing)} ${_getDisplayUnit(listing)} (Isi 12 pcs / box)',
+          ),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          _buildSimpleSpecRow(
+            icon: Icons.event_available_rounded,
+            label: 'Kedaluwarsa',
+            value: '18 Nov 2026',
+            badge: 'Sisa ${listing.effectiveDaysToExpiry} Hari',
+            badgeColor: const Color(0xFFFEE2E2),
+            badgeTextColor: const Color(0xFFDC2626),
+          ),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          _buildSimpleSpecRow(
+            icon: Icons.local_shipping_outlined,
+            label: 'Metode Pengambilan',
+            value: 'Self-Pickup / Kargo (${listing.city})',
+            badge: '${listing.distanceKm?.toStringAsFixed(1) ?? '2.4'} km',
+            badgeColor: const Color(0xFFF1F5F9),
+            badgeTextColor: const Color(0xFF475569),
+          ),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          _buildSimpleSpecRow(
+            icon: Icons.thermostat_rounded,
+            label: 'Suhu Penyimpanan',
+            value: listing.storageType == 'frozen'
+                ? 'Frozen (-18°C) • Tersegel'
+                : (listing.storageType == 'chilled'
+                      ? 'Chilled (2-4°C) • Tersegel'
+                      : 'Ambient (20-25°C) • Tersegel'),
+          ),
           const SizedBox(height: 12),
 
-          // 4 Grid Specifications
-          Row(
-            children: [
-              _buildSpecCard(
-                'Minimum Order (MOQ)',
-                '5 ${listing.defaultUnit}',
-                '60 Pcs (12 pcs/box)',
-              ),
-              const SizedBox(width: 8),
-              _buildSpecCard(
-                'Kedaluwarsa (Exp Date)',
-                '18 Nov 2026',
-                'Sisa ${listing.effectiveDaysToExpiry} Hari Kerja',
-                valueColor: const Color(0xFFDC2626),
-                subColor: const Color(0xFFDC2626),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildSpecCard(
-                'Metode Pengambilan',
-                'Self-Pickup / Kargo',
-                '${listing.city} Hub (${listing.distanceKm?.toStringAsFixed(1) ?? '5.2'} km)',
-              ),
-              const SizedBox(width: 8),
-              _buildSpecCard(
-                'Penyimpanan Suhu',
-                listing.storageType == 'frozen'
-                    ? 'Frozen (-18°C)'
-                    : (listing.storageType == 'chilled'
-                        ? 'Chilled (2-4°C)'
-                        : 'Ambient (20-25°C)'),
-                'Sealed Packaging',
-                subColor: const Color(0xFF16A34A),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Distributor Profile Card
+          // Distributor Profile Card (Clean & Compact)
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          'MP',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      'MP',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
                               listing.companyName,
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: const Color(0xFF0F172A),
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.verified_rounded,
-                                size: 15, color: AppColors.primary),
-                          ],
-                        ),
-                        Text(
-                          'Distributor Resmi FMCG • SLA 99.4%',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: const Color(0xFF64748B),
                           ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.verified_rounded,
+                            size: 14,
+                            color: AppColors.primary,
+                          ),
+                        ],
+                      ),
+                      Text(
+                        'Distributor Resmi FMCG • SLA 99.4%',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: const Color(0xFF64748B),
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded,
-                            size: 15, color: Color(0xFFF59E0B)),
-                        const SizedBox(width: 2),
-                        Text(
-                          '4.9',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFFF59E0B),
-                          ),
-                        ),
-                      ],
+                    const Icon(
+                      Icons.star_rounded,
+                      size: 15,
+                      color: Color(0xFFF59E0B),
                     ),
+                    const SizedBox(width: 2),
                     Text(
-                      '142 Transaksi',
+                      '4.9',
                       style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: const Color(0xFF64748B),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFFF59E0B),
                       ),
                     ),
                   ],
@@ -2113,51 +2072,77 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _buildSpecCard(String label, String value, String sub,
-      {Color? valueColor, Color? subColor}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                color: const Color(0xFF64748B),
-              ),
+  Widget _buildSimpleSpecRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    String? badge,
+    Color? badgeColor,
+    Color? badgeTextColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: valueColor ?? const Color(0xFF0F172A),
-              ),
+            child: Icon(icon, size: 18, color: const Color(0xFF475569)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  value,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+              ],
             ),
-            Text(
-              sub,
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                color: subColor ?? const Color(0xFF64748B),
-                fontWeight: FontWeight.w500,
+          ),
+          if (badge != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: badgeColor ?? const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                badge,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: badgeTextColor ?? const Color(0xFF334155),
+                ),
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 5. ESG IMPACT LEDGER & SHA-256 AUDIT
+  // 5. ESG IMPACT VERIFICATION (STEMPEL / CAP RESMI)
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildEsgImpactSection(Listing listing) {
     return Container(
@@ -2176,162 +2161,117 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.eco_rounded,
-                      size: 20, color: Color(0xFF10B981)),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Verifikasi Dampak ESG',
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDCFCE7),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  'Tersertifikasi',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF16A34A),
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'Verifikasi Dampak ESG',
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F172A),
+            ),
           ),
           const SizedBox(height: 12),
 
-          // 2 Grid Metrics
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Penyelamatan Pangan',
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '150 kg',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF16A34A),
-                        ),
-                      ),
-                      Text(
-                        'Food Waste Avoided',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F9FF),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Emisi Karbon Dicegah',
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '375 kg CO₂e',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      Text(
-                        'Scope 3 Avoidance',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // SHA-256 Audit Ribbon
+          // Kartu Stempel / Cap Verifikasi ESG
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFBBF7D0), width: 1.2),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // ── Cap / Stempel Bulat Berornamen ──────────────────────────
+                Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    Text(
-                      'Audit Stamped:',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF0F172A),
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFF16A34A),
+                          width: 2,
+                        ),
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF86EFAC),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.eco_rounded,
+                              size: 24,
+                              color: Color(0xFF16A34A),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    Text(
-                      '12:00 BST / 18:00 WIB',
-                      style: GoogleFonts.robotoMono(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF475569),
+                    // Stempel tanda centang biru kecil di sudut kanan bawah
+                    Positioned(
+                      right: -1,
+                      bottom: -1,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF0284C7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check_rounded,
+                            size: 10,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'SHA-256: 8a73b49c0d11fef8e2a8740c05df1a2e93d...',
-                  style: GoogleFonts.robotoMono(
-                    fontSize: 10,
-                    color: const Color(0xFF64748B),
+                const SizedBox(width: 12),
+
+                // ── Keterangan Dampak ───────────────────────────────────────
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'VERIFIKASI DAMPAK ESG',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF166534),
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Potensi penyelamatan 150 kg pangan (-375 kg CO₂e). Sertifikat audit terbit otomatis usai transaksi.',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: const Color(0xFF334155),
+                          height: 1.35,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -2345,13 +2285,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   // 6. STICKY BOTTOM CHECKOUT BAR
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildStickyBottomBar(Listing listing) {
-    final totalIdr = listing.currentPrice * _selectedQty;
-    final totalFormatted = _formatPriceDisplay(totalIdr, _selectedCurrency);
-    final totalUsd = (totalIdr / _rateUSD).toStringAsFixed(2);
-    final totalEur = (totalIdr / _rateEUR).toStringAsFixed(2);
+    final unitPrice = _getActiveTierPrice(listing);
+    final minQty = _getMinOrderQty(listing);
+    final maxQty = listing.qty > 0 ? listing.qty : 100;
+    final unit = _getDisplayUnit(listing);
+    final totalIdr = unitPrice * _selectedQty;
+    final totalFormatted = 'Rp ${_formatPriceInt(totalIdr)}';
+    final isAtMin = _selectedQty <= minQty;
+    final isAtMax = _selectedQty >= maxQty;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -2364,58 +2308,154 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+            // ── Baris Atas: Opsi Tambah / Kurang Jumlah Pembelian ───────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Total Tagihan (Min $_selectedQty ${listing.defaultUnit}):',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFF64748B),
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      'Jumlah Pembelian',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '(Min: $minQty $unit | Stok: $maxQty)',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  totalFormatted,
-                  style: GoogleFonts.inter(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.primary,
+                // Stepper Counter [-] [ Qty ] [+]
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
-                ),
-                Text(
-                  '≈ \$$totalUsd USD | €$totalEur EUR',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF64748B),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        onTap: () => _decrementQty(listing),
+                        borderRadius: const BorderRadius.horizontal(
+                          left: Radius.circular(9),
+                        ),
+                        child: Container(
+                          width: 36,
+                          height: 32,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.remove_rounded,
+                            size: 18,
+                            color: isAtMin
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        constraints: const BoxConstraints(minWidth: 40),
+                        height: 32,
+                        alignment: Alignment.center,
+                        color: Colors.white,
+                        child: Text(
+                          '$_selectedQty',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () => _incrementQty(listing),
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(9),
+                        ),
+                        child: Container(
+                          width: 36,
+                          height: 32,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.add_rounded,
+                            size: 18,
+                            color: isAtMax
+                                ? const Color(0xFFCBD5E1)
+                                : AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            const SizedBox(height: 10),
+            const Divider(height: 1, color: Color(0xFFF1F5F9)),
+            const SizedBox(height: 10),
+
+            // ── Baris Bawah: Total Pembayaran & Tombol Beli Sekarang ────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Pembayaran ($_selectedQty $unit):',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      totalFormatted,
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primary,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
                 ),
-                elevation: 3,
-              ),
-              icon: const Icon(Icons.fingerprint_rounded, size: 20),
-              label: Text(
-                'Beli Sekarang',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 2,
+                  ),
+                  icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+                  label: Text(
+                    'Beli Sekarang',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  onPressed: () => _openConfirmationSheet(listing),
                 ),
-              ),
-              onPressed: () => _openConfirmationSheet(listing),
+              ],
             ),
           ],
         ),
