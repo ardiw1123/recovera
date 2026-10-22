@@ -63,7 +63,7 @@ class AuthRepository extends ChangeNotifier {
     String name = 'Gevinta Aprilia',
     String? companyName,
   }) {
-    _currentTokens = AuthTokens(
+    final tokens = AuthTokens(
       accessToken: 'demo_token_${DateTime.now().millisecondsSinceEpoch}',
       refreshToken: 'demo_refresh_token',
       tokenType: 'Bearer',
@@ -72,6 +72,8 @@ class AuthRepository extends ChangeNotifier {
       role: role,
       name: name,
     );
+    _currentTokens = tokens;
+    tokenStorage.saveTokens(tokens);
     _currentUserProfile = UserProfile(
       id: 1,
       email: '${name.toLowerCase().replaceAll(' ', '')}@recovera.dev',

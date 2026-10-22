@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/services/biometric_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -421,27 +422,79 @@ class _ProfileMenuList extends StatefulWidget {
 }
 
 class _ProfileMenuListState extends State<_ProfileMenuList> {
-  final _prefsRepo = AppPrefsRepository();
-  String _selectedCurrency = 'IDR';
-  String _selectedTimezone = 'WIB';
+  final _prefsRepo = AppPrefsRepository.instance;
+  late String _selectedCurrency;
+  late String _selectedTimezone;
+  bool _isBiometricSupported = true;
+  bool _isBiometricEnabled = false;
 
   @override
   void initState() {
     super.initState();
+    _selectedCurrency = _prefsRepo.selectedCurrency;
+    _selectedTimezone = _prefsRepo.selectedTimezone;
+    _prefsRepo.addListener(_onPrefsUpdated);
     _loadPreferences();
+  }
+
+  @override
+  void dispose() {
+    _prefsRepo.removeListener(_onPrefsUpdated);
+    super.dispose();
+  }
+
+  void _onPrefsUpdated() {
+    if (!mounted) return;
+    setState(() {
+      _selectedCurrency = _prefsRepo.selectedCurrency;
+      _selectedTimezone = _prefsRepo.selectedTimezone;
+    });
   }
 
   Future<void> _loadPreferences() async {
     try {
       final cur = await _prefsRepo.getSelectedCurrency();
       final tz = await _prefsRepo.getSelectedTimezone();
+      final supported = await BiometricService.instance.isBiometricAvailable();
+      final enabled = await BiometricService.instance.isBiometricLoginEnabled();
       if (mounted) {
         setState(() {
           _selectedCurrency = cur;
           _selectedTimezone = tz;
+          _isBiometricSupported = supported;
+          _isBiometricEnabled = enabled;
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _onToggleBiometric(bool newValue) async {
+    if (newValue) {
+      // Minta verifikasi sidik jari dulu sebelum mengaktifkan (PB-016)
+      final authenticated = await BiometricService.instance.authenticate(
+        reason: 'Verifikasi sidik jari Anda untuk mengaktifkan login cepat & pembayaran Recovera',
+      );
+      if (!authenticated) return; // Batal jika sidik jari gagal/dibatalkan
+    }
+
+    setState(() => _isBiometricEnabled = newValue);
+    await BiometricService.instance.setBiometricLoginEnabled(newValue);
+    await _prefsRepo.setBiometricEnabled(newValue);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newValue
+                ? 'Login & pembayaran biometrik berhasil diaktifkan'
+                : 'Login & pembayaran biometrik dinonaktifkan',
+            style: GoogleFonts.inter(),
+          ),
+          backgroundColor: newValue ? const Color(0xFF059669) : const Color(0xFF64748B),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
   }
 
   String _getCurrencyLabel(String code) {
@@ -562,9 +615,9 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
     return GestureDetector(
       onTap: () async {
         Navigator.pop(ctx);
+        setState(() => _selectedCurrency = code);
         await _prefsRepo.setSelectedCurrency(code);
         if (mounted) {
-          setState(() => _selectedCurrency = code);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -736,9 +789,9 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
     return GestureDetector(
       onTap: () async {
         Navigator.pop(ctx);
+        setState(() => _selectedTimezone = code);
         await _prefsRepo.setSelectedTimezone(code);
         if (mounted) {
-          setState(() => _selectedTimezone = code);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -876,16 +929,27 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         subtitleColor: const Color(0xFF16A34A),
         onTap: () => _showTimezonePickerBottomSheet(context),
       ),
-      _ProfileMenuItem(
-        key: const Key('menu_security_biometrics'),
-        icon: Icons.lock_outline_rounded,
-        iconBg: AppColors.successBg,
-        iconColor: const Color(0xFF059669),
-        label: 'Pengaturan Keamanan & Biometrik',
-        subtitle: 'Sidik Jari Aktif',
-        subtitleColor: const Color(0xFF059669),
-        onTap: () {},
-      ),
+      if (_isBiometricSupported)
+        _ProfileMenuItem(
+          key: const Key('menu_security_biometrics'),
+          icon: Icons.fingerprint_rounded,
+          iconBg: _isBiometricEnabled ? AppColors.successBg : const Color(0xFFF1F5F9),
+          iconColor: _isBiometricEnabled ? const Color(0xFF059669) : const Color(0xFF64748B),
+          label: 'Pengaturan Keamanan & Biometrik',
+          subtitle: _isBiometricEnabled
+              ? 'Sidik Jari Aktif untuk Login & Pembayaran'
+              : 'Aktifkan untuk Login Cepat & Pembayaran',
+          subtitleColor: _isBiometricEnabled ? const Color(0xFF059669) : const Color(0xFF64748B),
+          onTap: () => _onToggleBiometric(!_isBiometricEnabled),
+          trailing: SizedBox(
+            height: 28,
+            child: Switch.adaptive(
+              value: _isBiometricEnabled,
+              activeColor: const Color(0xFF059669),
+              onChanged: _onToggleBiometric,
+            ),
+          ),
+        ),
       _ProfileMenuItem(
         key: const Key('menu_feedback'),
         icon: Icons.chat_bubble_outline_rounded,
@@ -914,6 +978,7 @@ class _ProfileMenuItem extends StatefulWidget {
     required this.onTap,
     this.subtitle,
     this.subtitleColor,
+    this.trailing,
   });
 
   final IconData icon;
@@ -923,6 +988,7 @@ class _ProfileMenuItem extends StatefulWidget {
   final VoidCallback onTap;
   final String? subtitle;
   final Color? subtitleColor;
+  final Widget? trailing;
 
   @override
   State<_ProfileMenuItem> createState() => _ProfileMenuItemState();
@@ -997,12 +1063,13 @@ class _ProfileMenuItemState extends State<_ProfileMenuItem> {
               ),
             ),
 
-            // Arrow
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 14,
-              color: Color(0xFF94A3B8),
-            ),
+            // Trailing widget or Arrow
+            widget.trailing ??
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: Color(0xFF94A3B8),
+                ),
           ],
         ),
       ),

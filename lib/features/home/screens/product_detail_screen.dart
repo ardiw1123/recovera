@@ -14,6 +14,7 @@ import '../../../data/repositories/listing_repository.dart';
 import '../../../data/repositories/order_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../../../data/services/order_api_service.dart';
+import '../../../core/services/biometric_service.dart';
 import '../models/product_model.dart';
 
 /// Screen detail lelang dan batch produk (US-09 Konversi Mata Uang, US-10 Konversi 4 Zona Waktu)
@@ -81,20 +82,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _loadListingDetail(widget.listingId!);
     }
 
+    AppPrefsRepository.instance.addListener(_onPrefsChanged);
     _loadUserPreferences();
     _startCountdown();
     _fetchLiveRates();
   }
 
+  @override
+  void dispose() {
+    AppPrefsRepository.instance.removeListener(_onPrefsChanged);
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onPrefsChanged() {
+    if (!mounted) return;
+    setState(() {
+      _selectedCurrency = AppPrefsRepository.instance.selectedCurrency;
+      _selectedTimezone = AppPrefsRepository.instance.selectedTimezone;
+      _rateUSD = AppPrefsRepository.instance.rateUSD;
+      _rateEUR = AppPrefsRepository.instance.rateEUR;
+      _rateGBP = AppPrefsRepository.instance.rateGBP;
+    });
+  }
+
   Future<void> _loadUserPreferences() async {
     try {
-      final prefs = AppPrefsRepository();
-      final cur = await prefs.getSelectedCurrency();
-      final tz = await prefs.getSelectedTimezone();
+      final cur = AppPrefsRepository.instance.selectedCurrency;
+      final tz = AppPrefsRepository.instance.selectedTimezone;
       if (mounted) {
         setState(() {
           _selectedCurrency = cur;
           _selectedTimezone = tz;
+          _rateUSD = AppPrefsRepository.instance.rateUSD;
+          _rateEUR = AppPrefsRepository.instance.rateEUR;
+          _rateGBP = AppPrefsRepository.instance.rateGBP;
         });
       }
     } catch (_) {}
@@ -127,7 +149,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     try {
       // 1. Coba baca cache lokal SQLite terlebih dahulu (Offline first)
       try {
-        final cached = await AppPrefsRepository().getLastCurrencyRates();
+        final cached = await AppPrefsRepository.instance.getLastCurrencyRates();
         if (cached.isNotEmpty && mounted) {
           setState(() {
             if (cached['USD'] != null && cached['USD']! > 0)
@@ -166,11 +188,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               _lastRateUpdate =
                   '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')} WIB';
             });
+            AppPrefsRepository.instance.updateLiveRates(
+              rateUSD: _rateUSD,
+              rateEUR: _rateEUR,
+              rateGBP: _rateGBP,
+            );
           }
 
           // Simpan ke SQLite cache lokal
           try {
-            await AppPrefsRepository().setLastCurrencyRates({
+            await AppPrefsRepository.instance.setLastCurrencyRates({
               'USD': usdPerIdr,
               'EUR': eurPerIdr,
               'GBP': gbpPerIdr,
@@ -224,12 +251,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         setState(() => _isLoadingRates = false);
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _countdownTimer?.cancel();
-    super.dispose();
   }
 
   Future<void> _loadListingDetail(int id) async {
@@ -608,7 +629,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                     ),
                     Text(
-                      'Rp ${_formatPriceInt(totalIdr)}',
+                      _formatPriceDisplay(totalIdr, _selectedCurrency),
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
@@ -736,6 +757,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Future<void> _executePurchase(Listing listing) async {
+    // 1. Step-Up Biometrik (US-02 & PB-017 / Shopee-style)
+    final isAvailable = await BiometricService.instance.isBiometricAvailable();
+    if (isAvailable) {
+      final verified = await BiometricService.instance.authenticate(
+        reason: 'Konfirmasi sidik jari untuk menyelesaikan pembelian ${listing.productName}',
+      );
+      if (!verified) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Verifikasi biometrik dibatalkan. Transaksi tidak diproses.',
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+              ),
+              backgroundColor: const Color(0xFFDC2626),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     setState(() => _isPurchasing = true);
     try {
       final order = await _orderRepository.buyListing(
@@ -842,10 +887,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     const SizedBox(height: 6),
                     _dialogRow(
                       'Total',
-                      'Rp ${_formatPriceInt(order.totalPrice)}',
+                      _formatPriceDisplay(order.totalPrice, _selectedCurrency),
                     ),
                     const SizedBox(height: 6),
-                    _dialogRow('Batas Ambil', '21:00 WIB', isHighlight: true),
+                    _dialogRow(
+                      'Batas Ambil',
+                      '${_getTzInfo(_selectedTimezone)['pickup']} $_selectedTimezone',
+                      isHighlight: true,
+                    ),
                   ],
                 ),
               ),

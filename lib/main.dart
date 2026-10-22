@@ -12,11 +12,13 @@ import 'features/shell/main_shell.dart';
 import 'features/seller/screens/seller_inventory_screen.dart';
 import 'features/seller/screens/upload_stock_flow_screen.dart';
 import 'features/home/screens/product_detail_screen.dart';
+import 'data/repositories/app_prefs_repository.dart';
 import 'features/auth/screens/location_management_screen.dart';
 
 Future<void> main() async {
   // 1. Pastikan binding Flutter terinisialisasi
   WidgetsFlutterBinding.ensureInitialized();
+  await AppPrefsRepository.instance.init();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../models/seller_inventory_model.dart';
 import '../repositories/seller_repository.dart';
@@ -425,12 +426,17 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 80),
-      itemCount: displayItems.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 14),
-      itemBuilder: (context, index) {
-        return _buildInventoryCard(displayItems[index]);
+    return ListenableBuilder(
+      listenable: AppPrefsRepository.instance,
+      builder: (context, _) {
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 80),
+          itemCount: displayItems.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 14),
+          itemBuilder: (context, index) {
+            return _buildInventoryCard(displayItems[index]);
+          },
+        );
       },
     );
   }
@@ -488,7 +494,9 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                     Row(
                       children: [
                         Text(
-                          item.formattedPrice,
+                          AppPrefsRepository.instance.formatPrice(
+                            item.currentPrice > 0 ? item.currentPrice : item.startPrice,
+                          ),
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,

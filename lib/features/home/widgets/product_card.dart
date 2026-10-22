@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../data/repositories/app_prefs_repository.dart';
 import '../models/product_model.dart';
 import '../screens/product_detail_screen.dart';
 
@@ -197,37 +198,44 @@ class ProductCard extends StatelessWidget {
                     ),
 
                     // Harga (tidak membuat baris baru terpisah di bawah foto)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          'Rp ${_fmt(listing.currentPrice)}',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          '/ ${listing.defaultUnit}',
-                          style: GoogleFonts.inter(
-                            fontSize: 9.5,
-                            color: const Color(0xFF64748B),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          'Rp ${_fmt(listing.normalPrice)}',
-                          style: GoogleFonts.inter(
-                            fontSize: 9.5,
-                            color: const Color(0xFF94A3B8),
-                            decoration: TextDecoration.lineThrough,
-                          ),
-                        ),
-                      ],
+                    ListenableBuilder(
+                      listenable: AppPrefsRepository.instance,
+                      builder: (context, _) {
+                        final curPrice = AppPrefsRepository.instance.formatPrice(listing.currentPrice);
+                        final norPrice = AppPrefsRepository.instance.formatPrice(listing.normalPrice);
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              curPrice,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              '/ ${listing.defaultUnit}',
+                              style: GoogleFonts.inter(
+                                fontSize: 9.5,
+                                color: const Color(0xFF64748B),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              norPrice,
+                              style: GoogleFonts.inter(
+                                fontSize: 9.5,
+                                color: const Color(0xFF94A3B8),
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),

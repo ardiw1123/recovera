@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/listing_repository.dart';
 import '../../../data/services/listing_api_service.dart';
@@ -634,6 +635,29 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ],
                                       ),
                                     ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ListenableBuilder(
+                                    listenable: AppPrefsRepository.instance,
+                                    builder: (context, _) {
+                                      final cur = AppPrefsRepository.instance.selectedCurrency;
+                                      final tz = AppPrefsRepository.instance.selectedTimezone;
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.22),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          '$cur • $tz',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ],
                               ),
