@@ -112,4 +112,24 @@ class SellerRepository extends ChangeNotifier {
     notifyListeners();
     return published;
   }
+
+  /// Mengirim foto faktur/produk ke endpoint AI OCR
+  Future<Map<String, dynamic>> uploadInvoiceForOcr({
+    required String filePath,
+    Uint8List? bytes,
+    String? filename,
+  }) async {
+    return await apiService.uploadInvoiceForOcr(
+      filePath: filePath,
+      bytes: bytes,
+      filename: filename,
+    );
+  }
+
+  /// Menghapus draf produk dari backend dan daftar inventaris lokal
+  Future<void> deleteDraft(int listingId) async {
+    await apiService.deleteDraft(listingId);
+    _inventory.removeWhere((item) => item.id == listingId);
+    notifyListeners();
+  }
 }

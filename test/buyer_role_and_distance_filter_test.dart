@@ -150,6 +150,26 @@ void main() {
       expect(find.text('Stok'), findsNothing);
       expect(find.byKey(const Key('nav_seller_add_stock')), findsNothing);
       expect(find.text('Tambah'), findsNothing);
+
+      // Tapping 'Profil' must open profilePage, NOT StokScreen or restricted barrier
+      await tester.tap(find.text('Profil'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Halaman Profil'), findsOneWidget);
+      expect(find.text('Akses Terbatas: Khusus Penjual'), findsNothing);
+
+      // Tapping 'Saran' must open feedbackPage
+      await tester.tap(find.text('Saran'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Halaman Saran'), findsOneWidget);
+
+      // Tapping 'Home' returns to Home screen
+      await tester.tap(find.text('Home'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
     });
 
     testWidgets('MainShell for Seller: Stok tab and Tambah button are present', (tester) async {

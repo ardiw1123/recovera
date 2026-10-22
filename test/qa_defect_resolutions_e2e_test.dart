@@ -12,8 +12,6 @@ import 'package:recovera/data/repositories/listing_repository.dart';
 import 'package:recovera/data/services/auth_api_service.dart';
 import 'package:recovera/features/auth/models/user_profile.dart';
 import 'package:recovera/features/auth/screens/location_management_screen.dart';
-import 'package:recovera/features/home/models/product_model.dart';
-import 'package:recovera/features/home/screens/home_screen.dart';
 import 'package:recovera/features/home/widgets/filter_bottom_sheet.dart';
 import 'package:recovera/features/home/widgets/product_card.dart';
 import 'package:recovera/features/seller/repositories/seller_repository.dart';

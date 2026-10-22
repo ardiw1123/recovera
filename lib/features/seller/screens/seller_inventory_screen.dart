@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../models/seller_inventory_model.dart';
 import '../repositories/seller_repository.dart';
+import 'seller_product_detail_screen.dart';
 import 'upload_stock_flow_screen.dart';
 
 /// Screen Stok Saya (Seller Inventory)
@@ -450,75 +452,185 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
 
   // ── Inventory Card Item matching fixed reference ─────────────────────────
   Widget _buildInventoryCard(SellerListingItem item) {
-    return Container(
-      key: Key('inventory_card_${item.id}'),
-      decoration: BoxDecoration(
-        color: AppColors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: Key('inventory_card_tap_${item.id}'),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+        onTap: () async {
+          final res = await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => SellerProductDetailScreen(
+                item: item,
+                repository: widget.repository,
+              ),
+            ),
+          );
+          if (res == true) {
+            _loadData();
+          }
+        },
+        child: Container(
+          key: Key('inventory_card_${item.id}'),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          padding: const EdgeInsets.all(16),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Product Picture / Box
-              _buildProductThumbnail(item),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.productName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF03045E),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Product Picture / Box
+                  _buildProductThumbnail(item),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.productName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF03045E),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${item.qty} ${item.defaultUnit}',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            children: [
+                              Text(
+                                item.formattedPrice,
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF0284C7),
+                                ),
+                              ),
+                              Text(
+                                ' / ${item.defaultUnit}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Two Pills: Expiry + Status
+              Row(
+                children: [
+                  // Expiry Pill
+                  Flexible(
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFFDE68A)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.access_time_rounded,
+                            size: 14,
+                            color: Color(0xFFD97706),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              item.daysRemainingText,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFFD97706),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
+                  ),
+                  const SizedBox(width: 8),
+                  // Status Pill
+                  _buildStatusPill(item),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Bottom Process Banner
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFF1F5F9)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF0284C7),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
-                      '${item.qty} ${item.defaultUnit}',
+                      'Proses Saat Ini:',
                       style: GoogleFonts.inter(
-                        fontSize: 14,
+                        fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: const Color(0xFF64748B),
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        children: [
-                          Text(
-                            item.formattedPrice,
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF0284C7),
-                            ),
-                          ),
-                          Text(
-                            ' / ${item.defaultUnit}',
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        item.currentProcessLabel,
+                        textAlign: TextAlign.end,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF0284C7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -526,97 +638,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // Two Pills: Expiry + Status
-          Row(
-            children: [
-              // Expiry Pill
-              Flexible(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3C7),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFFDE68A)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.access_time_rounded,
-                        size: 14,
-                        color: Color(0xFFD97706),
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          item.daysRemainingText,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFFD97706),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Status Pill
-              _buildStatusPill(item),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Bottom Process Banner
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFF1F5F9)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF0284C7),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Proses Saat Ini:',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    item.currentProcessLabel,
-                    textAlign: TextAlign.end,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0284C7),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -624,6 +646,46 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
   Widget _buildProductThumbnail(SellerListingItem item) {
     final bgColor = _getCategoryColor(item.category);
     final iconData = _getCategoryIcon(item.category);
+
+    Widget imageWidget;
+    final img = item.imageUrl;
+
+    if (img != null && img.isNotEmpty) {
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        imageWidget = Image.network(
+          img,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Center(
+            child: Icon(iconData, size: 36, color: bgColor),
+          ),
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: bgColor,
+                ),
+              ),
+            );
+          },
+        );
+      } else {
+        imageWidget = Image.file(
+          File(img),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Center(
+            child: Icon(iconData, size: 36, color: bgColor),
+          ),
+        );
+      }
+    } else {
+      imageWidget = Center(
+        child: Icon(iconData, size: 36, color: bgColor),
+      );
+    }
 
     return Container(
       width: 72,
@@ -634,30 +696,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
         border: Border.all(color: bgColor.withValues(alpha: 0.3)),
       ),
       clipBehavior: Clip.antiAlias,
-      child: item.imageUrl != null && item.imageUrl!.startsWith('http')
-          ? Image.network(
-              item.imageUrl!,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Center(
-                child: Icon(iconData, size: 36, color: bgColor),
-              ),
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-                return Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: bgColor,
-                    ),
-                  ),
-                );
-              },
-            )
-          : Center(
-              child: Icon(iconData, size: 36, color: bgColor),
-            ),
+      child: imageWidget,
     );
   }
 

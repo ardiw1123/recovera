@@ -1,4 +1,5 @@
-import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import 'place_search_service.dart';
 
 /// Status perizinan akses lokasi perangkat mobile
 enum LocationPermissionStatus {
@@ -14,8 +15,8 @@ class DeviceLocationData {
     required this.latitude,
     required this.longitude,
     this.accuracy = 10.0,
-    this.address = 'Jl. Medan Merdeka Barat No. 12, Gambir, Jakarta Pusat',
-    this.city = 'Jakarta Pusat',
+    this.address = 'Titik Lokasi Terpilih',
+    this.city = 'Lokasi Terpilih',
   });
 
   final double latitude;
@@ -30,15 +31,12 @@ class DeviceLocationData {
 
 /// Layanan integrasi izin lokasi native OS dan perolehan koordinat GPS perangkat.
 ///
-/// Menggunakan platform channel MethodChannel ('com.recovera/location') untuk berinteraksi
-/// langsung dengan Android (LocationManager / FusedLocationProviderClient) dan iOS (CLLocationManager).
+/// Menggunakan package geolocator untuk berinteraksi dengan sensor GPS dan permission
+/// pada Android dan iOS.
 class DeviceLocationService {
-  DeviceLocationService({MethodChannel? channel})
-      : _channel = channel ?? const MethodChannel('com.recovera/location');
+  DeviceLocationService();
 
   static DeviceLocationService instance = DeviceLocationService();
-
-  final MethodChannel _channel;
 
   // Hook override untuk widget test dan simulasi lingkungan non-mobile
   static LocationPermissionStatus? mockPermissionStatus;
@@ -51,8 +49,8 @@ class DeviceLocationService {
     }
 
     try {
-      final result = await _channel.invokeMethod<String>('checkPermission');
-      return _parseStatus(result);
+      final permission = await Geolocator.checkPermission();
+      return _mapGeolocatorPermission(permission);
     } catch (_) {
       // Fallback aman pada unit test atau platform non-Android/iOS
       return LocationPermissionStatus.notDetermined;
@@ -66,60 +64,63 @@ class DeviceLocationService {
     }
 
     try {
-      final result = await _channel.invokeMethod<String>('requestPermission');
-      return _parseStatus(result);
+      final isServiceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!isServiceEnabled) {
+        return LocationPermissionStatus.denied;
+      }
+
+      final permission = await Geolocator.requestPermission();
+      return _mapGeolocatorPermission(permission);
     } catch (_) {
-      // Fallback anggun jika channel belum terdaftar di test harness
+      // Fallback anggun jika plugin belum terdaftar di test harness
       return LocationPermissionStatus.granted;
     }
   }
 
-  /// Mengambil koordinat GPS akurat dari sensor lokasi perangkat
+  /// Mengambil koordinat GPS akurat dari sensor lokasi perangkat dengan reverse geocoding
   Future<DeviceLocationData> getCurrentLocation() async {
     if (mockLocationData != null) {
       return mockLocationData!;
     }
 
     try {
-      final result = await _channel.invokeMapMethod<String, dynamic>('getCurrentPosition');
-      if (result != null && result['latitude'] != null && result['longitude'] != null) {
-        final lat = (result['latitude'] as num).toDouble();
-        final lng = (result['longitude'] as num).toDouble();
-        final accuracy = (result['accuracy'] as num?)?.toDouble() ?? 10.0;
-        final address = (result['address'] as String?) ?? 'Jl. Medan Merdeka Barat No. 12, Gambir, Jakarta Pusat';
-        final city = (result['city'] as String?) ?? 'Jakarta Pusat';
-        return DeviceLocationData(
-          latitude: lat,
-          longitude: lng,
-          accuracy: accuracy,
-          address: address,
-          city: city,
-        );
-      }
-    } catch (_) {
-      // Abaikan dan gunakan default koordinat perangkat jika terjadi timeout sensor
-    }
+      final position = await Geolocator.getCurrentPosition();
 
-    // Default GPS fix (Jakarta Pusat / Monas)
-    return const DeviceLocationData(
-      latitude: -6.175392,
-      longitude: 106.827153,
-      accuracy: 5.0,
-      address: 'Jl. Medan Merdeka Barat No. 12, Gambir, Jakarta Pusat',
-      city: 'Jakarta Pusat',
-    );
+      // Dapatkan alamat jalan dan kota riil menggunakan reverse geocoding
+      final reverseInfo = await PlaceSearchService.instance.reverseGeocode(
+        position.latitude,
+        position.longitude,
+      );
+
+      return DeviceLocationData(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: position.accuracy,
+        address: reverseInfo.road,
+        city: reverseInfo.city,
+      );
+    } catch (_) {
+      // Fallback koordinat perangkat jika terjadi timeout sensor atau di test environment
+      return const DeviceLocationData(
+        latitude: -6.175392,
+        longitude: 106.827153,
+        accuracy: 5.0,
+        address: 'Jl. Medan Merdeka Barat No. 12, Gambir, Jakarta Pusat',
+        city: 'Jakarta Pusat',
+      );
+    }
   }
 
-  LocationPermissionStatus _parseStatus(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'granted':
+  LocationPermissionStatus _mapGeolocatorPermission(LocationPermission permission) {
+    switch (permission) {
+      case LocationPermission.always:
+      case LocationPermission.whileInUse:
         return LocationPermissionStatus.granted;
-      case 'denied':
+      case LocationPermission.denied:
         return LocationPermissionStatus.denied;
-      case 'deniedforever':
-      case 'permanentlydenied':
+      case LocationPermission.deniedForever:
         return LocationPermissionStatus.deniedForever;
-      default:
+      case LocationPermission.unableToDetermine:
         return LocationPermissionStatus.notDetermined;
     }
   }

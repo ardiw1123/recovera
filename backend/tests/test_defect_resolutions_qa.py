@@ -27,7 +27,7 @@ def test_seller_draft_creation_success_with_image(client):
     """
     headers = _create_seller(client, "qa_seller_img")
 
-    exp_date = (date.today() + timedelta(days=20)).isoformat()
+    exp_date = (date.today() + timedelta(days=45)).isoformat()
     draft_payload = {
         "sku": "SKU-QA-DAIRY-99",
         "barcode": "8991234567890",
@@ -146,7 +146,7 @@ def test_seller_draft_update_and_validate_progression(client):
         "qty": 30,
         "normal_price": 40000.0,
         "min_price": 5000.0,
-        "expiry_date": (date.today() + timedelta(days=20)).isoformat(),
+        "expiry_date": (date.today() + timedelta(days=45)).isoformat(),
         "image_url": "https://storage.recovera.id/products/roti_gandum.jpg",
     }, headers=headers)
     assert create_res.status_code == 201, f"Create failed: {create_res.text}"
@@ -222,7 +222,7 @@ def test_listings_dynamic_distance_query_filtering(client):
         "qty": 40,
         "normal_price": 120000.0,
         "min_price": 20000.0,
-        "expiry_date": (date.today() + timedelta(days=25)).isoformat(),
+        "expiry_date": (date.today() + timedelta(days=45)).isoformat(),
         "image_url": "https://storage.recovera.id/products/keju_edam.jpg",
     }, headers=headers)
     assert draft_res.status_code == 201
@@ -257,3 +257,72 @@ def test_listings_dynamic_distance_query_filtering(client):
     assert len(matching_60) == 1, "Listing must be included under expanded 60 km radius"
     assert matching_60[0]["distance_km"] > 35.0
     assert matching_60[0]["distance_km"] < 60.0
+
+
+def test_delete_draft_and_expiry_less_than_30_days(client):
+    """Verify draft can be deleted and expiry < 30 days is rejected."""
+    headers_exp = _create_seller(client, "qa_seller_exp_short")
+
+    # 1. Reject if expiry < 30 days
+    rej_res = client.post("/listings/seller/inventory/drafts", json={
+        "sku": "SKU-EXP-SHORT",
+        "name": "Susu Cepat Basi",
+        "category": "Dairy",
+        "storage_type": "chilled",
+        "default_unit": "karton",
+        "batch_number": "LOT-EXP-SHORT",
+        "qty": 10,
+        "normal_price": 25000.0,
+        "min_price": 5000.0,
+        "expiry_date": (date.today() + timedelta(days=15)).isoformat(),
+        "image_url": "https://storage.recovera.id/products/susu_short.jpg",
+    }, headers=headers_exp)
+    assert rej_res.status_code == 422
+    assert rej_res.json()["error"]["code"] == "INVALID_EXPIRY_DATE"
+
+    # 2. Reject if image_url is missing
+    headers_img = _create_seller(client, "qa_seller_no_img")
+    no_img_res = client.post("/listings/seller/inventory/drafts", json={
+        "sku": "SKU-NO-IMG",
+        "name": "Produk Tanpa Foto",
+        "category": "Dairy",
+        "storage_type": "chilled",
+        "default_unit": "karton",
+        "batch_number": "LOT-NO-IMG",
+        "qty": 10,
+        "normal_price": 25000.0,
+        "min_price": 5000.0,
+        "expiry_date": (date.today() + timedelta(days=40)).isoformat(),
+        "image_url": "",
+    }, headers=headers_img)
+    assert no_img_res.status_code == 422
+    assert no_img_res.json()["error"]["code"] in ["IMAGE_REQUIRED", "VALIDATION_ERROR"]
+
+    # 3. Create valid draft with expiry >= 30 days and valid image
+    headers_ok = _create_seller(client, "qa_seller_ok_del")
+    ok_res = client.post("/listings/seller/inventory/drafts", json={
+        "sku": "SKU-DEL-OK",
+        "name": "Beras Premium 5kg",
+        "category": "Flour & Grain",
+        "storage_type": "ambient",
+        "default_unit": "karung",
+        "batch_number": "LOT-DEL-OK",
+        "qty": 20,
+        "normal_price": 75000.0,
+        "min_price": 25000.0,
+        "expiry_date": (date.today() + timedelta(days=60)).isoformat(),
+        "image_url": "https://storage.recovera.id/products/beras.jpg",
+    }, headers=headers_ok)
+    assert ok_res.status_code == 201
+    draft_id = ok_res.json()["data"]["listing"]["id"]
+
+    # 4. Delete the draft
+    del_res = client.delete(f"/listings/seller/inventory/{draft_id}", headers=headers_ok)
+    assert del_res.status_code == 200
+    assert del_res.json()["data"]["deleted"] is True
+
+    # 5. Verify it is gone from inventory
+    inv_res = client.get("/listings/seller/inventory", headers=headers_ok)
+    assert inv_res.status_code == 200
+    assert not any(item["id"] == draft_id for item in inv_res.json()["data"])
+

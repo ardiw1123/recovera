@@ -47,12 +47,14 @@ def _validate_inventory_listing(listing: Listing) -> list[str]:
     product = listing.product
     if not product or not product.name.strip() or not product.category.strip():
         errors.append("Product name and category are required")
-    if not product or not product.image_url:
-        errors.append("A product image URL is required")
+    if not product or not product.image_url or not str(product.image_url).strip():
+        errors.append("Foto produk wajib diunggah")
     if listing.qty <= 0:
         errors.append("Quantity must be greater than zero")
     if listing.expiry_date <= date.today():
         errors.append("Expiry date must be in the future")
+    elif (listing.expiry_date - date.today()).days < 30:
+        errors.append("Masa simpan minimal 30 hari")
     if listing.min_price > listing.start_price or listing.start_price > listing.normal_price:
         errors.append("Prices must satisfy minimum price <= starting price <= normal price")
     return errors
@@ -82,7 +84,7 @@ async def create_seller_inventory_draft(
         
         if payload.expiry_date <= date.today():
             raise AppException("INVALID_EXPIRY_DATE", "Expiry date must be in the future", status.HTTP_422_UNPROCESSABLE_ENTITY)
-        
+
         if payload.qty <= 0:
             raise AppException("INVALID_QUANTITY", "Quantity must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
         
@@ -91,6 +93,12 @@ async def create_seller_inventory_draft(
         
         if payload.min_price > payload.normal_price:
             raise AppException("INVALID_PRICE_RANGE", "Minimum price cannot exceed normal price", status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        if (payload.expiry_date - date.today()).days < 30:
+            raise AppException("INVALID_EXPIRY_DATE", "Masa simpan minimal 30 hari agar lelang Dutch Auction berjalan. Pilih tanggal kedaluwarsa yang lebih jauh.", status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        if not payload.image_url or not str(payload.image_url).strip():
+            raise AppException("IMAGE_REQUIRED", "Foto produk wajib diunggah", status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         product = db.query(Product).filter(Product.sku == payload.sku).first()
         if product is None:
@@ -185,8 +193,11 @@ async def update_seller_inventory_draft(
         if "min_price" in values and values["min_price"] <= 0:
             raise AppException("INVALID_PRICE", "Minimum price must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
         
-        if "expiry_date" in values and values["expiry_date"] <= date.today():
-            raise AppException("INVALID_EXPIRY_DATE", "Expiry date must be in the future", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        if "expiry_date" in values:
+            if values["expiry_date"] <= date.today():
+                raise AppException("INVALID_EXPIRY_DATE", "Expiry date must be in the future", status.HTTP_422_UNPROCESSABLE_ENTITY)
+            if (values["expiry_date"] - date.today()).days < 30:
+                raise AppException("INVALID_EXPIRY_DATE", "Masa simpan minimal 30 hari agar lelang Dutch Auction berjalan. Pilih tanggal kedaluwarsa yang lebih jauh.", status.HTTP_422_UNPROCESSABLE_ENTITY)
         
         for field in ("batch_number", "qty", "normal_price", "start_price", "min_price", "expiry_date"):
             if field in values:
@@ -214,6 +225,20 @@ async def update_seller_inventory_draft(
             f"Failed to update inventory draft: {str(e)}",
             status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@router.delete("/seller/inventory/{listing_id}", status_code=status.HTTP_200_OK)
+async def delete_seller_inventory_draft(
+    db: DbSessionDep,
+    seller_user: RequireSellerDep,
+    listing_id: Annotated[int, Path(ge=1)],
+) -> dict:
+    _, listing = _owned_listing(db, seller_user.id, listing_id)
+    if listing.status not in {"draft", "review"}:
+        raise AppException("LISTING_NOT_DELETABLE", "Hanya produk berstatus draft yang dapat dihapus", status.HTTP_409_CONFLICT)
+    db.delete(listing)
+    db.commit()
+    return wrap_success({"deleted": True, "id": listing_id})
 
 
 @router.post("/seller/inventory/{listing_id}/validate")
@@ -388,6 +413,13 @@ async def create_listing(
         raise AppException(
             code="INVALID_DATE_FORMAT",
             message="expiry_date must be in ISO format YYYY-MM-DD",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    if (exp_date - date.today()).days < 30:
+        raise AppException(
+            code="INVALID_EXPIRY_DATE",
+            message="Masa simpan minimal 30 hari agar lelang Dutch Auction berjalan. Pilih tanggal kedaluwarsa yang lebih jauh.",
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 

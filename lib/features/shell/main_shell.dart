@@ -5,7 +5,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/listing_repository.dart';
 import '../home/screens/home_screen.dart';
-import '../stok/screens/stok_screen.dart';
 import '../seller/screens/seller_inventory_screen.dart';
 import '../seller/repositories/seller_repository.dart';
 import '../seller/screens/upload_stock_flow_screen.dart';
@@ -51,11 +50,14 @@ class _MainShellState extends State<MainShell> {
         final buyerLat = profile?.baseLat ?? -6.2088;
         final buyerLng = profile?.baseLng ?? 106.8456;
 
-        // Daftar halaman adaptif berdasarkan role (Buyer tidak memiliki tab Stok)
+        // Daftar halaman adaptif berdasarkan role
+        // • Seller: Beranda (0), Stok (1), Profil (2), Saran (3)
+        // • Buyer: Home (0), Profil (1), Saran (2) — Stok dihilangkan sepenuhnya
         final pages = isSeller
             ? <Widget>[
                 SellerInventoryScreen(repository: widget.sellerRepository),
-                widget.stokPage ?? SellerInventoryScreen(repository: widget.sellerRepository),
+                widget.stokPage ??
+                    SellerInventoryScreen(repository: widget.sellerRepository),
                 widget.profilePage ?? const ProfileScreen(),
                 widget.feedbackPage ?? const SaranKesanScreen(),
               ]
@@ -69,9 +71,11 @@ class _MainShellState extends State<MainShell> {
                 widget.feedbackPage ?? const SaranKesanScreen(),
               ];
 
+        final activeIndex = _currentIndex.clamp(0, pages.length - 1);
+
         return Scaffold(
           body: IndexedStack(
-            index: _currentIndex.clamp(0, pages.length - 1),
+            index: activeIndex,
             children: pages,
           ),
           bottomNavigationBar: Container(
@@ -90,8 +94,8 @@ class _MainShellState extends State<MainShell> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: isSeller
-                    ? _buildSellerNavRow()
-                    : _buildBuyerNavRow(),
+                    ? _buildSellerNavRow(activeIndex)
+                    : _buildBuyerNavRow(activeIndex),
               ),
             ),
           ),
@@ -101,7 +105,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   // ── Bottom Nav Row untuk Penjual (Sesuai seller-inventory-screen.png) ─────
-  Widget _buildSellerNavRow() {
+  Widget _buildSellerNavRow(int activeIndex) {
     return Row(
       children: [
         Expanded(
@@ -109,7 +113,7 @@ class _MainShellState extends State<MainShell> {
             icon: Icons.home_outlined,
             activeIcon: Icons.home_rounded,
             label: 'Beranda',
-            isActive: _currentIndex == 0,
+            isActive: activeIndex == 0,
             onTap: () => setState(() => _currentIndex = 0),
           ),
         ),
@@ -118,7 +122,7 @@ class _MainShellState extends State<MainShell> {
             icon: Icons.inventory_2_outlined,
             activeIcon: Icons.inventory_2_rounded,
             label: 'Stok',
-            isActive: _currentIndex == 1,
+            isActive: activeIndex == 1,
             onTap: () => setState(() => _currentIndex = 1),
           ),
         ),
@@ -170,7 +174,7 @@ class _MainShellState extends State<MainShell> {
             icon: Icons.person_outline_rounded,
             activeIcon: Icons.person_rounded,
             label: 'Profil',
-            isActive: _currentIndex == 2,
+            isActive: activeIndex == 2,
             onTap: () => setState(() => _currentIndex = 2),
           ),
         ),
@@ -179,7 +183,7 @@ class _MainShellState extends State<MainShell> {
             icon: Icons.chat_bubble_outline_rounded,
             activeIcon: Icons.chat_bubble_rounded,
             label: 'Saran',
-            isActive: _currentIndex == 3,
+            isActive: activeIndex == 3,
             onTap: () => setState(() => _currentIndex = 3),
           ),
         ),
@@ -188,7 +192,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   // ── Bottom Nav Row untuk Pembeli (Role guard: Tab Stok dihilangkan sepenuhnya) ──
-  Widget _buildBuyerNavRow() {
+  Widget _buildBuyerNavRow(int activeIndex) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
@@ -196,21 +200,21 @@ class _MainShellState extends State<MainShell> {
           icon: Icons.home_outlined,
           activeIcon: Icons.home_rounded,
           label: 'Home',
-          isActive: _currentIndex == 0,
+          isActive: activeIndex == 0,
           onTap: () => setState(() => _currentIndex = 0),
         ),
         _NavItem(
           icon: Icons.person_outline_rounded,
           activeIcon: Icons.person_rounded,
           label: 'Profil',
-          isActive: _currentIndex == 1,
+          isActive: activeIndex == 1,
           onTap: () => setState(() => _currentIndex = 1),
         ),
         _NavItem(
           icon: Icons.chat_bubble_outline_rounded,
           activeIcon: Icons.chat_bubble_rounded,
           label: 'Saran',
-          isActive: _currentIndex == 2,
+          isActive: activeIndex == 2,
           onTap: () => setState(() => _currentIndex = 2),
         ),
       ],

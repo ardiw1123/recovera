@@ -93,6 +93,7 @@ class _AuditSellerRepository extends SellerRepository {
   _AuditSellerRepository(this.items)
       : super(apiService: SellerApiService(client: ApiClient()));
 
+  @override
   final List<SellerListingItem> items;
 
   @override

@@ -93,7 +93,9 @@ class ApiClient {
       headers: headers,
       extra: options?.extra ?? {},
       responseType: options?.responseType ?? ResponseType.json,
-      contentType: options?.contentType ?? _dio.options.contentType,
+      contentType: data is FormData
+          ? null
+          : (options?.contentType ?? _dio.options.contentType),
     );
 
     // Jalankan request interceptors (misal: penyuntikan header Authorization)

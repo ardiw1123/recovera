@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
 
     gemini_api_key: str = ""
+    groq_api_key: str = ""
     cloudinary_url: str = ""
     fcm_server_key: str = ""
     web3_rpc_url: str = "https://rpc.bot-chain.testnet"
