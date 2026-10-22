@@ -1,5 +1,6 @@
 // Data models for the Recovera seller inventory, draft creation, validation,
 // recommendation, and publication workflow.
+import '../../../data/repositories/app_prefs_repository.dart';
 
 class SellerListingItem {
   final int id;
@@ -301,17 +302,7 @@ class SellerRecommendationResult {
   }
 }
 
-/// Helper currency formatter for Indonesian Rupiah
+/// Helper currency formatter delegating to AppPrefsRepository for multi-currency support
 String formatCurrency(num amount) {
-  final val = amount.round();
-  final s = val.abs().toString();
-  final buffer = StringBuffer();
-  for (int i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 == 0) {
-      buffer.write('.');
-    }
-    buffer.write(s[i]);
-  }
-  final sign = val < 0 ? '-' : '';
-  return '${sign}Rp${buffer.toString()}';
+  return AppPrefsRepository.instance.formatPrice(amount.toDouble());
 }

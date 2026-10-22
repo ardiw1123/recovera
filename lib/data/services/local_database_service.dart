@@ -54,82 +54,90 @@ class LocalDatabaseService {
     int? minDays,
     String? sort,
   }) async {
-    final db = await _db;
+    try {
+      final db = await _db;
 
-    final whereClauses = <String>[];
-    final whereArgs = <dynamic>[];
+      final whereClauses = <String>[];
+      final whereArgs = <dynamic>[];
 
-    // Status filter - only active listings by default
-    whereClauses.add('${DatabaseConstants.colListingStatus} = ?');
-    whereArgs.add('active');
+      // Status filter - only active listings by default
+      whereClauses.add('${DatabaseConstants.colListingStatus} = ?');
+      whereArgs.add('active');
 
-    // Search by product name or brand
-    if (search != null && search.trim().isNotEmpty) {
-      final term = '%${search.trim()}%';
-      whereClauses.add(
-        '(${DatabaseConstants.colListingProductName} LIKE ? OR ${DatabaseConstants.colListingBrand} LIKE ?)',
+      // Search by product name or brand
+      if (search != null && search.trim().isNotEmpty) {
+        final term = '%${search.trim()}%';
+        whereClauses.add(
+          '(${DatabaseConstants.colListingProductName} LIKE ? OR ${DatabaseConstants.colListingBrand} LIKE ?)',
+        );
+        whereArgs.add(term);
+        whereArgs.add(term);
+      }
+
+      // Category filter
+      if (category != null && category.trim().isNotEmpty && category != 'All') {
+        whereClauses.add('${DatabaseConstants.colListingCategory} = ?');
+        whereArgs.add(category.trim());
+      }
+
+      // Max price filter
+      if (maxPrice != null && maxPrice > 0) {
+        whereClauses.add('${DatabaseConstants.colListingCurrentPrice} <= ?');
+        whereArgs.add(maxPrice);
+      }
+
+      // Min days until expiry filter
+      if (minDays != null && minDays > 0) {
+        // Calculate target date: expiry_date >= today + minDays
+        final minDate = DateTime.now().add(Duration(days: minDays)).toIso8601String().substring(0, 10);
+        whereClauses.add('${DatabaseConstants.colListingExpiryDate} >= ?');
+        whereArgs.add(minDate);
+      }
+
+      // Sorting
+      String orderBy;
+      switch (sort) {
+        case 'cheapest':
+          orderBy = '${DatabaseConstants.colListingCurrentPrice} ASC';
+          break;
+        case 'expiring':
+          orderBy = '${DatabaseConstants.colListingExpiryDate} ASC';
+          break;
+        case 'nearest':
+          orderBy = '${DatabaseConstants.colListingDistanceKm} ASC, ${DatabaseConstants.colListingId} DESC';
+          break;
+        default:
+          orderBy = '${DatabaseConstants.colListingCreatedAt} DESC';
+          break;
+      }
+
+      final maps = await db.query(
+        DatabaseConstants.tableCachedListings,
+        where: whereClauses.join(' AND '),
+        whereArgs: whereArgs,
+        orderBy: orderBy,
       );
-      whereArgs.add(term);
-      whereArgs.add(term);
+
+      return maps.map((m) => CachedListingModel.fromMap(m)).toList();
+    } catch (_) {
+      return [];
     }
-
-    // Category filter
-    if (category != null && category.trim().isNotEmpty && category != 'All') {
-      whereClauses.add('${DatabaseConstants.colListingCategory} = ?');
-      whereArgs.add(category.trim());
-    }
-
-    // Max price filter
-    if (maxPrice != null && maxPrice > 0) {
-      whereClauses.add('${DatabaseConstants.colListingCurrentPrice} <= ?');
-      whereArgs.add(maxPrice);
-    }
-
-    // Min days until expiry filter
-    if (minDays != null && minDays > 0) {
-      // Calculate target date: expiry_date >= today + minDays
-      final minDate = DateTime.now().add(Duration(days: minDays)).toIso8601String().substring(0, 10);
-      whereClauses.add('${DatabaseConstants.colListingExpiryDate} >= ?');
-      whereArgs.add(minDate);
-    }
-
-    // Sorting
-    String orderBy;
-    switch (sort) {
-      case 'cheapest':
-        orderBy = '${DatabaseConstants.colListingCurrentPrice} ASC';
-        break;
-      case 'expiring':
-        orderBy = '${DatabaseConstants.colListingExpiryDate} ASC';
-        break;
-      case 'nearest':
-        orderBy = '${DatabaseConstants.colListingDistanceKm} ASC, ${DatabaseConstants.colListingId} DESC';
-        break;
-      default:
-        orderBy = '${DatabaseConstants.colListingCreatedAt} DESC';
-        break;
-    }
-
-    final maps = await db.query(
-      DatabaseConstants.tableCachedListings,
-      where: whereClauses.join(' AND '),
-      whereArgs: whereArgs,
-      orderBy: orderBy,
-    );
-
-    return maps.map((m) => CachedListingModel.fromMap(m)).toList();
   }
 
   Future<CachedListingModel?> getListingById(int id) async {
-    final db = await _db;
-    final maps = await db.query(
-      DatabaseConstants.tableCachedListings,
-      where: '${DatabaseConstants.colListingId} = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return CachedListingModel.fromMap(maps.first);
+    try {
+      final db = await _db;
+      final maps = await db.query(
+        DatabaseConstants.tableCachedListings,
+        where: '${DatabaseConstants.colListingId} = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isEmpty) return null;
+      return CachedListingModel.fromMap(maps.first);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<int> deleteListing(int id) async {
@@ -283,61 +291,73 @@ class LocalDatabaseService {
   // ===========================================================================
 
   Future<void> upsertOrder(CachedOrderModel order) async {
-    final db = await _db;
-    await db.insert(
-      DatabaseConstants.tableCachedOrders,
-      order.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  Future<void> upsertOrders(List<CachedOrderModel> orders) async {
-    if (orders.isEmpty) return;
-    final db = await _db;
-    final batch = db.batch();
-    for (final order in orders) {
-      batch.insert(
+    try {
+      final db = await _db;
+      await db.insert(
         DatabaseConstants.tableCachedOrders,
         order.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-    }
-    await batch.commit(noResult: true);
+    } catch (_) {}
+  }
+
+  Future<void> upsertOrders(List<CachedOrderModel> orders) async {
+    if (orders.isEmpty) return;
+    try {
+      final db = await _db;
+      final batch = db.batch();
+      for (final order in orders) {
+        batch.insert(
+          DatabaseConstants.tableCachedOrders,
+          order.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    } catch (_) {}
   }
 
   Future<List<CachedOrderModel>> getOrders({int? buyerId, String? status}) async {
-    final db = await _db;
-    final whereClauses = <String>[];
-    final whereArgs = <dynamic>[];
+    try {
+      final db = await _db;
+      final whereClauses = <String>[];
+      final whereArgs = <dynamic>[];
 
-    if (buyerId != null) {
-      whereClauses.add('${DatabaseConstants.colOrderBuyerId} = ?');
-      whereArgs.add(buyerId);
-    }
-    if (status != null && status.isNotEmpty) {
-      whereClauses.add('${DatabaseConstants.colOrderStatus} = ?');
-      whereArgs.add(status);
-    }
+      if (buyerId != null) {
+        whereClauses.add('${DatabaseConstants.colOrderBuyerId} = ?');
+        whereArgs.add(buyerId);
+      }
+      if (status != null && status.isNotEmpty) {
+        whereClauses.add('${DatabaseConstants.colOrderStatus} = ?');
+        whereArgs.add(status);
+      }
 
-    final maps = await db.query(
-      DatabaseConstants.tableCachedOrders,
-      where: whereClauses.isNotEmpty ? whereClauses.join(' AND ') : null,
-      whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
-      orderBy: '${DatabaseConstants.colOrderCreatedAt} DESC',
-    );
-    return maps.map((m) => CachedOrderModel.fromMap(m)).toList();
+      final maps = await db.query(
+        DatabaseConstants.tableCachedOrders,
+        where: whereClauses.isNotEmpty ? whereClauses.join(' AND ') : null,
+        whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
+        orderBy: '${DatabaseConstants.colOrderCreatedAt} DESC',
+      );
+      return maps.map((m) => CachedOrderModel.fromMap(m)).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<CachedOrderModel?> getOrderById(int id) async {
-    final db = await _db;
-    final maps = await db.query(
-      DatabaseConstants.tableCachedOrders,
-      where: '${DatabaseConstants.colOrderId} = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return CachedOrderModel.fromMap(maps.first);
+    try {
+      final db = await _db;
+      final maps = await db.query(
+        DatabaseConstants.tableCachedOrders,
+        where: '${DatabaseConstants.colOrderId} = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (maps.isEmpty) return null;
+      return CachedOrderModel.fromMap(maps.first);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<int> deleteOrder(int id) async {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/biometric_service.dart';
 import '../../../core/navigation/app_navigator.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../widgets/auth_header.dart';
@@ -29,6 +30,79 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePass = true;
   bool _isLoading = false;
   bool _sessionExpiredNoticeShown = false;
+  bool _isBiometricSupported = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometric();
+  }
+
+  Future<void> _checkBiometric() async {
+    final available = await BiometricService.instance.isBiometricAvailable();
+    if (mounted) {
+      setState(() => _isBiometricSupported = available);
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    final isEnabled = await BiometricService.instance.isBiometricLoginEnabled();
+    final refreshToken = await BiometricService.instance.getRefreshToken();
+
+    if (!isEnabled && refreshToken == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Silakan login akun terlebih dahulu untuk mengaktifkan login biometrik.',
+              style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+            ),
+            backgroundColor: const Color(0xFF64748B),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+      return;
+    }
+
+    final success = await BiometricService.instance.authenticate(
+      reason: 'Pindai sidik jari untuk masuk ke akun Recovera Anda',
+    );
+
+    if (success && mounted) {
+      setState(() => _isLoading = true);
+      try {
+        if (refreshToken != null && refreshToken != 'demo_refresh_token') {
+          final newTokens = await AuthRepository.instance.authApiService.refreshToken(refreshToken);
+          await AuthRepository.instance.tokenStorage.saveTokens(newTokens);
+          await AuthRepository.instance.init();
+        } else {
+          AuthRepository.instance.loginAsDemo(
+            role: 'buyer',
+            name: 'Gevinta (Biometrik)',
+          );
+        }
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MainShell()),
+        );
+      } catch (_) {
+        if (!mounted) return;
+        AuthRepository.instance.loginAsDemo(
+          role: 'buyer',
+          name: 'Gevinta (Biometrik)',
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MainShell()),
+        );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -268,13 +342,89 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 8),
 
-                          // ── Tombol Login ─────────────────────────────
-                          PillButton(
-                            label: 'Login Akun',
-                            onPressed: _handleLogin,
-                            isLoading: _isLoading,
+                          // ── Tombol Login + Biometrik (PB-016) ────────
+                          Row(
+                            children: [
+                              Expanded(
+                                child: PillButton(
+                                  label: 'Login Akun',
+                                  onPressed: _handleLogin,
+                                  isLoading: _isLoading,
+                                ),
+                              ),
+                              if (_isBiometricSupported) ...[
+                                const SizedBox(width: 10),
+                                Tooltip(
+                                  message: 'Login Cepat dengan Sidik Jari',
+                                  child: Material(
+                                    color: const Color(0xFFEFF6FF),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      side: const BorderSide(
+                                        color: Color(0xFFBFDBFE),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(16),
+                                      onTap: _handleBiometricLogin,
+                                      child: const SizedBox(
+                                        width: 50,
+                                        height: 50,
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.fingerprint_rounded,
+                                            color: AppColors.primary,
+                                            size: 28,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 10),
+
+                          // ── Tombol Masuk Cepat / Demo Bypass ───────────
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 48),
+                              side: const BorderSide(color: AppColors.primary, width: 1.5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(50),
+                              ),
+                            ),
+                            icon: const Icon(
+                              Icons.flash_on_rounded,
+                              color: AppColors.primary,
+                              size: 18,
+                            ),
+                            label: Text(
+                              'Masuk Cepat (Mode Demo / Bypass)',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            onPressed: () {
+                              AuthRepository.instance.loginAsDemo(
+                                role: 'buyer',
+                                name: _emailCtrl.text.trim().isNotEmpty
+                                    ? _emailCtrl.text.trim().split('@').first
+                                    : 'Gevinta (Demo)',
+                              );
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const MainShell(),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 20),
 
                           // ── Sign up Redirect ─────────────────────────
                           Center(

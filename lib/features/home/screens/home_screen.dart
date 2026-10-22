@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/listing_repository.dart';
 import '../../../data/services/listing_api_service.dart';
@@ -34,13 +35,52 @@ class _HomeScreenState extends State<HomeScreen> {
   late final ListingRepository _listingRepository;
   final TextEditingController _searchCtrl = TextEditingController();
 
-  List<Listing> _allListings = [];
+  List<Listing> _allListings = List<Listing>.from(dummyListings);
   bool _isLoading = false;
   bool _isFromCache = false;
   String? _errorMessage;
 
-  FoodCategory? _selectedCategory;
-  String _selectedSort = 'nearest'; // 'nearest', 'cheapest', 'highest_match'
+  Set<FoodCategory>? _selectedCategoriesInternal;
+  Set<FoodCategory> get _selectedCategories {
+    _selectedCategoriesInternal ??= <FoodCategory>{};
+    return _selectedCategoriesInternal!;
+  }
+
+  double? _selectedRadiusKm = 15.0; // Default radius 15 km per specifications
+  int? _selectedMaxExpiryDays; // null = Semua, 14 = <= 14 hari, 30, 60
+  String _selectedSort = 'nearest'; // 'nearest', 'cheapest', 'expiring_soon', 'highest_match'
+
+  int get _activeFilterCount {
+    int count = 0;
+    if (_selectedCategories.isNotEmpty) count += _selectedCategories.length;
+    if (_selectedRadiusKm != null && _selectedRadiusKm != 15.0) count++;
+    if (_selectedMaxExpiryDays != null) count++;
+    if (_selectedSort != 'nearest') count++;
+    return count;
+  }
+
+  bool get _hasActiveFilters =>
+      _selectedCategories.isNotEmpty ||
+      (_selectedRadiusKm != null && _selectedRadiusKm != 15.0) ||
+      _selectedMaxExpiryDays != null ||
+      _selectedSort != 'nearest';
+
+  String _getSortLabel(String code) {
+    switch (code) {
+      case 'cheapest':
+        return 'Harga Termurah';
+      case 'expiring_soon':
+      case 'expiring':
+      case 'expiry':
+        return 'Segera Kedaluwarsa';
+      case 'highest_match':
+      case 'discount':
+        return 'Diskon Tertinggi';
+      case 'nearest':
+      default:
+        return 'Terdekat';
+    }
+  }
 
   double get _effectiveLat =>
       AuthRepository.instance.currentUserProfile?.baseLat ?? widget.userLat;
@@ -50,6 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _allListings = List<Listing>.from(dummyListings);
     AuthRepository.instance.addListener(_onAuthProfileChanged);
     final client = ApiClient();
     _listingRepository = widget.repository ??
@@ -80,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Mengambil daftar listing terdekat dari backend REST API via FastAPI.
-  /// Bila gagal atau offline, ListingRepository otomatis fallback ke SQLite cache.
+  /// Bila gagal atau offline, ListingRepository otomatis fallback ke SQLite cache / dummyListings.
   Future<void> _fetchListings({bool forceRefresh = true}) async {
     setState(() {
       _isLoading = true;
@@ -93,22 +134,46 @@ class _HomeScreenState extends State<HomeScreen> {
         lat: _effectiveLat,
         lng: _effectiveLng,
         sort: _selectedSort,
-        category: _selectedCategory?.label,
+        category: _selectedCategories.length == 1
+            ? _selectedCategories.first.label
+            : null,
+        radiusKm: (_selectedRadiusKm != null && _selectedRadiusKm != 15.0)
+            ? _selectedRadiusKm
+            : null,
+        minDays: _selectedMaxExpiryDays != null ? 1 : null,
         search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
       );
 
       if (mounted) {
         setState(() {
           _isFromCache = result.isFromCache;
-          _allListings = result.listings
-              .map((m) => Listing.fromCachedModel(m))
-              .toList();
+          if (result.listings.isNotEmpty) {
+            _allListings = result.listings
+                .map((m) => Listing.fromCachedModel(m))
+                .toList();
+          } else {
+            // Fallback ke dummyListings jika remote / cache kosong agar katalog stok selalu tampil
+            _allListings = List<Listing>.from(dummyListings);
+          }
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          final demo = ListingRepository.getDemoListings(
+            category: _selectedCategories.length == 1
+                ? _selectedCategories.first.label
+                : null,
+            search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
+            radiusKm: (_selectedRadiusKm != null && _selectedRadiusKm != 15.0)
+                ? _selectedRadiusKm
+                : null,
+            minDays: _selectedMaxExpiryDays,
+            sort: _selectedSort,
+          ).map((m) => Listing.fromCachedModel(m)).toList();
+          _allListings = demo.isNotEmpty ? demo : List<Listing>.from(dummyListings);
+          _isFromCache = true;
+          _errorMessage = null;
         });
       }
     } finally {
@@ -120,7 +185,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Filter data di memori bila pencarian lokal dilakukan
   List<Listing> get _filteredListings {
-    var items = List<Listing>.from(_allListings);
+    var items = _allListings.isNotEmpty
+        ? List<Listing>.from(_allListings)
+        : List<Listing>.from(dummyListings);
 
     final query = _searchCtrl.text.trim().toLowerCase();
     if (query.isNotEmpty) {
@@ -133,10 +200,45 @@ class _HomeScreenState extends State<HomeScreen> {
           .toList();
     }
 
-    if (_selectedCategory != null) {
+    if (_selectedCategories.isNotEmpty) {
       items = items
-          .where((item) => item.category == _selectedCategory)
+          .where((item) => _selectedCategories.contains(item.category))
           .toList();
+    }
+
+    if (_selectedMaxExpiryDays != null) {
+      items = items
+          .where((item) => item.effectiveDaysToExpiry <= _selectedMaxExpiryDays!)
+          .toList();
+    }
+
+    if (_selectedRadiusKm != null && _selectedRadiusKm != 15.0) {
+      items = items
+          .where((item) => item.distanceKm == null || item.distanceKm! <= _selectedRadiusKm!)
+          .toList();
+    }
+
+    switch (_selectedSort) {
+      case 'cheapest':
+        items.sort((a, b) => a.startPrice.compareTo(b.startPrice));
+        break;
+      case 'expiring_soon':
+      case 'expiring':
+      case 'expiry':
+        items.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+        break;
+      case 'highest_match':
+      case 'discount':
+        items.sort((a, b) => b.effectiveDiscountPercent.compareTo(a.effectiveDiscountPercent));
+        break;
+      case 'nearest':
+      default:
+        items.sort((a, b) {
+          final da = a.distanceKm ?? 999999.0;
+          final db = b.distanceKm ?? 999999.0;
+          return da.compareTo(db);
+        });
+        break;
     }
 
     return items;
@@ -228,176 +330,79 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: RefreshIndicator(
-          key: const Key('home_refresh_indicator'),
-          onRefresh: () => _fetchListings(forceRefresh: true),
-          color: AppColors.primary,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              // ── Header & Branding ─────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: _buildHeader(),
-              ),
-
-              // ── Location Pin Bar ──────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: _buildLocationBar(),
-              ),
-
-              // ── Offline Cache Banner Indicator ────────────────────────────
-              if (_isFromCache)
-                SliverToBoxAdapter(
-                  child: _buildOfflineCacheBanner(),
-                ),
-
-              // ── Search & Filter Bar ───────────────────────────────────────
-              SliverToBoxAdapter(
-                child: _buildSearchBar(),
-              ),
-
-              // ── Category Filter Chips ─────────────────────────────────────
-              SliverToBoxAdapter(
-                child: _buildCategoryChips(),
-              ),
-
-              // ── Proximity Recommendation Header ───────────────────────────
-              SliverToBoxAdapter(
-                child: _buildRecommendationHeader(listings.length),
-              ),
-
-              // ── Content Area: Loading / Error / Empty / Feed ──────────────
-              if (_isLoading && _allListings.isEmpty)
-                SliverToBoxAdapter(
-                  child: _buildLoadingSkeleton(),
-                )
-              else if (_errorMessage != null && _allListings.isEmpty)
-                SliverToBoxAdapter(
-                  child: _buildErrorState(),
-                )
-              else if (listings.isEmpty)
-                SliverToBoxAdapter(
-                  child: _buildEmptyState(),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final item = listings[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: ProductCard(listing: item),
-                        );
-                      },
-                      childCount: listings.length,
-                    ),
-                  ),
-                ),
-
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 32),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Header Section with Branding & Greeting ───────────────────────────────
-  Widget _buildHeader() {
-    final buyerGreeting = _getBuyerGreeting();
-
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: Column(
         children: [
+          // ── Fixed Wave Header (Sticky, tidak ikut ter-scroll) ───────────
+          _buildFixedWaveHeader(),
+
+          // ── Offline Cache Banner Indicator ──────────────────────────────
+          if (_isFromCache) _buildOfflineCacheBanner(),
+
+          // ── Scrollable Body Catalog ─────────────────────────────────────
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'RECOVERA B2B',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primary,
-                          letterSpacing: 0.6,
+            child: RefreshIndicator(
+              key: const Key('home_refresh_indicator'),
+              onRefresh: () => _fetchListings(forceRefresh: true),
+              color: AppColors.primary,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  // ── Search & Filter Bar ─────────────────────────────────
+                  SliverToBoxAdapter(
+                    child: _buildSearchBar(),
+                  ),
+
+                  // ── Category Filter Chips ───────────────────────────────
+                  SliverToBoxAdapter(
+                    child: _buildCategoryChips(),
+                  ),
+
+                  // ── Active Filters Bar ──────────────────────────────────
+                  if (_hasActiveFilters)
+                    SliverToBoxAdapter(
+                      child: _buildActiveFiltersBar(),
+                    ),
+
+                  // ── Proximity Recommendation Header ─────────────────────
+                  SliverToBoxAdapter(
+                    child: _buildRecommendationHeader(listings.length),
+                  ),
+
+                  // ── Content Area: Loading / Error / Empty / Feed ────────
+                  if (_isLoading && _allListings.isEmpty)
+                    SliverToBoxAdapter(
+                      child: _buildLoadingSkeleton(),
+                    )
+                  else if (_errorMessage != null && _allListings.isEmpty)
+                    SliverToBoxAdapter(
+                      child: _buildErrorState(),
+                    )
+                  else if (listings.isEmpty)
+                    SliverToBoxAdapter(
+                      child: _buildEmptyState(),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final item = listings[index];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: ProductCard(listing: item),
+                            );
+                          },
+                          childCount: listings.length,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFECFDF5),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFA7F3D0)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.verified_rounded, size: 10, color: Color(0xFF10B981)),
-                          const SizedBox(width: 2),
-                          Text(
-                            'Verified',
-                            style: GoogleFonts.inter(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF047857),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Halo, $buyerGreeting',
-                  key: const Key('buyer_greeting_title'),
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0F172A),
+
+                  const SliverToBoxAdapter(
+                    child: SizedBox(height: 32),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Temukan likuidasi stok pangan terdekat dengan harga terbaik.',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.notifications_none_rounded,
-              color: Color(0xFF475569),
-              size: 22,
+                ],
+              ),
             ),
           ),
         ],
@@ -405,91 +410,323 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── Location Pin Bar ───────────────────────────────────────────────────────
-  Widget _buildLocationBar() {
+  // ── Fixed Wave Header with Recovera Brand, Greeting, Location & Notification ───
+  Widget _buildFixedWaveHeader() {
+    final buyerGreeting = _getBuyerGreeting();
     final locationText = _getBuyerLocationText();
 
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: GestureDetector(
-        key: const Key('home_location_bar_button'),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const LocationManagementScreen(),
+    return Stack(
+      children: [
+        // Layer gelombang latar belakang (soft contrast)
+        Positioned.fill(
+          child: ClipPath(
+            clipper: _HeaderWaveBackdropClipper(),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryLight.withValues(alpha: 0.5),
+                    AppColors.secondary.withValues(alpha: 0.6),
+                  ],
+                ),
+              ),
             ),
-          );
-        },
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.location_on_rounded,
-                color: Color(0xFF0284C7),
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Lokasi Pengiriman Anda',
-                      style: GoogleFonts.inter(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF94A3B8),
-                      ),
-                    ),
-                    Text(
-                      locationText,
-                      key: const Key('buyer_location_text'),
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1E293B),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0F2FE),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFBAE6FD)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.radar_rounded, size: 11, color: Color(0xFF0284C7)),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Radius < 15 km',
-                      key: const Key('proximity_radius_badge'),
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF0369A1),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ),
         ),
-      ),
+
+        // Layer gelombang utama dengan konten header tetap (fixed)
+        ClipPath(
+          clipper: _HeaderWaveClipper(),
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primaryDark,
+                  AppColors.primary,
+                  AppColors.primaryLight,
+                ],
+              ),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sisi Kiri: Logo Brand Recovera, Greeting Pembeli, dan Lokasi
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // ── Logo Recovera & Teks Brand ──
+                          Row(
+                            children: [
+                              Image.asset(
+                                'lib/assets/recovera-logo-mark.png',
+                                width: 24,
+                                height: 24,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.eco_rounded,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Recovera',
+                                style: GoogleFonts.inter(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: -0.6,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'RECOVERA B2B',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: const Color(0xFF6EE7B7).withValues(alpha: 0.4),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.verified_rounded,
+                                      size: 9,
+                                      color: Color(0xFF6EE7B7),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      'Verified',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF6EE7B7),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+
+                          // ── Greeting Pembeli: "Halo, [nama/Govina]!" ──
+                          Text(
+                            'Halo, $buyerGreeting',
+                            key: const Key('buyer_greeting_title'),
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: -0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+
+                          // ── Bar Lokasi Pengiriman (Dialihkan ke pemilihan lokasi saat diklik) ──
+                          GestureDetector(
+                            key: const Key('home_location_bar_button'),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const LocationManagementScreen(),
+                                ),
+                              );
+                            },
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_rounded,
+                                    color: Color(0xFF90E0EF),
+                                    size: 15,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      locationText,
+                                      key: const Key('buyer_location_text'),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    size: 15,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  GestureDetector(
+                                    key: const Key('proximity_radius_badge_tap'),
+                                    onTap: () => _showFilterBottomSheet(context),
+                                    behavior: HitTestBehavior.opaque,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.22),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.radar_rounded, size: 10, color: Color(0xFF90E0EF)),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            _selectedRadiusKm == 15.0
+                                                ? 'Radius < 15 km'
+                                                : (_selectedRadiusKm != null
+                                                    ? 'Radius < ${_selectedRadiusKm!.toInt()} km'
+                                                    : 'Semua Radius'),
+                                            key: const Key('proximity_radius_badge'),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ListenableBuilder(
+                                    listenable: AppPrefsRepository.instance,
+                                    builder: (context, _) {
+                                      final cur = AppPrefsRepository.instance.selectedCurrency;
+                                      final tz = AppPrefsRepository.instance.selectedTimezone;
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.22),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          '$cur • $tz',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // ── Tombol Notifikasi (Kanan Atas) ──
+                    GestureDetector(
+                      key: const Key('btn_home_notification'),
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Belum ada notifikasi baru untuk Anda.',
+                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 2),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        );
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            const Icon(
+                              Icons.notifications_none_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                            Positioned(
+                              top: 9,
+                              right: 10,
+                              child: Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF59E0B),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -535,7 +772,7 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 44,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(50),
                 border: Border.all(color: const Color(0xFFCBD5E1)),
               ),
               child: TextField(
@@ -562,7 +799,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           },
                         )
                       : null,
+                  filled: false,
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 onChanged: (_) => setState(() {}),
@@ -571,38 +811,617 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFCBD5E1)),
-            ),
-            child: PopupMenuButton<String>(
-              key: const Key('btn_home_sort_menu'),
-              icon: const Icon(Icons.tune_rounded, color: AppColors.primary, size: 20),
-              tooltip: 'Urutkan',
-              onSelected: (val) {
-                setState(() => _selectedSort = val);
-                _fetchListings();
-              },
-              itemBuilder: (ctx) => [
-                const PopupMenuItem(
-                  value: 'nearest',
-                  child: Text('Terdekat (Proximity)'),
+          GestureDetector(
+            key: const Key('btn_home_filter_sheet'),
+            onTap: () => _showFilterBottomSheet(context),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: _activeFilterCount > 0 ? AppColors.primary : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _activeFilterCount > 0 ? AppColors.primary : const Color(0xFFCBD5E1),
                 ),
-                const PopupMenuItem(
-                  value: 'highest_match',
-                  child: Text('Skor Kecocokan Tertinggi'),
-                ),
-                const PopupMenuItem(
-                  value: 'cheapest',
-                  child: Text('Harga Termurah'),
-                ),
-              ],
+                boxShadow: _activeFilterCount > 0
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.tune_rounded,
+                    key: const Key('btn_home_sort_menu'),
+                    color: _activeFilterCount > 0 ? Colors.white : AppColors.primary,
+                    size: 19,
+                  ),
+                  if (_activeFilterCount > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$_activeFilterCount',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Active Filters Bar ────────────────────────────────────────────────────
+  Widget _buildActiveFiltersBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            ..._selectedCategories.map(
+              (cat) => Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: _buildActiveFilterPill(
+                  label: cat.label,
+                  icon: cat.icon,
+                  onRemove: () {
+                    setState(() => _selectedCategories.remove(cat));
+                    _fetchListings();
+                  },
+                ),
+              ),
+            ),
+            if (_selectedRadiusKm != null && _selectedRadiusKm != 15.0) ...[
+              _buildActiveFilterPill(
+                label: 'Radius < ${_selectedRadiusKm!.toInt()} km',
+                icon: Icons.radar_rounded,
+                onRemove: () {
+                  setState(() => _selectedRadiusKm = 15.0);
+                  _fetchListings();
+                },
+              ),
+              const SizedBox(width: 6),
+            ],
+            if (_selectedMaxExpiryDays != null) ...[
+              _buildActiveFilterPill(
+                label: 'Exp ≤ $_selectedMaxExpiryDays Hari',
+                icon: Icons.hourglass_bottom_rounded,
+                onRemove: () {
+                  setState(() => _selectedMaxExpiryDays = null);
+                  _fetchListings();
+                },
+              ),
+              const SizedBox(width: 6),
+            ],
+            if (_selectedSort != 'nearest') ...[
+              _buildActiveFilterPill(
+                label: _getSortLabel(_selectedSort),
+                icon: Icons.swap_vert_rounded,
+                onRemove: () {
+                  setState(() => _selectedSort = 'nearest');
+                  _fetchListings();
+                },
+              ),
+              const SizedBox(width: 6),
+            ],
+            GestureDetector(
+              key: const Key('btn_clear_all_active_filters'),
+              onTap: () {
+                setState(() {
+                  _selectedCategories.clear();
+                  _selectedRadiusKm = 15.0;
+                  _selectedMaxExpiryDays = null;
+                  _selectedSort = 'nearest';
+                });
+                _fetchListings();
+              },
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  'Reset Semua',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.error,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveFilterPill({
+    required String label,
+    required IconData icon,
+    required VoidCallback onRemove,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: AppColors.primary),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onRemove,
+            behavior: HitTestBehavior.opaque,
+            child: const Icon(
+              Icons.close_rounded,
+              size: 13,
+              color: AppColors.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Filter Bottom Sheet (PBI-09) ──────────────────────────────────────────
+  void _showFilterBottomSheet(BuildContext context) {
+    final Set<FoodCategory> tempCategories =
+        Set<FoodCategory>.from(_selectedCategories);
+    double? tempRadiusKm = _selectedRadiusKm;
+    int? tempMaxExpiryDays = _selectedMaxExpiryDays;
+    String tempSort = _selectedSort;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetContext, setModalState) {
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.85,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Drag Handle
+                    Container(
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+
+                    // Sheet Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Filter & Urutkan Katalog',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF0F172A),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Saring bahan baku berdasarkan jarak, waktu & kategori',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                          TextButton(
+                            key: const Key('btn_sheet_reset_filters'),
+                            onPressed: () {
+                              setModalState(() {
+                                tempCategories.clear();
+                                tempRadiusKm = 15.0;
+                                tempMaxExpiryDays = null;
+                                tempSort = 'nearest';
+                              });
+                            },
+                            child: Text(
+                              'Reset',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const Divider(height: 1, color: Color(0xFFF1F5F9)),
+
+                    // Scrollable Filter Sections
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ── Section 1: Kategori Produk ─────────────────────
+                            _buildFilterSectionTitle('Kategori Bahan Baku (Bisa Pilih Beberapa)', Icons.category_outlined),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _buildSheetChoiceChip(
+                                  label: 'Semua Kategori',
+                                  isSelected: tempCategories.isEmpty,
+                                  onTap: () => setModalState(() => tempCategories.clear()),
+                                ),
+                                ...FoodCategory.values.map(
+                                  (cat) => _buildSheetChoiceChip(
+                                    label: cat.label,
+                                    icon: cat.icon,
+                                    isSelected: tempCategories.contains(cat),
+                                    onTap: () => setModalState(() {
+                                      if (tempCategories.contains(cat)) {
+                                        tempCategories.remove(cat);
+                                      } else {
+                                        tempCategories.add(cat);
+                                      }
+                                    }),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // ── Section 2: Radius Gudang Penjual (LBS) ─────────
+                            _buildFilterSectionTitle('Radius Jarak Gudang (LBS)', Icons.radar_rounded),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _buildSheetChoiceChip(
+                                  label: 'Semua Jarak',
+                                  isSelected: tempRadiusKm == null,
+                                  onTap: () => setModalState(() => tempRadiusKm = null),
+                                ),
+                                _buildSheetChoiceChip(
+                                  label: '≤ 5 km (Sangat Dekat)',
+                                  isSelected: tempRadiusKm == 5.0,
+                                  onTap: () => setModalState(() => tempRadiusKm = 5.0),
+                                ),
+                                _buildSheetChoiceChip(
+                                  label: '< 15 km (Standar)',
+                                  isSelected: tempRadiusKm == 15.0,
+                                  onTap: () => setModalState(() => tempRadiusKm = 15.0),
+                                ),
+                                _buildSheetChoiceChip(
+                                  label: '≤ 30 km',
+                                  isSelected: tempRadiusKm == 30.0,
+                                  onTap: () => setModalState(() => tempRadiusKm = 30.0),
+                                ),
+                                _buildSheetChoiceChip(
+                                  label: '≤ 50 km',
+                                  isSelected: tempRadiusKm == 50.0,
+                                  onTap: () => setModalState(() => tempRadiusKm = 50.0),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // ── Section 3: Sisa Hari Kedaluwarsa ───────────────
+                            _buildFilterSectionTitle('Sisa Umur Simpan (Kedaluwarsa)', Icons.hourglass_bottom_rounded),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _buildSheetChoiceChip(
+                                  label: 'Semua Waktu',
+                                  isSelected: tempMaxExpiryDays == null,
+                                  onTap: () => setModalState(() => tempMaxExpiryDays = null),
+                                ),
+                                _buildSheetChoiceChip(
+                                  label: '≤ 14 Hari (Prioritas/Mendesak)',
+                                  icon: Icons.warning_amber_rounded,
+                                  activeColor: const Color(0xFFD97706),
+                                  isSelected: tempMaxExpiryDays == 14,
+                                  onTap: () => setModalState(() => tempMaxExpiryDays = 14),
+                                ),
+                                _buildSheetChoiceChip(
+                                  label: '≤ 30 Hari (Bulan Ini)',
+                                  isSelected: tempMaxExpiryDays == 30,
+                                  onTap: () => setModalState(() => tempMaxExpiryDays = 30),
+                                ),
+                                _buildSheetChoiceChip(
+                                  label: '≤ 60 Hari',
+                                  isSelected: tempMaxExpiryDays == 60,
+                                  onTap: () => setModalState(() => tempMaxExpiryDays = 60),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // ── Section 4: Urutan (Sort) ───────────────────────
+                            _buildFilterSectionTitle('Urutkan Hasil', Icons.swap_vert_rounded),
+                            const SizedBox(height: 10),
+                            Column(
+                              children: [
+                                _buildSortOptionTile(
+                                  title: 'Terdekat (Proximity)',
+                                  subtitle: 'Prioritaskan gudang seller terdekat dari lokasi Anda',
+                                  icon: Icons.near_me_rounded,
+                                  isSelected: tempSort == 'nearest',
+                                  onTap: () => setModalState(() => tempSort = 'nearest'),
+                                ),
+                                const SizedBox(height: 8),
+                                _buildSortOptionTile(
+                                  title: 'Harga Termurah',
+                                  subtitle: 'Urutkan dari harga penawaran saat ini terendah',
+                                  icon: Icons.payments_outlined,
+                                  isSelected: tempSort == 'cheapest',
+                                  onTap: () => setModalState(() => tempSort = 'cheapest'),
+                                ),
+                                const SizedBox(height: 8),
+                                _buildSortOptionTile(
+                                  title: 'Segera Kedaluwarsa',
+                                  subtitle: 'Bahan baku yang paling cepat mencapai batas kedaluwarsa',
+                                  icon: Icons.timer_outlined,
+                                  isSelected: tempSort == 'expiring_soon' || tempSort == 'expiring',
+                                  onTap: () => setModalState(() => tempSort = 'expiring_soon'),
+                                ),
+                                const SizedBox(height: 8),
+                                _buildSortOptionTile(
+                                  title: 'Diskon & Kecocokan Tertinggi',
+                                  subtitle: 'Potongan harga terbesar dari harga normal seller',
+                                  icon: Icons.percent_rounded,
+                                  isSelected: tempSort == 'highest_match',
+                                  onTap: () => setModalState(() => tempSort = 'highest_match'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Bottom Action
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, -4),
+                          ),
+                        ],
+                      ),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          key: const Key('btn_apply_filter_sheet'),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            setState(() {
+                              _selectedCategories
+                                ..clear()
+                                ..addAll(tempCategories);
+                              _selectedRadiusKm = tempRadiusKm;
+                              _selectedMaxExpiryDays = tempMaxExpiryDays;
+                              _selectedSort = tempSort;
+                            });
+                            _fetchListings();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            'Terapkan Filter',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildFilterSectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.primary),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSheetChoiceChip({
+    required String label,
+    IconData? icon,
+    Color? activeColor,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final effectiveColor = activeColor ?? AppColors.primary;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? effectiveColor.withValues(alpha: 0.1) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? effectiveColor : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 13,
+                color: isSelected ? effectiveColor : const Color(0xFF64748B),
+              ),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? effectiveColor : const Color(0xFF334155),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSortOptionTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFFDCFCE7) : Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                icon,
+                size: 18,
+                color: isSelected ? const Color(0xFF15803D) : const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isSelected ? const Color(0xFF15803D) : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle_rounded,
+                size: 18,
+                color: Color(0xFF16A34A),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -618,9 +1437,9 @@ class _HomeScreenState extends State<HomeScreen> {
           // "Semua" Chip
           _buildChip(
             label: 'Semua',
-            isSelected: _selectedCategory == null,
+            isSelected: _selectedCategories.isEmpty,
             onTap: () {
-              setState(() => _selectedCategory = null);
+              setState(() => _selectedCategories.clear());
               _fetchListings();
             },
           ),
@@ -628,9 +1447,15 @@ class _HomeScreenState extends State<HomeScreen> {
             (cat) => _buildChip(
               label: cat.label,
               icon: cat.icon,
-              isSelected: _selectedCategory == cat,
+              isSelected: _selectedCategories.contains(cat),
               onTap: () {
-                setState(() => _selectedCategory = cat);
+                setState(() {
+                  if (_selectedCategories.contains(cat)) {
+                    _selectedCategories.remove(cat);
+                  } else {
+                    _selectedCategories.add(cat);
+                  }
+                });
                 _fetchListings();
               },
             ),
@@ -827,7 +1652,9 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () {
                 _searchCtrl.clear();
                 setState(() {
-                  _selectedCategory = null;
+                  _selectedCategories.clear();
+                  _selectedRadiusKm = 15.0;
+                  _selectedMaxExpiryDays = null;
                   _selectedSort = 'nearest';
                 });
                 _fetchListings();
@@ -895,4 +1722,51 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+/// Custom Clipper untuk gelombang header bawah (sesuai coretan sketsa pengguna)
+class _HeaderWaveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 24);
+    // Gelombang dari kiri ke kanan (melengkung turun lalu naik sedikit)
+    path.cubicTo(
+      size.width * 0.30,
+      size.height + 6,
+      size.width * 0.65,
+      size.height - 32,
+      size.width,
+      size.height - 12,
+    );
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+/// Custom Clipper untuk aksen gelombang sekunder di latar belakang header
+class _HeaderWaveBackdropClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 14);
+    path.cubicTo(
+      size.width * 0.35,
+      size.height + 14,
+      size.width * 0.70,
+      size.height - 20,
+      size.width,
+      size.height - 6,
+    );
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
