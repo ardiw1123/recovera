@@ -944,24 +944,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                 // ── Main Content Body ──────────────────────────────────────────
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 150),
+                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 110),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
                       // 1. Product Hero Card
                       _buildHeroCard(listing),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 8),
 
                       // 2. Interactive Multi-Currency Section (PB-062 / US-09)
                       _buildCurrencySection(listing),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 8),
 
                       // 3. Dutch Auction Engine & Multi-Timezone Converter (PB-063 / US-10)
                       _buildDutchAuctionSection(listing),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 8),
 
                       // 4. Batch Technical Specifications & Warehouse
                       _buildBatchSpecifications(listing),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 8),
 
                       // 5. ESG Impact Ledger & SHA-256 Audit
                       _buildEsgImpactSection(listing),
@@ -991,10 +991,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return Container(
       color: Colors.white,
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
-        left: 12,
-        right: 16,
-        bottom: 10,
+        top: MediaQuery.of(context).padding.top + 6,
+        left: 8,
+        right: 14,
+        bottom: 8,
       ),
       child: Row(
         children: [
@@ -1002,6 +1002,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             icon: const Icon(
               Icons.arrow_back_rounded,
               color: Color(0xFF0F172A),
+              size: 22,
             ),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -1011,71 +1012,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'LOT #14 • UHT WHOLESALE',
+                  'LOT #${listing.id} • WHOLESALE',
                   style: GoogleFonts.inter(
                     fontSize: 10,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: const Color(0xFF64748B),
                     letterSpacing: 0.5,
                   ),
                 ),
                 Text(
-                  'Detail Lelang & Batch',
+                  'Detail Produk & Batch',
                   style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                     color: const Color(0xFF0F172A),
                   ),
                 ),
               ],
             ),
-          ),
-          // Live Dutch Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF10B981),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  'Live Dutch',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF10B981),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            icon: const Icon(
-              Icons.share_outlined,
-              size: 20,
-              color: Color(0xFF64748B),
-            ),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(
-              Icons.bookmark_border_rounded,
-              size: 22,
-              color: Color(0xFF64748B),
-            ),
-            onPressed: () {},
           ),
         ],
       ),
@@ -1089,11 +1043,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
@@ -1102,14 +1056,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Aspect Ratio 4:3 Image Container
           AspectRatio(
-            aspectRatio: 4 / 3,
+            aspectRatio: 16 / 10,
             child: Stack(
               children: [
                 Positioned.fill(
-                  child:
-                      listing.imageUrl != null &&
+                  child: listing.imageUrl != null &&
                           listing.imageUrl!.startsWith('http')
                       ? Image.network(
                           listing.imageUrl!,
@@ -1119,7 +1071,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         )
                       : _buildDefaultHeroPlaceholder(),
                 ),
-                // Gradient Overlay
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
@@ -1127,131 +1078,73 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.black.withValues(alpha: 0.25),
+                          Colors.black.withValues(alpha: 0.2),
                           Colors.transparent,
-                          Colors.black.withValues(alpha: 0.85),
+                          Colors.black.withValues(alpha: 0.8),
                         ],
-                        stops: const [0.0, 0.4, 1.0],
+                        stops: const [0.0, 0.45, 1.0],
                       ),
                     ),
                   ),
                 ),
-                // Top Left Badges
+                // Top Badges (Hapus Dutch Auction Aktif & icon)
                 Positioned(
-                  top: 12,
-                  left: 12,
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.gavel_rounded,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Dutch Auction Aktif',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF97316),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          'Hemat ${listing.effectiveDiscountPercent}%',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Top Right QC Badge
-                Positioned(
-                  top: 12,
-                  right: 12,
+                  top: 10,
+                  left: 10,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
+                      horizontal: 8,
+                      vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          blurRadius: 4,
-                        ),
-                      ],
+                      color: const Color(0xFFF97316),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.verified_rounded,
-                          size: 14,
-                          color: Color(0xFF10B981),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'QC Grade A',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF10B981),
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'Hemat ${listing.effectiveDiscountPercent}%',
+                      style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'QC Grade A',
+                      style: GoogleFonts.inter(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF10B981),
+                      ),
                     ),
                   ),
                 ),
                 // Bottom Text on Image
                 Positioned(
-                  left: 14,
-                  right: 14,
-                  bottom: 12,
+                  left: 12,
+                  right: 12,
+                  bottom: 10,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'BATCH #${listing.batchNumber}',
                         style: GoogleFonts.robotoMono(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
                           color: const Color(0xFF94CCFF),
                           letterSpacing: 0.5,
                         ),
@@ -1260,32 +1153,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       Text(
                         listing.productName,
                         style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                           color: Colors.white,
-                          height: 1.25,
+                          height: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.warehouse_rounded,
-                            size: 15,
-                            color: Color(0xFFE2E8F0),
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              'Gudang ${listing.companyName} • ${listing.city} (${listing.distanceKm?.toStringAsFixed(1) ?? '2.4'} km)',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: const Color(0xFFE2E8F0),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 3),
+                      Text(
+                        'Gudang ${listing.companyName} • ${listing.city} (${listing.distanceKm?.toStringAsFixed(1) ?? '2.4'} km)',
+                        style: GoogleFonts.inter(
+                          fontSize: 10.5,
+                          color: const Color(0xFFE2E8F0),
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -1295,35 +1176,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
           // Lab Inspection Ribbon
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            color: const Color(0xFFF1F5F9),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            color: const Color(0xFFF8FAFC),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.verified_user_rounded,
-                      size: 18,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Layak Konsumsi',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Layak Konsumsi',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF0F172A),
+                  ),
                 ),
                 Text(
                   'Inspeksi Lab: 12 Jam Lalu (Residu 0%)',
                   style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF475569),
+                    fontSize: 10.5,
+                    color: const Color(0xFF64748B),
                   ),
                 ),
               ],
@@ -1370,145 +1240,115 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Ribbon / Label Pita Tier Aktif ──────────────────────────────
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF005D90), Color(0xFF0284C7)],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 0, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Baris Atas: "Penawaran saat ini" (kiri) & Pita Merah "Tier 2" (kanan) ──
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    'Penawaran saat ini',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF475569),
+                    ),
+                  ),
+                  // Pita Merah Tier (Ujung kiri berlekuk ribbon, ujung kanan rata mengikuti kartu)
+                  ClipPath(
+                    clipper: _TierRibbonClipper(),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(14, 4, 12, 4),
+                      color: const Color(0xFFDC2626), // Merah cerah elegan
+                      child: Text(
+                        'Tier 2',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+
+              // ── Baris Bawah: Harga Rp 147.000 / ...... ──
+              Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      currentFormatted,
+                      style: GoogleFonts.inter(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '/ ${_getDisplayUnit(listing)}',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      normalFormatted,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color(0xFF94A3B8),
+                        decoration: TextDecoration.lineThrough,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '-$discountPercent%',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF16A34A),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.bookmark_rounded,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'TIER 2 • HARGA PENAWARAN SAAT INI',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'Lelang Berjalan',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Detail Harga ────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        currentFormatted,
-                        style: GoogleFonts.inter(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.primary,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        '/ ${_getDisplayUnit(listing)}',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: const Color(0xFF64748B),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Text(
-                        'Harga Awal: ',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                      Text(
-                        normalFormatted,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: const Color(0xFF94A3B8),
-                          decoration: TextDecoration.lineThrough,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCFCE7),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'Hemat -$discountPercent%',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF16A34A),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1521,80 +1361,62 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final tz = _getTzInfo(_selectedTimezone);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section Header
+          // Section Header (Tanpa Icon Sesuai Request)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE0F2FE),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.trending_down_rounded,
-                      size: 18,
-                      color: Color(0xFF0284C7),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Mekanisme Dutch Auction',
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
+              Text(
+                'Mekanisme Dutch Auction',
+                style: GoogleFonts.inter(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF0F172A),
+                ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFFCDE5FF),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   'Tier 2 of 4',
                   style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
                     color: const Color(0xFF003366),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
-          // Live Drop Ticker Gradient Box
+          // Live Drop Ticker Gradient Box (Timer Tidak Bold Sesuai Request)
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF005D90), Color(0xFF0077B6)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1605,7 +1427,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     Text(
                       'Turun harga berikutnya dalam:',
                       style: GoogleFonts.inter(
-                        fontSize: 11,
+                        fontSize: 10.5,
                         color: const Color(0xFFB3EBFF),
                       ),
                     ),
@@ -1613,10 +1435,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     Text(
                       _formatTimerString(_remainingSeconds),
                       style: GoogleFonts.robotoMono(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w400, // Tidak bold sesuai request
                         color: Colors.white,
-                        letterSpacing: 1.0,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ],
@@ -1627,7 +1449,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     Text(
                       'Target Harga Tier 3:',
                       style: GoogleFonts.inter(
-                        fontSize: 11,
+                        fontSize: 10.5,
                         color: const Color(0xFFB3EBFF),
                       ),
                     ),
@@ -1635,16 +1457,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     Text(
                       'Rp 8.250',
                       style: GoogleFonts.inter(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
                     ),
                     Text(
                       'Diskon 45%',
                       style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w500,
                         color: const Color(0xFF67E8F9),
                       ),
                     ),
@@ -1653,34 +1475,34 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
-          // Stepping Progress Indicator
+          // Stepping Progress Indicator (Compact)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Progres Penurunan Harga Batch',
                 style: GoogleFonts.inter(
-                  fontSize: 11,
+                  fontSize: 10.5,
                   color: const Color(0xFF64748B),
                 ),
               ),
               Text(
                 'Sisa 36 Jam di Tier Ini',
                 style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
                   color: AppColors.primary,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           ClipRRect(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
             child: SizedBox(
-              height: 8,
+              height: 5,
               child: Row(
                 children: [
                   Expanded(
@@ -1706,48 +1528,38 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
 
-          // Jadwal Lelang & Batas Pengambilan (Waktu Jam Sekarang Dihilangkan Sesuai Request)
+          // Jadwal Lelang & Batas Pengambilan (Tanpa Icon Sesuai Request)
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.schedule_rounded,
-                      size: 16,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Jadwal Lelang & Batas Pengambilan',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0F172A),
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Jadwal Lelang & Batas Pengambilan',
+                  style: GoogleFonts.inter(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF0F172A),
+                  ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
 
-                // 2 Cards: Jadwal Drop & Batas Ambil
+                // 2 Cards: Jadwal Drop & Batas Ambil (Jam Tidak Bold Sesuai Request)
                 Row(
                   children: [
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: Column(
@@ -1756,30 +1568,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             Row(
                               children: [
                                 Container(
-                                  width: 6,
-                                  height: 6,
+                                  width: 5,
+                                  height: 5,
                                   decoration: const BoxDecoration(
                                     color: Color(0xFFF97316),
                                     shape: BoxShape.circle,
                                   ),
                                 ),
-                                const SizedBox(width: 5),
+                                const SizedBox(width: 4),
                                 Text(
                                   'Jadwal Drop Hari Ini',
                                   style: GoogleFonts.inter(
-                                    fontSize: 10,
+                                    fontSize: 9.5,
                                     color: const Color(0xFF64748B),
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w400,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 3),
                             RichText(
                               text: TextSpan(
                                 style: GoogleFonts.robotoMono(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500, // Tidak bold sesuai request
                                   color: const Color(0xFF0F172A),
                                 ),
                                 children: [
@@ -1787,9 +1599,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   TextSpan(
                                     text: ' ${tz['code']}',
                                     style: GoogleFonts.inter(
-                                      fontSize: 11,
+                                      fontSize: 10.5,
                                       color: const Color(0xFF64748B),
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w400,
                                     ),
                                   ),
                                 ],
@@ -1799,9 +1611,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             Text(
                               'Penurunan ke Rp 8.250',
                               style: GoogleFonts.inter(
-                                fontSize: 10,
+                                fontSize: 9.5,
                                 color: const Color(0xFFF97316),
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
@@ -1811,10 +1623,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: Column(
@@ -1823,30 +1635,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             Row(
                               children: [
                                 Container(
-                                  width: 6,
-                                  height: 6,
+                                  width: 5,
+                                  height: 5,
                                   decoration: const BoxDecoration(
                                     color: Color(0xFFDC2626),
                                     shape: BoxShape.circle,
                                   ),
                                 ),
-                                const SizedBox(width: 5),
+                                const SizedBox(width: 4),
                                 Text(
                                   'Batas Akhir Ambil',
                                   style: GoogleFonts.inter(
-                                    fontSize: 10,
+                                    fontSize: 9.5,
                                     color: const Color(0xFF64748B),
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w400,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 3),
                             RichText(
                               text: TextSpan(
                                 style: GoogleFonts.robotoMono(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500, // Tidak bold sesuai request
                                   color: const Color(0xFF0F172A),
                                 ),
                                 children: [
@@ -1854,9 +1666,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   TextSpan(
                                     text: ' ${tz['code']}',
                                     style: GoogleFonts.inter(
-                                      fontSize: 11,
+                                      fontSize: 10.5,
                                       color: const Color(0xFF64748B),
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w400,
                                     ),
                                   ),
                                 ],
@@ -1866,9 +1678,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             Text(
                               'Auto-Cancel & Re-List',
                               style: GoogleFonts.inter(
-                                fontSize: 10,
+                                fontSize: 9.5,
                                 color: const Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w400,
                               ),
                             ),
                           ],
@@ -1890,15 +1702,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildBatchSpecifications(Listing listing) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -1911,49 +1723,37 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               Text(
                 'Spesifikasi Batch & Logistik',
                 style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
                   color: const Color(0xFF0F172A),
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFFDCFCE7),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.inventory_2_rounded,
-                      size: 13,
-                      color: Color(0xFF16A34A),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Stok: ${listing.qty} ${_getDisplayUnit(listing)}',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF16A34A),
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'Stok: ${listing.qty} ${_getDisplayUnit(listing)}',
+                  style: GoogleFonts.inter(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF16A34A),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
           _buildSimpleSpecRow(
-            icon: Icons.shopping_basket_outlined,
             label: 'Minimal Pembelian',
             value:
                 '${_getMinOrderQty(listing)} ${_getDisplayUnit(listing)} (Isi 12 pcs / box)',
           ),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           _buildSimpleSpecRow(
-            icon: Icons.event_available_rounded,
             label: 'Kedaluwarsa',
             value: '18 Nov 2026',
             badge: 'Sisa ${listing.effectiveDaysToExpiry} Hari',
@@ -1962,7 +1762,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           _buildSimpleSpecRow(
-            icon: Icons.local_shipping_outlined,
             label: 'Metode Pengambilan',
             value: 'Self-Pickup / Kargo (${listing.city})',
             badge: '${listing.distanceKm?.toStringAsFixed(1) ?? '2.4'} km',
@@ -1971,7 +1770,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           _buildSimpleSpecRow(
-            icon: Icons.thermostat_rounded,
             label: 'Suhu Penyimpanan',
             value: listing.storageType == 'frozen'
                 ? 'Frozen (-18°C) • Tersegel'
@@ -1979,21 +1777,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ? 'Chilled (2-4°C) • Tersegel'
                       : 'Ambient (20-25°C) • Tersegel'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           // Distributor Profile Card (Clean & Compact)
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 32,
+                  height: 32,
                   decoration: const BoxDecoration(
                     color: AppColors.primary,
                     shape: BoxShape.circle,
@@ -2002,43 +1800,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     child: Text(
                       'MP',
                       style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              listing.companyName,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF0F172A),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.verified_rounded,
-                            size: 14,
-                            color: AppColors.primary,
-                          ),
-                        ],
+                      Text(
+                        listing.companyName,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF0F172A),
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         'Distributor Resmi FMCG • SLA 99.4%',
                         style: GoogleFonts.inter(
-                          fontSize: 11,
+                          fontSize: 10.5,
                           color: const Color(0xFF64748B),
                         ),
                       ),
@@ -2050,15 +1836,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   children: [
                     const Icon(
                       Icons.star_rounded,
-                      size: 15,
+                      size: 14,
                       color: Color(0xFFF59E0B),
                     ),
                     const SizedBox(width: 2),
                     Text(
                       '4.9',
                       style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
                         color: const Color(0xFFF59E0B),
                       ),
                     ),
@@ -2073,7 +1859,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _buildSimpleSpecRow({
-    required IconData icon,
     required String label,
     required String value,
     String? badge,
@@ -2081,56 +1866,44 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     Color? badgeTextColor,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(8),
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: const Color(0xFF64748B),
+                fontWeight: FontWeight.w400,
+              ),
             ),
-            child: Icon(icon, size: 18, color: const Color(0xFF475569)),
           ),
-          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  value,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-              ],
+            child: Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF0F172A),
+              ),
             ),
           ),
           if (badge != null) ...[
+            const SizedBox(width: 6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: badgeColor ?? const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 badge,
                 style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
                   color: badgeTextColor ?? const Color(0xFF334155),
                 ),
               ),
@@ -2146,15 +1919,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildEsgImpactSection(Listing listing) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -2164,20 +1937,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           Text(
             'Verifikasi Dampak ESG',
             style: GoogleFonts.inter(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
               color: const Color(0xFF0F172A),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           // Kartu Stempel / Cap Verifikasi ESG
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: const Color(0xFFF0FDF4),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFBBF7D0), width: 1.2),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFBBF7D0), width: 1.0),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -2187,56 +1960,55 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: 54,
-                      height: 54,
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
                         color: const Color(0xFFDCFCE7),
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: const Color(0xFF16A34A),
-                          width: 2,
+                          width: 1.5,
                         ),
                       ),
                       child: Center(
                         child: Container(
-                          width: 42,
-                          height: 42,
+                          width: 32,
+                          height: 32,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: const Color(0xFF86EFAC),
-                              width: 1.5,
+                              width: 1.0,
                             ),
                           ),
                           child: const Center(
                             child: Icon(
                               Icons.eco_rounded,
-                              size: 24,
+                              size: 18,
                               color: Color(0xFF16A34A),
                             ),
                           ),
                         ),
                       ),
                     ),
-                    // Stempel tanda centang biru kecil di sudut kanan bawah
                     Positioned(
                       right: -1,
                       bottom: -1,
                       child: Container(
-                        padding: const EdgeInsets.all(2),
+                        padding: const EdgeInsets.all(1.5),
                         decoration: const BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
                         ),
                         child: Container(
-                          padding: const EdgeInsets.all(2),
+                          padding: const EdgeInsets.all(1.5),
                           decoration: const BoxDecoration(
                             color: Color(0xFF0284C7),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
                             Icons.check_rounded,
-                            size: 10,
+                            size: 8,
                             color: Colors.white,
                           ),
                         ),
@@ -2244,7 +2016,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
 
                 // ── Keterangan Dampak ───────────────────────────────────────
                 Expanded(
@@ -2254,20 +2026,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       Text(
                         'VERIFIKASI DAMPAK ESG',
                         style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
                           color: const Color(0xFF166534),
                           letterSpacing: 0.3,
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
-                        'Potensi penyelamatan 150 kg pangan (-375 kg CO₂e). Sertifikat audit terbit otomatis usai transaksi.',
+                        'Penyelamatan 150 kg pangan (-375 kg CO₂e). Sertifikat audit otomatis usai transaksi.',
                         style: GoogleFonts.inter(
-                          fontSize: 11,
+                          fontSize: 10.5,
                           color: const Color(0xFF334155),
-                          height: 1.35,
-                          fontWeight: FontWeight.w500,
+                          height: 1.3,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ],
@@ -2295,14 +2067,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final isAtMax = _selectedQty >= maxQty;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
+            blurRadius: 12,
+            offset: const Offset(0, -3),
           ),
         ],
       ),
@@ -2320,8 +2092,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     Text(
                       'Jumlah Pembelian',
                       style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
                         color: const Color(0xFF0F172A),
                       ),
                     ),
@@ -2331,7 +2103,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ],
@@ -2340,24 +2112,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       InkWell(
+                        key: const Key('btn_qty_decrease'),
                         onTap: () => _decrementQty(listing),
                         borderRadius: const BorderRadius.horizontal(
-                          left: Radius.circular(9),
+                          left: Radius.circular(7),
                         ),
                         child: Container(
-                          width: 36,
-                          height: 32,
+                          width: 32,
+                          height: 28,
                           alignment: Alignment.center,
                           child: Icon(
                             Icons.remove_rounded,
-                            size: 18,
+                            size: 16,
                             color: isAtMin
                                 ? const Color(0xFF94A3B8)
                                 : const Color(0xFF0F172A),
@@ -2365,31 +2138,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                       ),
                       Container(
-                        constraints: const BoxConstraints(minWidth: 40),
-                        height: 32,
+                        key: const Key('text_qty_value'),
+                        constraints: const BoxConstraints(minWidth: 36),
+                        height: 28,
                         alignment: Alignment.center,
                         color: Colors.white,
                         child: Text(
                           '$_selectedQty',
                           style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                             color: const Color(0xFF0F172A),
                           ),
                         ),
                       ),
                       InkWell(
+                        key: const Key('btn_qty_increase'),
                         onTap: () => _incrementQty(listing),
                         borderRadius: const BorderRadius.horizontal(
-                          right: Radius.circular(9),
+                          right: Radius.circular(7),
                         ),
                         child: Container(
-                          width: 36,
-                          height: 32,
+                          width: 32,
+                          height: 28,
                           alignment: Alignment.center,
                           child: Icon(
                             Icons.add_rounded,
-                            size: 18,
+                            size: 16,
                             color: isAtMax
                                 ? const Color(0xFFCBD5E1)
                                 : AppColors.primary,
@@ -2401,9 +2176,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             const Divider(height: 1, color: Color(0xFFF1F5F9)),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
             // ── Baris Bawah: Total Pembayaran & Tombol Beli Sekarang ────────
             Row(
@@ -2416,41 +2191,42 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     Text(
                       'Total Pembayaran ($_selectedQty $unit):',
                       style: GoogleFonts.inter(
-                        fontSize: 11,
+                        fontSize: 10.5,
                         color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     Text(
                       totalFormatted,
                       style: GoogleFonts.inter(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.primary,
-                        letterSpacing: -0.5,
+                        letterSpacing: -0.3,
                       ),
                     ),
                   ],
                 ),
                 ElevatedButton.icon(
+                  key: const Key('btn_buy_now'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
+                      horizontal: 20,
+                      vertical: 10,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    elevation: 2,
+                    elevation: 1,
                   ),
-                  icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+                  icon: const Icon(Icons.shopping_bag_outlined, size: 16),
                   label: Text(
                     'Beli Sekarang',
                     style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   onPressed: () => _openConfirmationSheet(listing),
@@ -2462,4 +2238,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ),
     );
   }
+}
+
+/// Custom Clipper untuk pita Tier di sudut kanan atas kartu (ujung kiri berlekuk V / swallowtail)
+class _TierRibbonClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(7, 0); // Titik awal atas setelah lekukan notch
+    path.lineTo(size.width, 0); // Garis lurus ke kanan atas
+    path.lineTo(size.width, size.height); // Garis lurus ke kanan bawah
+    path.lineTo(7, size.height); // Garis bawah sebelum lekukan notch
+    path.lineTo(0, size.height / 2); // Titik tengah lekukan notch (menjorok ke kanan)
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
