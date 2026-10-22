@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/cached_order_model.dart';
+import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/listing_repository.dart';
 import '../../../data/repositories/order_repository.dart';
@@ -43,12 +46,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ── State Konversi Mata Uang (PB-062 / US-09) ───────────────────────────────
   String _selectedCurrency = 'IDR'; // 'IDR', 'USD', 'EUR', 'GBP'
-  static const double _rateUSD = 15800.0;
-  static const double _rateEUR = 17200.0;
-  static const double _rateGBP = 20000.0;
+  double _rateUSD = 15800.0;
+  double _rateEUR = 17200.0;
+  double _rateGBP = 20000.0;
+  bool _isLoadingRates = false;
+  String _rateStatusLabel = 'GET /rates live';
+  String _rateSource = 'open.er-api.com';
+  String _lastRateUpdate = 'Sinkronisasi...';
 
   // ── State Konversi Zona Waktu (PB-063 / US-10) ──────────────────────────────
   String _selectedTimezone = 'WIB'; // 'WIB', 'WITA', 'WIT', 'London'
+  DateTime _currentTime = DateTime.now();
 
   // ── Countdown Timer Micro-Engine ───────────────────────────────────────────
   Timer? _countdownTimer;
@@ -69,7 +77,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _loadListingDetail(widget.listingId!);
     }
 
+    _loadUserPreferences();
     _startCountdown();
+    _fetchLiveRates();
+  }
+
+  Future<void> _loadUserPreferences() async {
+    try {
+      final prefs = AppPrefsRepository();
+      final cur = await prefs.getSelectedCurrency();
+      final tz = await prefs.getSelectedTimezone();
+      if (mounted) {
+        setState(() {
+          _selectedCurrency = cur;
+          _selectedTimezone = tz;
+        });
+      }
+    } catch (_) {}
   }
 
   void _startCountdown() {
@@ -77,6 +101,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       setState(() {
+        _currentTime = DateTime.now();
         if (_remainingSeconds > 0) {
           _remainingSeconds--;
         } else {
@@ -84,6 +109,112 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         }
       });
     });
+  }
+
+  /// Mengambil kurs valuta asing terkini dari Open Exchange-Rate API / Backend
+  /// Sesuai PRD US-09 & PB-062: Live API dengan fallback ke cache lokal & benchmark statis.
+  Future<void> _fetchLiveRates() async {
+    if (_isLoadingRates) return;
+    setState(() {
+      _isLoadingRates = true;
+      _rateStatusLabel = 'Syncing...';
+    });
+
+    try {
+      // 1. Coba baca cache lokal SQLite terlebih dahulu (Offline first)
+      try {
+        final cached = await AppPrefsRepository().getLastCurrencyRates();
+        if (cached.isNotEmpty && mounted) {
+          setState(() {
+            if (cached['USD'] != null && cached['USD']! > 0) _rateUSD = 1.0 / cached['USD']!;
+            if (cached['EUR'] != null && cached['EUR']! > 0) _rateEUR = 1.0 / cached['EUR']!;
+            if (cached['GBP'] != null && cached['GBP']! > 0) _rateGBP = 1.0 / cached['GBP']!;
+          });
+        }
+      } catch (_) {}
+
+      // 2. Coba panggil Public Open Exchange Rate API (Live Market Rate)
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 4),
+      ));
+
+      try {
+        final response = await dio.get('https://open.er-api.com/v6/latest/IDR');
+        if (response.statusCode == 200 && response.data != null) {
+          final rates = response.data['rates'] as Map<String, dynamic>;
+          final usdPerIdr = (rates['USD'] as num).toDouble();
+          final eurPerIdr = (rates['EUR'] as num).toDouble();
+          final gbpPerIdr = (rates['GBP'] as num).toDouble();
+
+          if (mounted) {
+            setState(() {
+              _rateUSD = usdPerIdr > 0 ? (1.0 / usdPerIdr) : _rateUSD;
+              _rateEUR = eurPerIdr > 0 ? (1.0 / eurPerIdr) : _rateEUR;
+              _rateGBP = gbpPerIdr > 0 ? (1.0 / gbpPerIdr) : _rateGBP;
+              _rateStatusLabel = 'Live API (Connected)';
+              _rateSource = 'open.er-api.com';
+              _lastRateUpdate =
+                  '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')} WIB';
+            });
+          }
+
+          // Simpan ke SQLite cache lokal
+          try {
+            await AppPrefsRepository().setLastCurrencyRates({
+              'USD': usdPerIdr,
+              'EUR': eurPerIdr,
+              'GBP': gbpPerIdr,
+            });
+          } catch (_) {}
+          return;
+        }
+      } catch (_) {
+        // 3. Fallback ke endpoint backend Recovera /rates
+        try {
+          final backendRes = await dio.get('${ApiConstants.baseUrl}/rates');
+          if (backendRes.statusCode == 200 && backendRes.data != null) {
+            final data = backendRes.data['data'] as Map<String, dynamic>;
+            final rates = data['rates'] as Map<String, dynamic>;
+            final usdPerIdr = (rates['USD'] as num).toDouble();
+            final eurPerIdr = (rates['EUR'] as num).toDouble();
+            final gbpPerIdr = (rates['GBP'] as num).toDouble();
+
+            if (mounted) {
+              setState(() {
+                _rateUSD = usdPerIdr > 0 ? (1.0 / usdPerIdr) : _rateUSD;
+                _rateEUR = eurPerIdr > 0 ? (1.0 / eurPerIdr) : _rateEUR;
+                _rateGBP = gbpPerIdr > 0 ? (1.0 / gbpPerIdr) : _rateGBP;
+                _rateStatusLabel = 'Backend /rates';
+                _rateSource = 'FastAPI Proxy';
+                _lastRateUpdate =
+                    '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')} WIB';
+              });
+            }
+            return;
+          }
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        setState(() {
+          _rateStatusLabel = 'Fallback Kurs (Offline)';
+          _rateSource = 'Benchmark Statis';
+          _lastRateUpdate = 'Offline';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _rateStatusLabel = 'Fallback Kurs (Offline)';
+          _rateSource = 'Benchmark Statis';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingRates = false);
+      }
+    }
   }
 
   @override
@@ -163,39 +294,52 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ── Helper Data Zona Waktu ─────────────────────────────────────────────────
   Map<String, dynamic> _getTzInfo(String tz) {
+    final utc = _currentTime.toUtc();
     switch (tz) {
       case 'WITA':
+        final wita = utc.add(const Duration(hours: 8));
         return {
           'code': 'WITA',
           'offset': 'UTC+8',
           'drop': '19:00',
           'pickup': '22:00',
           'label': 'WITA (UTC+8)',
+          'now':
+              '${wita.hour.toString().padLeft(2, '0')}:${wita.minute.toString().padLeft(2, '0')}:${wita.second.toString().padLeft(2, '0')}',
         };
       case 'WIT':
+        final wit = utc.add(const Duration(hours: 9));
         return {
           'code': 'WIT',
           'offset': 'UTC+9',
           'drop': '20:00',
           'pickup': '23:00',
           'label': 'WIT (UTC+9)',
+          'now':
+              '${wit.hour.toString().padLeft(2, '0')}:${wit.minute.toString().padLeft(2, '0')}:${wit.second.toString().padLeft(2, '0')}',
         };
       case 'London':
+        final london = utc.add(const Duration(hours: 1));
         return {
           'code': 'BST',
           'offset': 'UTC+1',
           'drop': '12:00',
           'pickup': '15:00',
           'label': 'London (BST)',
+          'now':
+              '${london.hour.toString().padLeft(2, '0')}:${london.minute.toString().padLeft(2, '0')}:${london.second.toString().padLeft(2, '0')}',
         };
       case 'WIB':
       default:
+        final wib = utc.add(const Duration(hours: 7));
         return {
           'code': 'WIB',
           'offset': 'UTC+7',
           'drop': '18:00',
           'pickup': '21:00',
           'label': 'WIB (UTC+7)',
+          'now':
+              '${wib.hour.toString().padLeft(2, '0')}:${wib.minute.toString().padLeft(2, '0')}:${wib.second.toString().padLeft(2, '0')}',
         };
     }
   }
@@ -1171,217 +1315,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // Currency Switcher Container
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.currency_exchange_rounded,
-                            size: 16, color: AppColors.primary),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Mata Uang Acuan (PB-062)',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF10B981),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'GET /rates live',
-                          style: GoogleFonts.robotoMono(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // 4 Currency Segmented Buttons
-                Row(
-                  children: [
-                    _buildCurrencyChip('IDR', 'IDR (Rp)'),
-                    const SizedBox(width: 6),
-                    _buildCurrencyChip('USD', 'USD (\$)'),
-                    const SizedBox(width: 6),
-                    _buildCurrencyChip('EUR', 'EUR (€)'),
-                    const SizedBox(width: 6),
-                    _buildCurrencyChip('GBP', 'GBP (£)'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Currency Matrix Card
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Ekuivalen Valas Impor Spot:',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                    Text(
-                      'Live Spot: 1 USD = Rp 15.800',
-                      style: GoogleFonts.robotoMono(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _buildMatrixBox('USD', '\$${(listing.currentPrice / _rateUSD).toStringAsFixed(2)}'),
-                    const SizedBox(width: 8),
-                    _buildMatrixBox('EUR', '€${(listing.currentPrice / _rateEUR).toStringAsFixed(2)}'),
-                    const SizedBox(width: 8),
-                    _buildMatrixBox('GBP', '£${(listing.currentPrice / _rateGBP).toStringAsFixed(2)}'),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Benchmarking Global Waste Valuation:',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                    Text(
-                      '-42% vs Global Spot Avg',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF10B981),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildCurrencyChip(String code, String label) {
-    final isSelected = _selectedCurrency == code;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedCurrency = code),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isSelected ? AppColors.primary : const Color(0xFFCBD5E1),
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.25),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? Colors.white : const Color(0xFF1E293B),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMatrixBox(String currency, String convertedValue) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              currency,
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                color: const Color(0xFF64748B),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              convertedValue,
-              style: GoogleFonts.robotoMono(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF0F172A),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1598,7 +1532,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             size: 16, color: AppColors.primary),
                         const SizedBox(width: 6),
                         Text(
-                          '4 Zona Waktu Lelang & ESG (PB-063)',
+                          'Jadwal Lelang & Batas Pengambilan',
                           style: GoogleFonts.inter(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
@@ -1607,28 +1541,40 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                       ],
                     ),
-                    Text(
-                      'Sync UTC+0',
-                      style: GoogleFonts.robotoMono(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0284C7),
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF0284C7),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${tz['now']} ${tz['code']} (${tz['offset']})',
+                          style: GoogleFonts.robotoMono(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0284C7),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-
-                // Timezone Tabs
+                const SizedBox(height: 6),
                 Row(
                   children: [
-                    _buildTimezoneTab('WIB'),
-                    const SizedBox(width: 4),
-                    _buildTimezoneTab('WITA'),
-                    const SizedBox(width: 4),
-                    _buildTimezoneTab('WIT'),
-                    const SizedBox(width: 4),
-                    _buildTimezoneTab('London'),
+                    Text(
+                      'Zona Waktu Operasional: $_selectedTimezone • Diatur di Profil',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -1773,19 +1719,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // 4-Region Multi-zone audit ribbon
-                Row(
-                  children: [
-                    _buildAuditBox('WIB', '18:00'),
-                    const SizedBox(width: 4),
-                    _buildAuditBox('WITA', '19:00'),
-                    const SizedBox(width: 4),
-                    _buildAuditBox('WIT', '20:00'),
-                    const SizedBox(width: 4),
-                    _buildAuditBox('London', '12:00'),
-                  ],
-                ),
-                const SizedBox(height: 8),
 
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1886,70 +1819,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _buildTimezoneTab(String tzKey) {
-    final isSelected = _selectedTimezone == tzKey;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedTimezone = tzKey),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : Colors.white,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: isSelected ? AppColors.primary : const Color(0xFFCBD5E1),
-            ),
-          ),
-          child: Center(
-            child: Text(
-              tzKey,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? Colors.white : const Color(0xFF1E293B),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAuditBox(String zone, String time) {
-    final isSelected = _selectedTimezone == zone;
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFE0F2FE) : const Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(6),
-          border: isSelected ? Border.all(color: const Color(0xFF7DD3FC)) : null,
-        ),
-        child: Column(
-          children: [
-            Text(
-              zone,
-              style: GoogleFonts.inter(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? const Color(0xFF0369A1) : const Color(0xFF64748B),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              time,
-              style: GoogleFonts.robotoMono(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: isSelected ? const Color(0xFF0369A1) : const Color(0xFF1E293B),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildTierRow({
     required IconData icon,

@@ -42,6 +42,22 @@ class AppPrefsRepository {
   }
 
   // ===========================================================================
+  // Currency Preference (US-09 & US-12)
+  // ===========================================================================
+
+  /// Get the active currency preference ('IDR', 'USD', 'EUR', 'GBP').
+  /// Defaults to 'IDR'.
+  Future<String> getSelectedCurrency() async {
+    final value = await _localDb.getPref(DatabaseConstants.prefSelectedCurrency);
+    return value ?? 'IDR';
+  }
+
+  /// Set the active currency preference.
+  Future<void> setSelectedCurrency(String currency) async {
+    await _localDb.setPref(DatabaseConstants.prefSelectedCurrency, currency);
+  }
+
+  // ===========================================================================
   // Currency Exchange Rates (US-09 & US-12)
   // ===========================================================================
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../widgets/auth_widgets.dart';
 import 'location_management_screen.dart';
@@ -414,7 +415,409 @@ class _VerifiedBadge extends StatelessWidget {
 // Menu List Profil
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ProfileMenuList extends StatelessWidget {
+class _ProfileMenuList extends StatefulWidget {
+  @override
+  State<_ProfileMenuList> createState() => _ProfileMenuListState();
+}
+
+class _ProfileMenuListState extends State<_ProfileMenuList> {
+  final _prefsRepo = AppPrefsRepository();
+  String _selectedCurrency = 'IDR';
+  String _selectedTimezone = 'WIB';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final cur = await _prefsRepo.getSelectedCurrency();
+      final tz = await _prefsRepo.getSelectedTimezone();
+      if (mounted) {
+        setState(() {
+          _selectedCurrency = cur;
+          _selectedTimezone = tz;
+        });
+      }
+    } catch (_) {}
+  }
+
+  String _getCurrencyLabel(String code) {
+    switch (code) {
+      case 'USD':
+        return 'USD (\$) • US Dollar';
+      case 'EUR':
+        return 'EUR (€) • Euro Uni Eropa';
+      case 'GBP':
+        return 'GBP (£) • British Pound';
+      case 'IDR':
+      default:
+        return 'IDR (Rp) • Rupiah Indonesia';
+    }
+  }
+
+  String _getTimezoneLabel(String code) {
+    switch (code) {
+      case 'WITA':
+        return 'WITA (UTC+8) • Waktu Indonesia Tengah';
+      case 'WIT':
+        return 'WIT (UTC+9) • Waktu Indonesia Timur';
+      case 'London':
+        return 'London (BST/UTC+1) • Standar Audit ESG';
+      case 'WIB':
+      default:
+        return 'WIB (UTC+7) • Waktu Indonesia Barat';
+    }
+  }
+
+  void _showCurrencyPickerBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.currency_exchange_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Pilih Mata Uang Acuan (PB-062)',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text(
+                          'Diterapkan di katalog & konversi detail lelang',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildCurrencyOption(ctx, 'IDR', 'Rupiah Indonesia (IDR)', 'Mata uang acuan domestik', 'Rp'),
+                _buildCurrencyOption(ctx, 'USD', 'US Dollar (USD)', 'Acuan komoditas & impor global', '\$'),
+                _buildCurrencyOption(ctx, 'EUR', 'Euro Uni Eropa (EUR)', 'Acuan prinsipal impor Eropa', '€'),
+                _buildCurrencyOption(ctx, 'GBP', 'British Pound (GBP)', 'Acuan kantor pusat prinsipal London', '£'),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCurrencyOption(
+    BuildContext ctx,
+    String code,
+    String title,
+    String desc,
+    String symbol,
+  ) {
+    final isSelected = _selectedCurrency == code;
+    return GestureDetector(
+      onTap: () async {
+        Navigator.pop(ctx);
+        await _prefsRepo.setSelectedCurrency(code);
+        if (mounted) {
+          setState(() => _selectedCurrency = code);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Mata uang acuan berhasil diubah ke $code ($symbol)',
+                style: GoogleFonts.inter(),
+              ),
+              backgroundColor: AppColors.primary,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primary : Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? AppColors.primary : const Color(0xFFCBD5E1),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  symbol,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: isSelected ? Colors.white : const Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isSelected ? AppColors.primary : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    desc,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.primary,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTimezonePickerBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.schedule_rounded,
+                        color: Color(0xFF16A34A),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Pilih Zona Waktu Operasional (PB-063)',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text(
+                          'Menyesuaikan jadwal lelang & deadline pickup barang',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildTimezoneOption(ctx, 'WIB', 'WIB (UTC+7)', 'Jawa, Sumatera, Kalimantan Barat & Tengah'),
+                _buildTimezoneOption(ctx, 'WITA', 'WITA (UTC+8)', 'Sulawesi, Bali, NTT, NTB, Kalimantan Timur/Selatan'),
+                _buildTimezoneOption(ctx, 'WIT', 'WIT (UTC+9)', 'Maluku dan Papua'),
+                _buildTimezoneOption(ctx, 'London', 'London (BST/UTC+1)', 'Standar Prinsipal Internasional & Audit ESG'),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTimezoneOption(
+    BuildContext ctx,
+    String code,
+    String title,
+    String desc,
+  ) {
+    final isSelected = _selectedTimezone == code;
+    return GestureDetector(
+      onTap: () async {
+        Navigator.pop(ctx);
+        await _prefsRepo.setSelectedTimezone(code);
+        if (mounted) {
+          setState(() => _selectedTimezone = code);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Zona waktu operasional berhasil diubah ke $code',
+                style: GoogleFonts.inter(),
+              ),
+              backgroundColor: const Color(0xFF16A34A),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFF16A34A) : Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFCBD5E1),
+                ),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.access_time_rounded,
+                  size: 18,
+                  color: isSelected ? Colors.white : const Color(0xFF475569),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isSelected ? const Color(0xFF15803D) : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    desc,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Color(0xFF16A34A),
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = AuthRepository.instance.currentUserProfile;
@@ -450,6 +853,28 @@ class _ProfileMenuList extends StatelessWidget {
             ),
           );
         },
+      ),
+      // ── Mata Uang Acuan (PB-062 / US-09) ──────────────────────────────────
+      _ProfileMenuItem(
+        key: const Key('menu_currency_preference'),
+        icon: Icons.currency_exchange_rounded,
+        iconBg: const Color(0xFFEFF6FF),
+        iconColor: AppColors.primary,
+        label: 'Mata Uang Acuan (PB-062)',
+        subtitle: _getCurrencyLabel(_selectedCurrency),
+        subtitleColor: AppColors.primary,
+        onTap: () => _showCurrencyPickerBottomSheet(context),
+      ),
+      // ── Zona Waktu Operasional (PB-063 / US-10) ───────────────────────────
+      _ProfileMenuItem(
+        key: const Key('menu_timezone_preference'),
+        icon: Icons.schedule_rounded,
+        iconBg: const Color(0xFFF0FDF4),
+        iconColor: const Color(0xFF16A34A),
+        label: 'Zona Waktu Operasional (PB-063)',
+        subtitle: _getTimezoneLabel(_selectedTimezone),
+        subtitleColor: const Color(0xFF16A34A),
+        onTap: () => _showTimezonePickerBottomSheet(context),
       ),
       _ProfileMenuItem(
         key: const Key('menu_security_biometrics'),
