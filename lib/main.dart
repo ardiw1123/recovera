@@ -13,6 +13,7 @@ import 'features/seller/screens/seller_inventory_screen.dart';
 import 'features/seller/screens/upload_stock_flow_screen.dart';
 import 'features/home/screens/product_detail_screen.dart';
 import 'features/auth/screens/location_management_screen.dart';
+import 'features/sky_balance/sky_balance_screen.dart';
 
 Future<void> main() async {
   // 1. Pastikan binding Flutter terinisialisasi
@@ -65,6 +66,7 @@ class RecoveraApp extends StatelessWidget {
         '/seller/upload': (_) => const UploadStockFlowScreen(),
         '/product/detail': (_) => const ProductDetailScreen(),
         '/profile/location': (_) => const LocationManagementScreen(),
+        '/sky-balance': (_) => const SkyBalanceScreen(),
       },
     );
   }
