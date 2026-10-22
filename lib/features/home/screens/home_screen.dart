@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:sensors_plus/sensors_plus.dart';
+import '../../../core/sensors/shake_detector.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/network/api_client.dart';
@@ -21,18 +24,21 @@ class HomeScreen extends StatefulWidget {
     this.repository,
     this.userLat = -6.2088,
     this.userLng = 106.8456,
+    this.sensorStream,
   });
 
   final ListingRepository? repository;
   final double userLat;
   final double userLng;
+  final Stream<AccelerometerEvent>? sensorStream;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final ListingRepository _listingRepository;
+  late final ShakeDetector _shakeDetector;
   final TextEditingController _searchCtrl = TextEditingController();
 
   List<Listing> _allListings = List<Listing>.from(dummyListings);
@@ -90,6 +96,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _shakeDetector = ShakeDetector(
+      onShake: _onShakeToRefresh,
+      sensorStream: widget.sensorStream,
+    );
+    _shakeDetector.startListening();
     _allListings = List<Listing>.from(dummyListings);
     AuthRepository.instance.addListener(_onAuthProfileChanged);
     final client = ApiClient();
@@ -114,7 +126,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _shakeDetector.startListening();
+    } else {
+      _shakeDetector.stopListening();
+    }
+  }
+
+  void _onShakeToRefresh() {
+    if (!mounted || _isLoading) return;
+
+    HapticFeedback.mediumImpact();
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Memperbarui daftar lelang...'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    _fetchListings(forceRefresh: true);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _shakeDetector.dispose();
     AuthRepository.instance.removeListener(_onAuthProfileChanged);
     _searchCtrl.dispose();
     super.dispose();

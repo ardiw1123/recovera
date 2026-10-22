@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:sensors_plus/sensors_plus.dart';
+import '../../../core/sensors/shake_detector.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
@@ -19,18 +22,21 @@ import '../../home/widgets/empty_state_view.dart';
 ///  • Result count + sort pill
 ///  • Product card list / empty state
 class StokScreen extends StatefulWidget {
-  const StokScreen({super.key});
+  const StokScreen({super.key, this.sensorStream});
+
+  final Stream<AccelerometerEvent>? sensorStream;
 
   @override
   State<StokScreen> createState() => _StokScreenState();
 }
 
-class _StokScreenState extends State<StokScreen> {
+class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
   // ── State ──────────────────────────────────────────────────────────────
   final _searchCtrl = TextEditingController();
   final _searchFocus = FocusNode();
 
   late final ListingRepository _listingRepository;
+  late final ShakeDetector _shakeDetector;
   List<Listing> _loadedListings = [];
   bool _isLoading = false;
   bool _isFromCache = false;
@@ -42,6 +48,12 @@ class _StokScreenState extends State<StokScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _shakeDetector = ShakeDetector(
+      onShake: _onShakeToRefresh,
+      sensorStream: widget.sensorStream,
+    );
+    _shakeDetector.startListening();
     final client = ApiClient();
     _listingRepository = ListingRepository(
       remoteClient: ListingApiService(client: client),
@@ -164,7 +176,35 @@ class _StokScreenState extends State<StokScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _shakeDetector.startListening();
+    } else {
+      _shakeDetector.stopListening();
+    }
+  }
+
+  void _onShakeToRefresh() {
+    if (!mounted || _isLoading) return;
+
+    HapticFeedback.mediumImpact();
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Memperbarui daftar lelang...'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    _fetchListings(forceRefresh: true);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _shakeDetector.dispose();
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
