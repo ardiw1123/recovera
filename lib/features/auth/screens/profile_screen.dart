@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/services/biometric_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/app_prefs_repository.dart';
@@ -7,6 +8,7 @@ import '../../../data/repositories/auth_repository.dart';
 import '../widgets/auth_widgets.dart';
 import 'location_management_screen.dart';
 import 'login_screen.dart';
+import '../../sky_balance/sky_balance_screen.dart';
 
 /// PBI-03 — Layar Profil & Keamanan Akun Recovera
 ///
@@ -48,17 +50,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final profile = AuthRepository.instance.currentUserProfile;
         final tokens = AuthRepository.instance.currentTokens;
 
-        final company = profile?.companyName ??
+        final company =
+            profile?.companyName ??
             profile?.name ??
             tokens?.name ??
             _defaultCompany;
         final role = profile?.role != null
             ? (profile!.role == 'seller'
-                ? 'Distributor (Seller)'
-                : 'UMKM Kuliner (Buyer)')
+                  ? 'Distributor (Seller)'
+                  : 'UMKM Kuliner (Buyer)')
             : (tokens?.role == 'seller'
-                ? 'Distributor (Seller)'
-                : _defaultRole);
+                  ? 'Distributor (Seller)'
+                  : _defaultRole);
         final city = profile?.city ?? _defaultCity;
 
         return Scaffold(
@@ -67,104 +70,110 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Column(
                 children: [
-              // ── Header Biru ────────────────────────────────────────
-              _ProfileHeader(context: context),
+                  // ── Header Biru ────────────────────────────────────────
+                  _ProfileHeader(context: context),
 
-              // ── Scrollable Content ─────────────────────────────────
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Transform.translate(
-                    offset: const Offset(0, -44), // avatar overlap
-                    child: Column(
-                      children: [
-                        // White Card mulai dari sini
-                        Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(32)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                blurRadius: 30,
-                                offset: const Offset(0, -12),
+                  // ── Scrollable Content ─────────────────────────────────
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Transform.translate(
+                        offset: const Offset(0, -44), // avatar overlap
+                        child: Column(
+                          children: [
+                            // White Card mulai dari sini
+                            Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: AppColors.white,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(32),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                    blurRadius: 30,
+                                    offset: const Offset(0, -12),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.only(
-                              left: 24,
-                              right: 24,
-                              top: 60, // ruang untuk avatar yang melayang
-                              bottom: 32,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 24,
+                                  right: 24,
+                                  top: 60, // ruang untuk avatar yang melayang
+                                  bottom: 32,
+                                ),
+                                child: Column(
+                                  children: [
+                                    // ── Identitas Perusahaan ───────────────
+                                    Text(
+                                      company,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.darkNavy,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$role • $city',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: AppColors.slateText,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+
+                                    // ── Badge Terverifikasi ────────────────
+                                    _VerifiedBadge(),
+                                    const SizedBox(height: 28),
+
+                                    // ── Menu List ─────────────────────────
+                                    _ProfileMenuList(),
+                                    const SizedBox(height: 24),
+
+                                    // ── Divider ────────────────────────────
+                                    const Divider(
+                                      color: Color(0xFFF1F5F9),
+                                      thickness: 1.5,
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    // ── Logout Button ──────────────────────
+                                    PillButton(
+                                      label: 'Logout',
+                                      outlined: true,
+                                      backgroundColor: AppColors.error,
+                                      foregroundColor: AppColors.error,
+                                      icon: const Icon(
+                                        Icons.logout_rounded,
+                                        size: 16,
+                                        color: AppColors.error,
+                                      ),
+                                      onPressed: () =>
+                                          _showLogoutDialog(context),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: Column(
-                              children: [
-                                // ── Identitas Perusahaan ───────────────
-                                Text(
-                                  company,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.darkNavy,
-                                    letterSpacing: -0.3,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '$role • $city',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color: AppColors.slateText,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-
-                                // ── Badge Terverifikasi ────────────────
-                                _VerifiedBadge(),
-                                const SizedBox(height: 28),
-
-                                // ── Menu List ─────────────────────────
-                                _ProfileMenuList(),
-                                const SizedBox(height: 24),
-
-                                // ── Divider ────────────────────────────
-                                const Divider(
-                                    color: Color(0xFFF1F5F9), thickness: 1.5),
-                                const SizedBox(height: 16),
-
-                                // ── Logout Button ──────────────────────
-                                PillButton(
-                                  label: 'Logout',
-                                  outlined: true,
-                                  backgroundColor: AppColors.error,
-                                  foregroundColor: AppColors.error,
-                                  icon: const Icon(
-                                    Icons.logout_rounded,
-                                    size: 16,
-                                    color: AppColors.error,
-                                  ),
-                                  onPressed: () => _showLogoutDialog(context),
-                                ),
-                              ],
-                            ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
+
+              // ── Avatar Melayang (Overlapping) ──────────────────────────────
+              _FloatingAvatar(context: context),
             ],
           ),
-
-          // ── Avatar Melayang (Overlapping) ──────────────────────────────
-          _FloatingAvatar(context: context),
-        ],
-      ),
-    );
+        );
       },
     );
   }
@@ -192,7 +201,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text(
               'Batal',
               style: GoogleFonts.inter(
-                  fontSize: 13, color: AppColors.slateText),
+                fontSize: 13,
+                color: AppColors.slateText,
+              ),
             ),
           ),
           ElevatedButton(
@@ -208,14 +219,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50)),
+                borderRadius: BorderRadius.circular(50),
+              ),
             ),
             child: Text(
               'Logout',
               style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.white),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.white,
+              ),
             ),
           ),
         ],
@@ -361,7 +374,9 @@ class _FloatingAvatar extends StatelessWidget {
                   color: AppColors.white,
                   shape: BoxShape.circle,
                   border: Border.all(
-                      color: const Color(0xFFE2E8F0), width: 1.5),
+                    color: const Color(0xFFE2E8F0),
+                    width: 1.5,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.08),
@@ -391,12 +406,18 @@ class _VerifiedBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.successBg,
         borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: AppColors.successBorder.withValues(alpha: 0.5)),
+        border: Border.all(
+          color: AppColors.successBorder.withValues(alpha: 0.5),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.verified_rounded, size: 14, color: Color(0xFF059669)),
+          const Icon(
+            Icons.verified_rounded,
+            size: 14,
+            color: Color(0xFF059669),
+          ),
           const SizedBox(width: 5),
           Text(
             'Terverifikasi',
@@ -879,8 +900,8 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
     final locationSubtitle = (address != null && address.isNotEmpty)
         ? address
         : (city != null && city.isNotEmpty
-            ? '$city, Indonesia'
-            : 'Atur Lokasi Pengiriman');
+              ? '$city, Indonesia'
+              : 'Atur Lokasi Pengiriman');
 
     final items = [
       _ProfileMenuItem(
@@ -901,9 +922,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         subtitleColor: AppColors.secondary,
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const LocationManagementScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const LocationManagementScreen()),
           );
         },
       ),
@@ -951,6 +970,20 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
           ),
         ),
       _ProfileMenuItem(
+        key: const Key('menu_sky_balance'),
+        icon: Icons.flight_takeoff_rounded,
+        iconBg: const Color(0xFFE0F7FA),
+        iconColor: AppColors.primary,
+        label: 'Sky Balance',
+        subtitle: 'Game petualangan dengan kontrol gerak',
+        subtitleColor: AppColors.slateText,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const SkyBalanceScreen()),
+          );
+        },
+      ),
+      _ProfileMenuItem(
         key: const Key('menu_feedback'),
         icon: Icons.chat_bubble_outline_rounded,
         iconBg: const Color(0xFFEEF2FF),
@@ -962,9 +995,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
       ),
     ];
 
-    return Column(
-      children: items,
-    );
+    return Column(children: items);
   }
 }
 
@@ -1011,14 +1042,10 @@ class _ProfileMenuItemState extends State<_ProfileMenuItem> {
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: _pressed
-              ? const Color(0xFFF8FAFC)
-              : AppColors.white,
+          color: _pressed ? const Color(0xFFF8FAFC) : AppColors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: _pressed
-                ? const Color(0xFFE2E8F0)
-                : Colors.transparent,
+            color: _pressed ? const Color(0xFFE2E8F0) : Colors.transparent,
           ),
         ),
         child: Row(
