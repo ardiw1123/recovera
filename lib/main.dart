@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
 import 'core/navigation/app_navigator.dart';
+import 'core/services/network_connectivity_service.dart';
 import 'features/splash/screens/splash_screen.dart';
 import 'features/auth/screens/welcome_screen.dart';
 import 'features/auth/screens/login_screen.dart';
@@ -20,6 +21,7 @@ Future<void> main() async {
   // 1. Pastikan binding Flutter terinisialisasi
   WidgetsFlutterBinding.ensureInitialized();
   await AppPrefsRepository.instance.init();
+  await NetworkConnectivityService.instance.init();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
+import '../models/esg_certificate_model.dart';
 import '../models/seller_dashboard_model.dart';
 import '../models/seller_inventory_model.dart';
 
@@ -289,6 +290,60 @@ class SellerApiService {
       }
     } on DioException catch (e) {
       throw ApiException.fromDioException(e, 'Gagal menghapus draf produk');
+    }
+  }
+
+  /// Mengambil daftar sertifikat donasi / ESG milik seller.
+  Future<List<EsgCertificateListItem>> fetchMyCertificates() async {
+    try {
+      final response = await client.get<Map<String, dynamic>>('/donations/my');
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error = body?['error']?['message'] ?? 'Gagal memuat sertifikat ESG';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+      final data = body['data'] as Map<String, dynamic>? ?? {};
+      final items = data['items'] as List<dynamic>? ?? [];
+      return items
+          .map((item) => EsgCertificateListItem.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memuat sertifikat ESG');
+    }
+  }
+
+  /// Mengambil detail satu sertifikat donasi / ESG.
+  Future<EsgCertificateDetail> fetchCertificateDetail(int donationId) async {
+    try {
+      final response = await client.get<Map<String, dynamic>>('/donations/$donationId/certificate');
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error = body?['error']?['message'] ?? 'Gagal memuat detail sertifikat';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+      final data = body['data'] as Map<String, dynamic>;
+      return EsgCertificateDetail.fromJson(data);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memuat detail sertifikat');
+    }
+  }
+
+  /// Memverifikasi hash transaksi sertifikat secara on-chain ke BOT Chain Testnet.
+  Future<BlockchainVerificationResult> verifyBlockchain(String txHash) async {
+    try {
+      final response = await client.get<Map<String, dynamic>>('/blockchain/verify/$txHash');
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error = body?['error']?['message'] ?? 'Gagal memverifikasi transaksi blockchain';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+      final data = body['data'] as Map<String, dynamic>;
+      return BlockchainVerificationResult.fromJson(data);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memverifikasi transaksi blockchain');
     }
   }
 }

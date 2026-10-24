@@ -34,10 +34,17 @@ async def process_invoice_ocr(filename: str, content: bytes) -> InvoiceOcrRespon
             b64_content = base64.b64encode(content).decode("utf-8")
 
             prompt = (
-                f"Analisis gambar faktur atau produk pangan ini untuk sistem B2B Recovera. "
+                f"Analisis gambar ini untuk sistem B2B Recovera. "
                 f"Hari ini adalah {today.isoformat()}. "
-                f"Ekstrak data produk utama dan kembalikan hanya objek JSON valid dengan struktur berikut:\n"
+                f"Sebelum mengekstrak data, periksa dulu apakah gambar ini memang berisi faktur pembelian produk, "
+                f"daftar harga produk pangan, atau foto produk pangan. "
+                f"Jika gambar BUKAN salah satu dari itu (misalnya: selfie, screenshot aplikasi non-faktur, foto hewan, "
+                f"pemandangan, dokumen non-pangan, atau konten tidak relevan lainnya), kembalikan HANYA JSON berikut:\n"
+                f'{{"rejected": true, "rejection_reason": "Gambar yang dikirim bukan faktur atau produk pangan"}}\n\n'
+                f"Hanya jika gambar memang berisi faktur atau produk pangan, lanjutkan ekstraksi data produk utama "
+                f"dan kembalikan objek JSON valid dengan struktur berikut:\n"
                 f"{{\n"
+                f'  "rejected": false,\n'
                 f'  "supplier_name": "Nama distributor atau supplier pangan",\n'
                 f'  "invoice_number": "{invoice_no}",\n'
                 f'  "items": [\n'
@@ -87,6 +94,18 @@ async def process_invoice_ocr(filename: str, content: bytes) -> InvoiceOcrRespon
                 clean_text = clean_text[:-3]
             parsed_data = json.loads(clean_text.strip())
 
+            # Cek jika AI menolak gambar
+            if parsed_data.get("rejected") is True:
+                reason = parsed_data.get("rejection_reason") or "Gambar yang dikirim bukan faktur atau produk pangan"
+                return InvoiceOcrResponse(
+                    invoice_number=None,
+                    supplier_name=None,
+                    parsed_items=[],
+                    fallback_used=False,
+                    rejected=True,
+                    rejection_reason=reason,
+                )
+
             items_data = parsed_data.get("items", [])
             parsed_items = []
             for it in items_data:
@@ -118,6 +137,17 @@ async def process_invoice_ocr(filename: str, content: bytes) -> InvoiceOcrRespon
                     supplier_name=parsed_data.get("supplier_name") or "Distributor Pangan Terdaftar",
                     parsed_items=parsed_items,
                     fallback_used=False,
+                    rejected=False,
+                    rejection_reason=None,
+                )
+            else:
+                return InvoiceOcrResponse(
+                    invoice_number=None,
+                    supplier_name=None,
+                    parsed_items=[],
+                    fallback_used=False,
+                    rejected=True,
+                    rejection_reason="Tidak ada produk pangan atau faktur yang dapat dikenali dari gambar ini",
                 )
         except Exception as e:
             logger.warning(f"OCR Model call failed, falling back to deterministic response: {e}")
@@ -151,6 +181,8 @@ async def process_invoice_ocr(filename: str, content: bytes) -> InvoiceOcrRespon
         supplier_name="PT Sumber Pangan Distribusi",
         parsed_items=parsed_items,
         fallback_used=True,
+        rejected=False,
+        rejection_reason=None,
     )
 
 

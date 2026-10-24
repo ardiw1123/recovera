@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/network_connectivity_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/models/cached_order_model.dart';
 import '../../../data/repositories/app_prefs_repository.dart';
@@ -52,9 +53,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   double _rateEUR = 17200.0;
   double _rateGBP = 20000.0;
   bool _isLoadingRates = false;
-  String _rateStatusLabel = 'GET /rates live';
-  String _rateSource = 'open.er-api.com';
-  String _lastRateUpdate = 'Sinkronisasi...';
+
 
   // ── State Konversi Zona Waktu (PB-063 / US-10) ──────────────────────────────
   String _selectedTimezone = 'WIB'; // 'WIB', 'WITA', 'WIT', 'London'
@@ -83,6 +82,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
 
     AppPrefsRepository.instance.addListener(_onPrefsChanged);
+    NetworkConnectivityService.instance.addListener(_onConnectivityChanged);
     _loadUserPreferences();
     _startCountdown();
     _fetchLiveRates();
@@ -91,8 +91,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   void dispose() {
     AppPrefsRepository.instance.removeListener(_onPrefsChanged);
+    NetworkConnectivityService.instance.removeListener(_onConnectivityChanged);
     _countdownTimer?.cancel();
     super.dispose();
+  }
+
+  void _onConnectivityChanged() {
+    if (!mounted) return;
+    final isOnline = NetworkConnectivityService.instance.isOnline;
+    if (isOnline) {
+      _fetchLiveRates();
+      final id = widget.listingId ?? _listing?.id;
+      if (id != null) {
+        _loadListingDetail(id);
+      }
+    }
   }
 
   void _onPrefsChanged() {
@@ -143,7 +156,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (_isLoadingRates) return;
     setState(() {
       _isLoadingRates = true;
-      _rateStatusLabel = 'Syncing...';
     });
 
     try {
@@ -152,12 +164,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         final cached = await AppPrefsRepository.instance.getLastCurrencyRates();
         if (cached.isNotEmpty && mounted) {
           setState(() {
-            if (cached['USD'] != null && cached['USD']! > 0)
+            if (cached['USD'] != null && cached['USD']! > 0) {
               _rateUSD = 1.0 / cached['USD']!;
-            if (cached['EUR'] != null && cached['EUR']! > 0)
+            }
+            if (cached['EUR'] != null && cached['EUR']! > 0) {
               _rateEUR = 1.0 / cached['EUR']!;
-            if (cached['GBP'] != null && cached['GBP']! > 0)
+            }
+            if (cached['GBP'] != null && cached['GBP']! > 0) {
               _rateGBP = 1.0 / cached['GBP']!;
+            }
           });
         }
       } catch (_) {}
@@ -183,10 +198,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               _rateUSD = usdPerIdr > 0 ? (1.0 / usdPerIdr) : _rateUSD;
               _rateEUR = eurPerIdr > 0 ? (1.0 / eurPerIdr) : _rateEUR;
               _rateGBP = gbpPerIdr > 0 ? (1.0 / gbpPerIdr) : _rateGBP;
-              _rateStatusLabel = 'Live API (Connected)';
-              _rateSource = 'open.er-api.com';
-              _lastRateUpdate =
-                  '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')} WIB';
             });
             AppPrefsRepository.instance.updateLiveRates(
               rateUSD: _rateUSD,
@@ -221,10 +232,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 _rateUSD = usdPerIdr > 0 ? (1.0 / usdPerIdr) : _rateUSD;
                 _rateEUR = eurPerIdr > 0 ? (1.0 / eurPerIdr) : _rateEUR;
                 _rateGBP = gbpPerIdr > 0 ? (1.0 / gbpPerIdr) : _rateGBP;
-                _rateStatusLabel = 'Backend /rates';
-                _rateSource = 'FastAPI Proxy';
-                _lastRateUpdate =
-                    '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')} WIB';
               });
             }
             return;
@@ -234,16 +241,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
       if (mounted) {
         setState(() {
-          _rateStatusLabel = 'Fallback Kurs (Offline)';
-          _rateSource = 'Benchmark Statis';
-          _lastRateUpdate = 'Offline';
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _rateStatusLabel = 'Fallback Kurs (Offline)';
-          _rateSource = 'Benchmark Statis';
         });
       }
     } finally {
@@ -525,8 +527,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _selectedCurrency,
     );
     final totalIdr = tierPrice * _selectedQty;
-    final totalUsd = (totalIdr / _rateUSD).toStringAsFixed(2);
-    final totalEur = (totalIdr / _rateEUR).toStringAsFixed(2);
 
     return Container(
       decoration: const BoxDecoration(
@@ -732,7 +732,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     String value, {
     Color? valueColor,
     bool isBold = false,
-    bool isMono = false,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -757,6 +756,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Future<void> _executePurchase(Listing listing) async {
+    if (_isPurchasing) return;
     // 1. Step-Up Biometrik (US-02 & PB-017 / Shopee-style)
     final isAvailable = await BiometricService.instance.isBiometricAvailable();
     if (isAvailable) {
@@ -1115,7 +1115,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ? Image.network(
                           listing.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
+                          errorBuilder: (_, _, _) =>
                               _buildDefaultHeroPlaceholder(),
                         )
                       : _buildDefaultHeroPlaceholder(),
