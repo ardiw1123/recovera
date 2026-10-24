@@ -1,0 +1,893 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:sensors_plus/sensors_plus.dart';
+import '../../../core/sensors/shake_detector.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/listing_repository.dart';
+import '../../../data/services/listing_api_service.dart';
+import '../../home/models/product_model.dart';
+import '../../home/widgets/product_card.dart';
+import '../../home/widgets/filter_bottom_sheet.dart';
+import '../../home/widgets/empty_state_view.dart';
+
+/// PBI-09 — Layar Stok & Katalog
+///
+/// Terdiri dari:
+///  • Location pin bar
+///  • Search bar + Filter button
+///  • Horizontal category chips (multi‑select)
+///  • Active filter tags ribbon
+///  • Result count + sort pill
+///  • Product card list / empty state
+class StokScreen extends StatefulWidget {
+  const StokScreen({super.key, this.listingRepository});
+
+  final ListingRepository? listingRepository;
+  const StokScreen({super.key, this.sensorStream});
+
+  final Stream<AccelerometerEvent>? sensorStream;
+
+  @override
+  State<StokScreen> createState() => _StokScreenState();
+}
+
+class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
+  // ── State ──────────────────────────────────────────────────────────────
+  final _searchCtrl = TextEditingController();
+  final _searchFocus = FocusNode();
+
+  late final ListingRepository _listingRepository;
+  late final ShakeDetector _shakeDetector;
+  List<Listing> _loadedListings = [];
+  bool _isLoading = false;
+  bool _isFromCache = false;
+
+  Set<FoodCategory> _selectedCategories = {};
+  String _expiryPreset = 'all';
+  String _sortKey = 'cheapest';
+  double _radiusKm = 15.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _listingRepository = widget.listingRepository ??
+        ListingRepository(
+          remoteClient: ListingApiService(client: ApiClient()),
+        );
+    WidgetsBinding.instance.addObserver(this);
+    _shakeDetector = ShakeDetector(
+      onShake: _onShakeToRefresh,
+      sensorStream: widget.sensorStream,
+    );
+    _shakeDetector.startListening();
+    final client = ApiClient();
+    _listingRepository = ListingRepository(
+      remoteClient: ListingApiService(client: client),
+    );
+    _fetchListings();
+  }
+
+  Future<void> _fetchListings({bool forceRefresh = true}) async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await _listingRepository.getListings(
+        forceRefresh: forceRefresh,
+      );
+      if (mounted) {
+        setState(() {
+          _isFromCache = result.isFromCache;
+          if (result.listings.isNotEmpty) {
+            _loadedListings = result.listings
+                .map((m) => Listing.fromCachedModel(m))
+                .toList();
+          } else {
+            _loadedListings = List<Listing>.from(dummyListings);
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          if (_loadedListings.isEmpty) {
+            _loadedListings = List<Listing>.from(dummyListings);
+          }
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<Listing> get _filteredProducts {
+    var list = _loadedListings.isNotEmpty
+        ? List<Listing>.from(_loadedListings)
+        : List<Listing>.from(dummyListings);
+
+    // Filter by search query (products.name, products.brand, sellers.company_name)
+    final query = _searchCtrl.text.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      list = list
+          .where((p) =>
+              p.productName.toLowerCase().contains(query) ||
+              (p.brand?.toLowerCase().contains(query) ?? false) ||
+              p.companyName.toLowerCase().contains(query))
+          .toList();
+    }
+
+    // Filter by categories
+    if (_selectedCategories.isNotEmpty) {
+      list =
+          list.where((p) => _selectedCategories.contains(p.category)).toList();
+    }
+
+    // Filter by expiry preset (listings.expiry_date derived → daysUntilExpiry)
+    if (_expiryPreset == '1-7') {
+      list = list.where((p) => p.daysUntilExpiry <= 7).toList();
+    } else if (_expiryPreset == '8-14') {
+      list = list.where((p) => p.daysUntilExpiry <= 14).toList();
+    } else if (_expiryPreset == '15-30') {
+      list = list.where((p) => p.daysUntilExpiry <= 30).toList();
+    }
+
+    // Sort (pakai field DB: start_price, expiry_date, discount_percent)
+    switch (_sortKey) {
+      case 'cheapest':
+        list.sort((a, b) => a.startPrice.compareTo(b.startPrice));
+        break;
+      case 'expiry':
+        list.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+        break;
+      case 'discount':
+        list.sort((a, b) => b.discountPercent.compareTo(a.discountPercent));
+        break;
+      case 'nearest':
+        // TODO: hitung jarak dari buyer.base_lat/lng ke sellers.warehouse_lat/lng
+        list.sort((a, b) => a.city.compareTo(b.city));
+        break;
+    }
+
+    return list;
+  }
+
+  bool get _hasActiveFilters =>
+      _selectedCategories.isNotEmpty || _expiryPreset != 'all';
+
+  void _clearAllFilters() {
+    setState(() {
+      _searchCtrl.clear();
+      _selectedCategories = {};
+      _expiryPreset = 'all';
+      _sortKey = 'cheapest';
+    });
+  }
+
+  void _openFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FilterBottomSheet(
+        selectedCategories: _selectedCategories,
+        selectedExpiryPreset: _expiryPreset,
+        selectedSort: _sortKey,
+        selectedRadiusKm: _radiusKm,
+        onApply: (cats, expiry, sort, radius) {
+          setState(() {
+            _selectedCategories = cats;
+            _expiryPreset = expiry;
+            _sortKey = sort;
+            _radiusKm = radius;
+          });
+        },
+      ),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _shakeDetector.startListening();
+    } else {
+      _shakeDetector.stopListening();
+    }
+  }
+
+  void _onShakeToRefresh() {
+    if (!mounted || _isLoading) return;
+
+    HapticFeedback.mediumImpact();
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Memperbarui daftar lelang...'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    _fetchListings(forceRefresh: true);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _shakeDetector.dispose();
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    // Role Guard: Stok screen is strictly for sellers
+    if (!AuthRepository.instance.isSeller) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          title: Text(
+            'Stok Lelang',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.gpp_bad_rounded,
+                  size: 64,
+                  color: AppColors.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Akses Terbatas: Khusus Penjual',
+                  key: const Key('stok_buyer_access_restricted_title'),
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0F172A),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Fitur manajemen stok lelang hanya dapat diakses oleh akun penjual.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: AppColors.slateText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final products = _filteredProducts;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Column(
+        children: [
+          // ── Sticky header ──────────────────────────────────────────
+          _buildStickyHeader(),
+
+          // ── Indikator Offline / Cache (US-05) ───────────────────────
+          if (_isFromCache) _buildCacheIndicator(),
+
+          // ── Body ───────────────────────────────────────────────────
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => _fetchListings(forceRefresh: true),
+              child: _buildBody(products),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(List<Listing> products) {
+    if (_isLoading && _loadedListings.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (products.isEmpty) {
+      return Center(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: EmptyStateView(
+            onResetFilter: _clearAllFilters,
+            onShowAll: _clearAllFilters,
+          ),
+        ),
+      );
+    }
+    return _buildProductList(products);
+  }
+
+  Widget _buildCacheIndicator() {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFFEF3C7),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.cloud_off_rounded,
+              size: 14, color: Color(0xFF92400E)),
+          const SizedBox(width: 6),
+          Text(
+            'Mode Offline — Menampilkan data cache SQLite',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF92400E),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Sticky Header
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildStickyHeader() {
+    return Container(
+      color: AppColors.white,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildLocationBar(),
+            _buildSearchBar(),
+            const SizedBox(height: 4),
+            _buildCategoryRow(),
+            if (_hasActiveFilters) _buildActiveFilterTags(),
+            _buildSubHeader(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Location Pin Bar ──────────────────────────────────────────────────
+
+  Widget _buildLocationBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.location_on, size: 14, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Jl. Merpati St, 86L, Depok',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF334155),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 16,
+            color: Color(0xFF94A3B8),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFECFDF5),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFA7F3D0)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF10B981),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Gudang < 15km',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF047857),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Search Bar ────────────────────────────────────────────────────────
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9).withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: TextField(
+                controller: _searchCtrl,
+                focusNode: _searchFocus,
+                onChanged: (_) => setState(() {}),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF1E293B),
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Cari nama bahan baku atau merek...',
+                  hintStyle: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    size: 18,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  suffixIcon: _searchCtrl.text.isNotEmpty
+                      ? GestureDetector(
+                          onTap: () => setState(() => _searchCtrl.clear()),
+                          child: const Icon(
+                            Icons.cancel_rounded,
+                            size: 16,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: _openFilterSheet,
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  const Icon(
+                    Icons.tune_rounded,
+                    size: 18,
+                    color: AppColors.white,
+                  ),
+                  if (_hasActiveFilters)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.white,
+                            width: 2,
+                          ),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.check,
+                            size: 8,
+                            color: AppColors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Category Horizontal Scroll ────────────────────────────────────────
+
+  Widget _buildCategoryRow() {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+      ),
+      padding: const EdgeInsets.only(top: 10, bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'KATEGORI PANGAN B2B',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF94A3B8),
+                      letterSpacing: 0.8,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      if (_selectedCategories.length ==
+                          FoodCategory.values.length) {
+                        _selectedCategories.clear();
+                      } else {
+                        _selectedCategories = Set.from(FoodCategory.values);
+                      }
+                    });
+                  },
+                  child: Text(
+                    _selectedCategories.length == FoodCategory.values.length
+                        ? 'Hapus Semua'
+                        : 'Pilih Semua',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 72,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: FoodCategory.values.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 14),
+              itemBuilder: (_, i) {
+                final cat = FoodCategory.values[i];
+                final isSelected = _selectedCategories.contains(cat);
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      if (isSelected) {
+                        _selectedCategories.remove(cat);
+                      } else {
+                        _selectedCategories.add(cat);
+                      }
+                    });
+                  },
+                  child: Column(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.primary
+                              : const Color(0xFFF1F5F9),
+                          shape: BoxShape.circle,
+                          border: isSelected
+                              ? null
+                              : Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.25),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Icon(
+                          cat.icon,
+                          size: 20,
+                          color: isSelected ? AppColors.white : cat.color,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        cat.label,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
+                          color: isSelected
+                              ? AppColors.primary
+                              : const Color(0xFF475569),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Active Filter Tags ────────────────────────────────────────────────
+
+  Widget _buildActiveFilterTags() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      color: const Color(0xFFF0F9FF).withValues(alpha: 0.6),
+      child: Row(
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.filter_alt_rounded,
+                  size: 11, color: AppColors.primary),
+              const SizedBox(width: 4),
+              Text(
+                'Aktif:',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  if (_selectedCategories.isNotEmpty)
+                    _filterTag(
+                      _selectedCategories.map((c) => c.label).join(', '),
+                      () => setState(() => _selectedCategories.clear()),
+                    ),
+                  if (_expiryPreset != 'all') ...[
+                    const SizedBox(width: 6),
+                    _filterTag(
+                      'Exp: ${_expiryLabel(_expiryPreset)}',
+                      () => setState(() => _expiryPreset = 'all'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: _clearAllFilters,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                'Hapus Semua',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFDC2626),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterTag(String label, VoidCallback onRemove) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFBAE6FD)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF334155),
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onRemove,
+            child: const Icon(Icons.close, size: 12, color: Color(0xFF94A3B8)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _expiryLabel(String preset) {
+    switch (preset) {
+      case '1-7':
+        return '1 - 7 Hari';
+      case '8-14':
+        return '1 - 14 Hari';
+      case '15-30':
+        return '15 - 30 Hari';
+      default:
+        return 'Semua';
+    }
+  }
+
+  // ── Sub-header (count + sort) ─────────────────────────────────────────
+
+  Widget _buildSubHeader() {
+    final count = _filteredProducts.length;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Menampilkan $count barang',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 4,
+                    height: 4,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFCBD5E1),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'B2B Verified',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _openFilterSheet,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '↓↑',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _sortLabel,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF334155),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 14,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String get _sortLabel {
+    switch (_sortKey) {
+      case 'cheapest':
+        return 'Termurah';
+      case 'expiry':
+        return 'Exp Terdekat';
+      case 'discount':
+        return 'Diskon ↑';
+      case 'nearest':
+        return 'Terdekat';
+      default:
+        return 'Urutkan';
+    }
+  }
+
+  // ── Product List ─────────────────────────────────────────────────────
+
+  Widget _buildProductList(List<Listing> listings) {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+      itemCount: listings.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (_, i) => ProductCard(listing: listings[i]),
+    );
+  }
+}

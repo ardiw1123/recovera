@@ -2,6 +2,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, status
 
 from app.core.dependencies import CurrentUserDep, DbSessionDep
+from app.core.exceptions import AppException
 from app.models.user import Buyer, Seller
 from app.schemas.envelope import ResponseEnvelope, wrap_success
 from app.schemas.profile import BuyerProfile, ProfileResponse, ProfileUpdateRequest, SellerProfile
@@ -99,6 +100,14 @@ async def update_profile(
             current_user.buyer.base_lng = payload.base_lng
         if payload.pref_categories is not None:
             current_user.buyer.pref_categories = payload.pref_categories
+        if payload.max_radius_km is not None:
+            if payload.max_radius_km <= 0:
+                raise AppException(
+                    "INVALID_RADIUS",
+                    "Maximum radius must be greater than zero",
+                    status.HTTP_422_UNPROCESSABLE_ENTITY
+                )
+            current_user.buyer.max_radius_km = payload.max_radius_km
         if payload.has_cold_storage is not None:
             current_user.buyer.has_cold_storage = payload.has_cold_storage
 

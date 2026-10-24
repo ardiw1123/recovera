@@ -1,0 +1,52 @@
+{
+  "version": "20261020-1154-csv",
+  "source": "csv",
+  "ranking": {
+    "n_train": 3619,
+    "n_valid": 786,
+    "n_test": 764,
+    "best_iteration": 111,
+    "auc": 0.7712016336234997,
+    "logloss": 0.4598349660170001,
+    "brier": 0.15007534639549505,
+    "brier_constant_baseline": 0.17896097114729373,
+    "auc_distance_baseline": 0.6479272922498753,
+    "auc_weighted_baseline": 0.7191202975802431,
+    "p5_model": 0.34074074074074073,
+    "n_listings_eval": 81,
+    "p5_distance_baseline": 0.3160493827160494,
+    "p5_weighted_baseline": 0.33827160493827163,
+    "p5_diff_model_vs_weighted": {
+      "mean": 0.0024691358024691366,
+      "ci95_lo": -0.014814814814814808,
+      "ci95_hi": 0.01728395061728395
+    },
+    "p5_random": 0.2888888888888889,
+    "p5_oracle_ceiling": 0.3382716049382717,
+    "p5_model_vs_oracle": 1.0072992700729924
+  },
+  "pricing": {
+    "n_train": 94,
+    "n_valid": 20,
+    "n_test": 20,
+    "best_iteration": 36,
+    "mae_model_pp": 9.8085370244842,
+    "mae_rule_baseline_pp": 25.0,
+    "mae_constant_median_pp": 10.25,
+    "guardrail_violations_min_price": 0
+  },
+  "size_kb": {
+    "ranking": 77.2265625,
+    "pricing": 9.2822265625
+  },
+  "latency": {
+    "advise_price": {
+      "p50_ms": 1.1312999999972817,
+      "p95_ms": 1.4666150000152813
+    },
+    "match_buyers_200_candidates": {
+      "p50_ms": 5.088099999966289,
+      "p95_ms": 6.311430000067731
+    }
+  }
+}

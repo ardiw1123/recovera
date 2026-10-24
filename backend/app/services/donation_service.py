@@ -1,3 +1,4 @@
+import random
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
@@ -83,3 +84,79 @@ def verify_blockchain_hash(tx_hash: str) -> BlockchainVerifyResponse:
         contract_address="0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7",
         block_explorer_url=f"https://explorer.bot-chain.testnet/tx/{tx_hash}",
     )
+
+
+def divert_listing_to_donation(db: Session, listing: Listing) -> Donation:
+    """
+    Menghentikan lelang listing dan mengalihkan stok ke jalur donasi (food bank / offtaker).
+    Aturan bisnis: Jika sisa umur stok < 15 hari dan status belum terjual/diverted.
+    """
+    if listing.donation is not None:
+        return listing.donation
+
+    listing.status = "diverted"
+
+    # Cari offtaker (misal food bank / pakan / kompos terdaftar)
+    offtaker = db.query(Offtaker).first()
+    if offtaker is None:
+        offtaker = Offtaker(
+            name="Food Bank Indonesia",
+            type="foodbank",
+            lat=-6.2088,
+            lng=106.8456,
+            address="Jl. Pengalihan Pangan Surplus No. 1, Jakarta",
+            contact="+628119876543",
+        )
+        db.add(offtaker)
+        db.flush()
+
+    from datetime import date
+    days_left = max(0, (listing.expiry_date - date.today()).days)
+    grade = "A" if days_left >= 7 else "B" if days_left >= 3 else "C"
+    qty_diverted = listing.qty
+    carbon_saved = round(float(qty_diverted) * 2.5, 2)
+    cert_no = f"ESG-ID-2026-{1000 + listing.id:05d}"
+    tx_hash = f"0x{''.join(random.choices('0123456789abcdef', k=64))}"
+
+    donation = Donation(
+        listing_id=listing.id,
+        offtaker_id=offtaker.id,
+        grade=grade,
+        qty_diverted=qty_diverted,
+        carbon_saved_kg=carbon_saved,
+        certificate_no=cert_no,
+        certificate_tx_hash=tx_hash,
+        block_number=random.randint(5000000, 6000000),
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(donation)
+    db.commit()
+    db.refresh(donation)
+    return donation
+
+
+def check_and_divert_expired_listings(db: Session) -> list[Donation]:
+    """
+    Periksa seluruh listing aktif: jika tidak terjual dan sisa umur < 15 hari,
+    hentikan lelang dan alihkan ke jalur donasi.
+    """
+    from datetime import date, timedelta
+    today = date.today()
+    critical_threshold = today + timedelta(days=15)
+
+    expired_listings = (
+        db.query(Listing)
+        .filter(
+            Listing.status == "active",
+            Listing.expiry_date < critical_threshold,
+        )
+        .all()
+    )
+
+    diverted_donations = []
+    for item in expired_listings:
+        donation = divert_listing_to_donation(db, item)
+        diverted_donations.append(donation)
+
+    return diverted_donations
+
