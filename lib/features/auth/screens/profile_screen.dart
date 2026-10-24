@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../../../core/services/biometric_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../widgets/auth_widgets.dart';
 import 'location_management_screen.dart';
 import 'login_screen.dart';
+import '../../sky_balance/sky_balance_screen.dart';
 
 /// PBI-03 — Layar Profil & Keamanan Akun Recovera
 ///
@@ -52,8 +56,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _defaultCompany;
         final role = profile?.role != null
             ? (profile!.role == 'seller'
-                ? 'Distributor (Seller)'
-                : 'UMKM Kuliner (Buyer)')
+                  ? 'Distributor (Seller)'
+                  : 'UMKM Kuliner (Buyer)')
             : (tokens?.role == 'seller'
                 ? 'Distributor (Seller)'
                 : _defaultRole);
@@ -68,115 +72,110 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Column(
                 children: [
-              // ── Header Biru ────────────────────────────────────────
-              _ProfileHeader(context: context),
+                  // ── Header Biru ────────────────────────────────────────
+                  _ProfileHeader(context: context),
 
-              // ── Scrollable Content ─────────────────────────────────
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Transform.translate(
-                    offset: const Offset(0, -44), // avatar overlap
-                    child: Column(
-                      children: [
-                        // White Card mulai dari sini
-                        Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(32)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                blurRadius: 30,
-                                offset: const Offset(0, -12),
-                              ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.only(
-                              left: 24,
-                              right: 24,
-                              top: 60, // ruang untuk avatar yang melayang
-                              bottom: 32,
-                            ),
-                            child: Column(
-                              children: [
-                                // ── Identitas Perusahaan ───────────────
-                                Text(
-                                  company,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.darkNavy,
-                                    letterSpacing: -0.3,
-                                  ),
+                  // ── Scrollable Content ─────────────────────────────────
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Transform.translate(
+                        offset: const Offset(0, -44), // avatar overlap
+                        child: Column(
+                          children: [
+                            // White Card mulai dari sini
+                            Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: AppColors.white,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(32),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '$role • $city',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color: AppColors.slateText,
-                                  ),
-                                ),
-                                if (email != null && email.isNotEmpty) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    email,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.slateText,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.1,
                                     ),
+                                    blurRadius: 30,
+                                    offset: const Offset(0, -12),
                                   ),
                                 ],
-                                const SizedBox(height: 10),
-
-                                // ── Badge Terverifikasi ────────────────
-                                _VerifiedBadge(),
-                                const SizedBox(height: 28),
-
-                                // ── Menu List ─────────────────────────
-                                _ProfileMenuList(),
-                                const SizedBox(height: 24),
-
-                                // ── Divider ────────────────────────────
-                                const Divider(
-                                    color: Color(0xFFF1F5F9), thickness: 1.5),
-                                const SizedBox(height: 16),
-
-                                // ── Logout Button ──────────────────────
-                                PillButton(
-                                  label: 'Logout',
-                                  outlined: true,
-                                  backgroundColor: AppColors.error,
-                                  foregroundColor: AppColors.error,
-                                  icon: const Icon(
-                                    Icons.logout_rounded,
-                                    size: 16,
-                                    color: AppColors.error,
-                                  ),
-                                  onPressed: () => _showLogoutDialog(context),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 24,
+                                  right: 24,
+                                  top: 60, // ruang untuk avatar yang melayang
+                                  bottom: 32,
                                 ),
-                              ],
+                                child: Column(
+                                  children: [
+                                    // ── Identitas Perusahaan ───────────────
+                                    Text(
+                                      company,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.darkNavy,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$role • $city',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: AppColors.slateText,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+
+                                    // ── Badge Terverifikasi ────────────────
+                                    _VerifiedBadge(),
+                                    const SizedBox(height: 28),
+
+                                    // ── Menu List ─────────────────────────
+                                    _ProfileMenuList(),
+                                    const SizedBox(height: 24),
+
+                                    // ── Divider ────────────────────────────
+                                    const Divider(
+                                      color: Color(0xFFF1F5F9),
+                                      thickness: 1.5,
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    // ── Logout Button ──────────────────────
+                                    PillButton(
+                                      label: 'Logout',
+                                      outlined: true,
+                                      backgroundColor: AppColors.error,
+                                      foregroundColor: AppColors.error,
+                                      icon: const Icon(
+                                        Icons.logout_rounded,
+                                        size: 16,
+                                        color: AppColors.error,
+                                      ),
+                                      onPressed: () =>
+                                          _showLogoutDialog(context),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
+
+              // ── Avatar Melayang (Overlapping) ──────────────────────────────
+              _FloatingAvatar(context: context),
             ],
           ),
-
-          // ── Avatar Melayang (Overlapping) ──────────────────────────────
-          _FloatingAvatar(context: context),
-        ],
-      ),
-    );
+        );
       },
     );
   }
@@ -204,7 +203,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text(
               'Batal',
               style: GoogleFonts.inter(
-                  fontSize: 13, color: AppColors.slateText),
+                fontSize: 13,
+                color: AppColors.slateText,
+              ),
             ),
           ),
           ElevatedButton(
@@ -220,14 +221,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50)),
+                borderRadius: BorderRadius.circular(50),
+              ),
             ),
             child: Text(
               'Logout',
               style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.white),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.white,
+              ),
             ),
           ),
         ],
@@ -373,7 +376,9 @@ class _FloatingAvatar extends StatelessWidget {
                   color: AppColors.white,
                   shape: BoxShape.circle,
                   border: Border.all(
-                      color: const Color(0xFFE2E8F0), width: 1.5),
+                    color: const Color(0xFFE2E8F0),
+                    width: 1.5,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.08),
@@ -403,12 +408,18 @@ class _VerifiedBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.successBg,
         borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: AppColors.successBorder.withValues(alpha: 0.5)),
+        border: Border.all(
+          color: AppColors.successBorder.withValues(alpha: 0.5),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.verified_rounded, size: 14, color: Color(0xFF059669)),
+          const Icon(
+            Icons.verified_rounded,
+            size: 14,
+            color: Color(0xFF059669),
+          ),
           const SizedBox(width: 5),
           Text(
             'Terverifikasi',
@@ -428,7 +439,461 @@ class _VerifiedBadge extends StatelessWidget {
 // Menu List Profil
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ProfileMenuList extends StatelessWidget {
+class _ProfileMenuList extends StatefulWidget {
+  @override
+  State<_ProfileMenuList> createState() => _ProfileMenuListState();
+}
+
+class _ProfileMenuListState extends State<_ProfileMenuList> {
+  final _prefsRepo = AppPrefsRepository.instance;
+  late String _selectedCurrency;
+  late String _selectedTimezone;
+  bool _isBiometricSupported = true;
+  bool _isBiometricEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCurrency = _prefsRepo.selectedCurrency;
+    _selectedTimezone = _prefsRepo.selectedTimezone;
+    _prefsRepo.addListener(_onPrefsUpdated);
+    _loadPreferences();
+  }
+
+  @override
+  void dispose() {
+    _prefsRepo.removeListener(_onPrefsUpdated);
+    super.dispose();
+  }
+
+  void _onPrefsUpdated() {
+    if (!mounted) return;
+    setState(() {
+      _selectedCurrency = _prefsRepo.selectedCurrency;
+      _selectedTimezone = _prefsRepo.selectedTimezone;
+    });
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final cur = await _prefsRepo.getSelectedCurrency();
+      final tz = await _prefsRepo.getSelectedTimezone();
+      final supported = await BiometricService.instance.isBiometricAvailable();
+      final enabled = await BiometricService.instance.isBiometricLoginEnabled();
+      if (mounted) {
+        setState(() {
+          _selectedCurrency = cur;
+          _selectedTimezone = tz;
+          _isBiometricSupported = supported;
+          _isBiometricEnabled = enabled;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _onToggleBiometric(bool newValue) async {
+    if (newValue) {
+      // Minta verifikasi sidik jari dulu sebelum mengaktifkan (PB-016)
+      final authenticated = await BiometricService.instance.authenticate(
+        reason: 'Verifikasi sidik jari Anda untuk mengaktifkan login cepat & pembayaran Recovera',
+      );
+      if (!authenticated) return; // Batal jika sidik jari gagal/dibatalkan
+    }
+
+    setState(() => _isBiometricEnabled = newValue);
+    await BiometricService.instance.setBiometricLoginEnabled(newValue);
+    await _prefsRepo.setBiometricEnabled(newValue);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newValue
+                ? 'Login & pembayaran biometrik berhasil diaktifkan'
+                : 'Login & pembayaran biometrik dinonaktifkan',
+            style: GoogleFonts.inter(),
+          ),
+          backgroundColor: newValue ? const Color(0xFF059669) : const Color(0xFF64748B),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  String _getCurrencyLabel(String code) {
+    switch (code) {
+      case 'USD':
+        return 'USD (\$) • US Dollar';
+      case 'EUR':
+        return 'EUR (€) • Euro Uni Eropa';
+      case 'GBP':
+        return 'GBP (£) • British Pound';
+      case 'IDR':
+      default:
+        return 'IDR (Rp) • Rupiah Indonesia';
+    }
+  }
+
+  String _getTimezoneLabel(String code) {
+    switch (code) {
+      case 'WITA':
+        return 'WITA (UTC+8) • Waktu Indonesia Tengah';
+      case 'WIT':
+        return 'WIT (UTC+9) • Waktu Indonesia Timur';
+      case 'London':
+        return 'London (BST/UTC+1) • Standar Audit ESG';
+      case 'WIB':
+      default:
+        return 'WIB (UTC+7) • Waktu Indonesia Barat';
+    }
+  }
+
+  void _showCurrencyPickerBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.currency_exchange_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Pilih Mata Uang Acuan (PB-062)',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text(
+                          'Diterapkan di katalog & konversi detail lelang',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildCurrencyOption(ctx, 'IDR', 'Rupiah Indonesia (IDR)', 'Mata uang acuan domestik', 'Rp'),
+                _buildCurrencyOption(ctx, 'USD', 'US Dollar (USD)', 'Acuan komoditas & impor global', '\$'),
+                _buildCurrencyOption(ctx, 'EUR', 'Euro Uni Eropa (EUR)', 'Acuan prinsipal impor Eropa', '€'),
+                _buildCurrencyOption(ctx, 'GBP', 'British Pound (GBP)', 'Acuan kantor pusat prinsipal London', '£'),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCurrencyOption(
+    BuildContext ctx,
+    String code,
+    String title,
+    String desc,
+    String symbol,
+  ) {
+    final isSelected = _selectedCurrency == code;
+    return GestureDetector(
+      onTap: () async {
+        Navigator.pop(ctx);
+        setState(() => _selectedCurrency = code);
+        await _prefsRepo.setSelectedCurrency(code);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Mata uang acuan berhasil diubah ke $code ($symbol)',
+                style: GoogleFonts.inter(),
+              ),
+              backgroundColor: AppColors.primary,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primary : Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? AppColors.primary : const Color(0xFFCBD5E1),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  symbol,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: isSelected ? Colors.white : const Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isSelected ? AppColors.primary : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    desc,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.primary,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTimezonePickerBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.schedule_rounded,
+                        color: Color(0xFF16A34A),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Pilih Zona Waktu Operasional (PB-063)',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text(
+                          'Menyesuaikan jadwal lelang & deadline pickup barang',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildTimezoneOption(ctx, 'WIB', 'WIB (UTC+7)', 'Jawa, Sumatera, Kalimantan Barat & Tengah'),
+                _buildTimezoneOption(ctx, 'WITA', 'WITA (UTC+8)', 'Sulawesi, Bali, NTT, NTB, Kalimantan Timur/Selatan'),
+                _buildTimezoneOption(ctx, 'WIT', 'WIT (UTC+9)', 'Maluku dan Papua'),
+                _buildTimezoneOption(ctx, 'London', 'London (BST/UTC+1)', 'Standar Prinsipal Internasional & Audit ESG'),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTimezoneOption(
+    BuildContext ctx,
+    String code,
+    String title,
+    String desc,
+  ) {
+    final isSelected = _selectedTimezone == code;
+    return GestureDetector(
+      onTap: () async {
+        Navigator.pop(ctx);
+        setState(() => _selectedTimezone = code);
+        await _prefsRepo.setSelectedTimezone(code);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Zona waktu operasional berhasil diubah ke $code',
+                style: GoogleFonts.inter(),
+              ),
+              backgroundColor: const Color(0xFF16A34A),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE2E8F0),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFF16A34A) : Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFCBD5E1),
+                ),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.access_time_rounded,
+                  size: 18,
+                  color: isSelected ? Colors.white : const Color(0xFF475569),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isSelected ? const Color(0xFF15803D) : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    desc,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Color(0xFF16A34A),
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = AuthRepository.instance.currentUserProfile;
@@ -437,8 +902,8 @@ class _ProfileMenuList extends StatelessWidget {
     final locationSubtitle = (address != null && address.isNotEmpty)
         ? address
         : (city != null && city.isNotEmpty
-            ? '$city, Indonesia'
-            : 'Atur Lokasi Pengiriman');
+              ? '$city, Indonesia'
+              : 'Atur Lokasi Pengiriman');
 
     final items = [
       _ProfileMenuItem(
@@ -459,21 +924,66 @@ class _ProfileMenuList extends StatelessWidget {
         subtitleColor: AppColors.secondary,
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const LocationManagementScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const LocationManagementScreen()),
           );
         },
       ),
+      // ── Mata Uang Acuan (PB-062 / US-09) ──────────────────────────────────
       _ProfileMenuItem(
-        key: const Key('menu_security_biometrics'),
-        icon: Icons.lock_outline_rounded,
-        iconBg: AppColors.successBg,
-        iconColor: const Color(0xFF059669),
-        label: 'Pengaturan Keamanan & Biometrik',
-        subtitle: 'Sidik Jari Aktif',
-        subtitleColor: const Color(0xFF059669),
-        onTap: () {},
+        key: const Key('menu_currency_preference'),
+        icon: Icons.currency_exchange_rounded,
+        iconBg: const Color(0xFFEFF6FF),
+        iconColor: AppColors.primary,
+        label: 'Mata Uang Acuan (PB-062)',
+        subtitle: _getCurrencyLabel(_selectedCurrency),
+        subtitleColor: AppColors.primary,
+        onTap: () => _showCurrencyPickerBottomSheet(context),
+      ),
+      // ── Zona Waktu Operasional (PB-063 / US-10) ───────────────────────────
+      _ProfileMenuItem(
+        key: const Key('menu_timezone_preference'),
+        icon: Icons.schedule_rounded,
+        iconBg: const Color(0xFFF0FDF4),
+        iconColor: const Color(0xFF16A34A),
+        label: 'Zona Waktu Operasional (PB-063)',
+        subtitle: _getTimezoneLabel(_selectedTimezone),
+        subtitleColor: const Color(0xFF16A34A),
+        onTap: () => _showTimezonePickerBottomSheet(context),
+      ),
+      if (_isBiometricSupported)
+        _ProfileMenuItem(
+          key: const Key('menu_security_biometrics'),
+          icon: Icons.fingerprint_rounded,
+          iconBg: _isBiometricEnabled ? AppColors.successBg : const Color(0xFFF1F5F9),
+          iconColor: _isBiometricEnabled ? const Color(0xFF059669) : const Color(0xFF64748B),
+          label: 'Pengaturan Keamanan & Biometrik',
+          subtitle: _isBiometricEnabled
+              ? 'Sidik Jari Aktif untuk Login & Pembayaran'
+              : 'Aktifkan untuk Login Cepat & Pembayaran',
+          subtitleColor: _isBiometricEnabled ? const Color(0xFF059669) : const Color(0xFF64748B),
+          onTap: () => _onToggleBiometric(!_isBiometricEnabled),
+          trailing: SizedBox(
+            height: 28,
+            child: Switch.adaptive(
+              value: _isBiometricEnabled,
+              activeColor: const Color(0xFF059669),
+              onChanged: _onToggleBiometric,
+            ),
+          ),
+        ),
+      _ProfileMenuItem(
+        key: const Key('menu_sky_balance'),
+        icon: Icons.flight_takeoff_rounded,
+        iconBg: const Color(0xFFE0F7FA),
+        iconColor: AppColors.primary,
+        label: 'Sky Balance',
+        subtitle: 'Game petualangan dengan kontrol gerak',
+        subtitleColor: AppColors.slateText,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const SkyBalanceScreen()),
+          );
+        },
       ),
       _ProfileMenuItem(
         key: const Key('menu_feedback'),
@@ -487,9 +997,7 @@ class _ProfileMenuList extends StatelessWidget {
       ),
     ];
 
-    return Column(
-      children: items,
-    );
+    return Column(children: items);
   }
 }
 
@@ -503,6 +1011,7 @@ class _ProfileMenuItem extends StatefulWidget {
     required this.onTap,
     this.subtitle,
     this.subtitleColor,
+    this.trailing,
   });
 
   final IconData icon;
@@ -512,6 +1021,7 @@ class _ProfileMenuItem extends StatefulWidget {
   final VoidCallback onTap;
   final String? subtitle;
   final Color? subtitleColor;
+  final Widget? trailing;
 
   @override
   State<_ProfileMenuItem> createState() => _ProfileMenuItemState();
@@ -534,14 +1044,10 @@ class _ProfileMenuItemState extends State<_ProfileMenuItem> {
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: _pressed
-              ? const Color(0xFFF8FAFC)
-              : AppColors.white,
+          color: _pressed ? const Color(0xFFF8FAFC) : AppColors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: _pressed
-                ? const Color(0xFFE2E8F0)
-                : Colors.transparent,
+            color: _pressed ? const Color(0xFFE2E8F0) : Colors.transparent,
           ),
         ),
         child: Row(
@@ -586,12 +1092,13 @@ class _ProfileMenuItemState extends State<_ProfileMenuItem> {
               ),
             ),
 
-            // Arrow
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 14,
-              color: Color(0xFF94A3B8),
-            ),
+            // Trailing widget or Arrow
+            widget.trailing ??
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: Color(0xFF94A3B8),
+                ),
           ],
         ),
       ),

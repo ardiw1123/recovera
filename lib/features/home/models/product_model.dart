@@ -322,7 +322,7 @@ final List<Listing> dummyListings = [
     brand: 'Sania',
     category: FoodCategory.oil,
     storageType: 'ambient',
-    defaultUnit: 'pouch',
+    defaultUnit: 'box',
     imageUrl: null,
     sku: 'BRK-MGS-002',
     companyName: 'CV Berkah Nabati',

@@ -12,11 +12,14 @@ import 'features/shell/main_shell.dart';
 import 'features/seller/screens/seller_dashboard_screen.dart';
 import 'features/seller/screens/upload_stock_flow_screen.dart';
 import 'features/home/screens/product_detail_screen.dart';
+import 'data/repositories/app_prefs_repository.dart';
 import 'features/auth/screens/location_management_screen.dart';
+import 'features/sky_balance/sky_balance_screen.dart';
 
 Future<void> main() async {
   // 1. Pastikan binding Flutter terinisialisasi
   WidgetsFlutterBinding.ensureInitialized();
+  await AppPrefsRepository.instance.init();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -65,6 +68,7 @@ class RecoveraApp extends StatelessWidget {
         '/seller/upload': (_) => const UploadStockFlowScreen(),
         '/product/detail': (_) => const ProductDetailScreen(),
         '/profile/location': (_) => const LocationManagementScreen(),
+        '/sky-balance': (_) => const SkyBalanceScreen(),
       },
     );
   }

@@ -106,4 +106,5 @@ class DatabaseConstants {
   static const String prefBiometricEnabled = 'biometric_enabled';
   static const String prefSelectedTimezone = 'selected_timezone';
   static const String prefLastCurrencyRates = 'last_currency_rates';
+  static const String prefSelectedCurrency = 'selected_currency';
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../data/repositories/app_prefs_repository.dart';
 import '../models/product_model.dart';
 import '../screens/product_detail_screen.dart';
 
@@ -51,96 +52,88 @@ class ProductCard extends StatelessWidget {
           ],
         ),
         padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Gambar / ikon produk ──────────────────────────────────
-            _ListingImage(listing: listing),
-            const SizedBox(width: 12),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Gambar / ikon produk (dengan pita diskon) ─────────────
+              _ListingImage(listing: listing),
+              const SizedBox(width: 12),
 
-            // ── Detail ───────────────────────────────────────────────
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // company_name + expiry badge
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
+              // ── Detail di samping foto: Nama, Brand, Lokasi, Harga ────
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
                           listing.companyName.toUpperCase(),
                           style: GoogleFonts.inter(
-                            fontSize: 10,
+                            fontSize: 9,
                             fontWeight: FontWeight.w700,
                             color: const Color(0xFF94A3B8),
                             letterSpacing: 0.5,
                           ),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      _ExpiryBadge(
-                        days: listing.effectiveDaysToExpiry,
-                        isUrgent: isUrgent,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-
-                  // products.name
-                  Text(
-                    listing.productName,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0F172A),
-                      height: 1.3,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  // brand (jika ada)
-                  if (listing.brand != null) ...[
-                    const SizedBox(height: 1),
-                    Text(
-                      listing.brand!,
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        color: const Color(0xFF94A3B8),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 3),
-
-                  // Proximity match score badge (jika ada)
-                  if (listing.matchScore != null) ...[
-                    Container(
-                      key: Key('match_score_badge_${listing.id}'),
-                      margin: const EdgeInsets.only(bottom: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFECFDF5),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFA7F3D0)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.radar_rounded, size: 9, color: Color(0xFF059669)),
-                          const SizedBox(width: 3),
+                        const SizedBox(height: 2),
+                        Text(
+                          listing.productName,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F172A),
+                            height: 1.25,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (listing.brand != null) ...[
+                          const SizedBox(height: 1),
                           Text(
-                            listing.matchScorePercentage,
+                            listing.brand!,
                             style: GoogleFonts.inter(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF047857),
+                              fontSize: 10,
+                              color: const Color(0xFF94A3B8),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        if (listing.matchScore != null) ...[
+                          const SizedBox(height: 3),
+                          Container(
+                            key: Key('match_score_badge_${listing.id}'),
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFECFDF5),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFFA7F3D0)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.radar_rounded, size: 9, color: Color(0xFF059669)),
+                                const SizedBox(width: 2),
+                                Text(
+                                  listing.matchScorePercentage,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF047857),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                  ],
 
                   // Proximity distance + city + MOQ (qty + default_unit)
                   Row(
@@ -177,24 +170,16 @@ class ProductCard extends StatelessWidget {
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '•',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          color: const Color(0xFF94A3B8),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Stok: ${listing.qty} ${listing.defaultUnit}',
+                        const SizedBox(width: 3),
+                        Text(
+                          listing.distanceKm != null
+                              ? '${listing.distanceKm!.toStringAsFixed(1)} km'
+                              : listing.city,
                           style: GoogleFonts.inter(
                             fontSize: 10,
-                            color: const Color(0xFF64748B),
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF0284C7),
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -270,15 +255,88 @@ class ProductCard extends StatelessWidget {
                               color: AppColors.white,
                               size: 16,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                      ],
+                    ),
+
+                    // Harga (tidak membuat baris baru terpisah di bawah foto)
+                    ListenableBuilder(
+                      listenable: AppPrefsRepository.instance,
+                      builder: (context, _) {
+                        final curPrice = AppPrefsRepository.instance.formatPrice(listing.currentPrice);
+                        final norPrice = AppPrefsRepository.instance.formatPrice(listing.normalPrice);
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              curPrice,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              '/ ${listing.defaultUnit}',
+                              style: GoogleFonts.inter(
+                                fontSize: 9.5,
+                                color: const Color(0xFF64748B),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              norPrice,
+                              style: GoogleFonts.inter(
+                                fontSize: 9.5,
+                                color: const Color(0xFF94A3B8),
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // ── Kanan: Sisa Hari (Atas) & Tombol [->] (Bawah) ──────────
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _ExpiryBadge(
+                    days: listing.effectiveDaysToExpiry,
+                    isUrgent: isUrgent,
+                  ),
+                  Material(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      key: Key('btn_open_detail_${listing.id}'),
+                      onTap: () => _handleTap(context),
+                      borderRadius: BorderRadius.circular(10),
+                      child: const SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: Icon(
+                          Icons.arrow_forward_rounded,
+                          color: AppColors.white,
+                          size: 15,
+                        ),
                       ),
-                    ],
+                    ),
                   ),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -326,65 +384,29 @@ class _ListingImage extends StatelessWidget {
                 : _iconFallback(),
           ),
 
-          // Badge diskon
+          // Badge diskon berbentuk potongan pita (tidak bold)
           Positioned(
             top: 4,
-            left: 4,
-            child: Container(
-              key: Key('discount_badge_${listing.id}'),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFFDC2626),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '-${listing.effectiveDiscountPercent}%',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
+            left: 0,
+            child: ClipPath(
+              clipper: _RibbonClipper(),
+              child: Container(
+                key: Key('discount_badge_${listing.id}'),
+                padding: const EdgeInsets.fromLTRB(6, 2, 10, 2),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFDC2626),
+                ),
+                child: Text(
+                  '-${listing.effectiveDiscountPercent}%',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
           ),
-
-          // Badge Live Dutch Auction
-          if (listing.isLiveDutch)
-            Positioned(
-              bottom: 4,
-              left: 4,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0C4A6E).withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF38BDF8),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      'Dutch',
-                      style: GoogleFonts.inter(
-                        fontSize: 8,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFFBAE6FD),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
 
           // Badge storage_type (frozen / chilled)
           if (listing.storageType != 'ambient')
@@ -445,39 +467,41 @@ class _ExpiryBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor =
-        isUrgent ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB);
-    final textColor =
-        isUrgent ? const Color(0xFFDC2626) : const Color(0xFFB45309);
-    final borderColor =
-        isUrgent ? const Color(0xFFFECACA) : const Color(0xFFFDE68A);
+    // Langsung tulisan saja tanpa background dan rounded border, warna sesuai urgensi
+    final Color textColor;
+    if (isUrgent || days <= 3) {
+      textColor = const Color(0xFFDC2626); // Merah
+    } else if (days <= 7) {
+      textColor = const Color(0xFFD97706); // Amber / Kuning Oranye
+    } else {
+      textColor = const Color(0xFF16A34A); // Hijau
+    }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isUrgent ? Icons.warning_rounded : Icons.timer_outlined,
-            size: 10,
-            color: textColor,
-          ),
-          const SizedBox(width: 3),
-          Text(
-            'Sisa $days Hari',
-            style: GoogleFonts.inter(
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              color: textColor,
-            ),
-          ),
-        ],
+    return Text(
+      'Sisa $days Hari',
+      style: GoogleFonts.inter(
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+        color: textColor,
       ),
     );
   }
 }
+
+/// Custom Clipper untuk potongan pita diskon (ujung kanan berlekuk ribbon tail)
+class _RibbonClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(size.width, 0);
+    path.lineTo(size.width - 5, size.height / 2); // lekuk potongan pita
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
