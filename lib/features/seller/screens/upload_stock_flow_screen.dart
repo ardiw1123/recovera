@@ -62,20 +62,6 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
   String? _invoiceImagePath;
   bool _isScanningOcr = false;
 
-  // Alias kompatibilitas
-  bool get _isPickingImage => _isPickingProductImage;
-  set _isPickingImage(bool value) => _isPickingProductImage = value;
-  String? get _imageError => _productImageError;
-  set _imageError(String? value) => _productImageError = value;
-  String get _imageUrl => _productImageUrl;
-  set _imageUrl(String value) => _productImageUrl = value;
-  String? get _imagePath => _productImagePath;
-  set _imagePath(String? value) => _productImagePath = value;
-  Uint8List? get _imageBytes => _productImageBytes;
-  set _imageBytes(Uint8List? value) => _productImageBytes = value;
-  XFile? get _pickedFile => _productPickedFile;
-  set _pickedFile(XFile? value) => _productPickedFile = value;
-
   int _currentStep = 1; // 1: Produk, 2: Validasi, 3: Harga, 4: Review
 
   // ── Step 1 Form Controllers ──────────────────────────────────────────────
@@ -390,7 +376,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         (_invoiceImagePath != null && _invoiceImagePath!.isNotEmpty) ||
         (_invoiceImageBytes != null && _invoiceImageBytes!.isNotEmpty);
 
-    if (!hasInvoice && widget.initialInvoiceUrl != null && widget.initialInvoiceUrl!.isNotEmpty) {
+    if (widget.onPickInvoiceImage != null) {
+      hasInvoice = false;
+    } else if (!hasInvoice && widget.initialInvoiceUrl != null && widget.initialInvoiceUrl!.isNotEmpty) {
       _invoiceImagePath = widget.initialInvoiceUrl;
       hasInvoice = true;
     } else if (!hasInvoice && widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty) {
@@ -450,6 +438,34 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         filename: _invoicePickedFile?.name,
       );
 
+      final isRejected = res['rejected'] == true;
+      if (isRejected) {
+        final reason = (res['rejection_reason'] as String?)?.trim().isNotEmpty == true
+            ? (res['rejection_reason'] as String).trim()
+            : 'Maaf, gambar yang Anda kirimkan terdeteksi bukan faktur atau produk pangan. Silakan upload ulang gambar faktur pembelian produk Anda.';
+
+        // Reset foto faktur agar user bisa langsung upload ulang gambar lain
+        setState(() {
+          _invoicePickedFile = null;
+          _invoiceImageBytes = null;
+          _invoiceImagePath = null;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              key: const Key('ocr_rejection_snackbar'),
+              content: Text(reason),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      final isFallback = res['fallback_used'] == true;
       final parsedItems = res['parsed_items'] as List<dynamic>? ?? [];
       if (parsedItems.isNotEmpty) {
         final item = parsedItems.first as Map<String, dynamic>;
@@ -511,14 +527,30 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Berhasil memindai faktur. Formulir terisi otomatis oleh AI.'),
-              backgroundColor: Color(0xFF059669),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          if (isFallback) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                key: Key('ocr_fallback_snackbar'),
+                content: Text(
+                  'Perhatian: Mode demo/offline aktif. Data faktur diisi dengan contoh dan perlu disesuaikan secara manual.',
+                ),
+                backgroundColor: Color(0xFFD97706),
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 4),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                key: Key('ocr_success_snackbar'),
+                content: Text(
+                  'Berhasil memindai faktur. Formulir terisi otomatis oleh AI.',
+                ),
+                backgroundColor: Color(0xFF059669),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
         }
       } else {
         if (mounted) {
@@ -551,9 +583,6 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       }
     }
   }
-
-  /// Alias kompatibilitas
-  Future<void> _scanInvoiceWithAi() => _pickInvoiceAndScanOcr();
 
   /// Langkah 2 -> Lanjut ke Rekomendasi Harga
   Future<void> _proceedToPricing() async {
@@ -1116,14 +1145,14 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       } else {
         if (!mounted) return;
         setState(() {
-          _isPickingImage = false;
+          _isPickingProductImage = false;
         });
       }
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _isPickingImage = false;
-        _imageError = 'Gagal mengakses galeri: $e';
+        _isPickingProductImage = false;
+        _productImageError = 'Gagal mengakses galeri: $e';
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1359,10 +1388,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 color: const Color(0xFF64748B),
               ),
             ),
-            if (_imageError != null) ...[
+            if (_productImageError != null) ...[
               const SizedBox(height: 6),
               Text(
-                _imageError!,
+                _productImageError!,
                 style: GoogleFonts.inter(
                   fontSize: 11,
                   color: AppColors.error,
@@ -1461,8 +1490,6 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       ),
     );
   }
-
-  Widget _buildOcrScanButton() => _buildOcrInsideProductInfoCard();
 
   Widget _buildSelectedImageWidget() {
     if (_productImageBytes != null) {

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/seller_dashboard_model.dart';
 import '../repositories/seller_repository.dart';
+import 'esg_certificate_list_screen.dart';
 import 'upload_stock_flow_screen.dart';
 import '../../transactions/screens/seller_order_screen.dart';
 
@@ -196,6 +197,11 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
 
           // 5d. Card Aktivitas Terbaru
           _buildRecentActivitiesCard(data.recentActivities),
+
+          const SizedBox(height: 24),
+
+          // 5e. Card Sertifikat ESG
+          _buildEsgCertificateCard(data),
 
           const SizedBox(height: 24),
         ],
@@ -469,6 +475,110 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEsgCertificateCard(SellerDashboardData data) {
+    final count = data.esgCertificateCount;
+    final carbon = data.totalCarbonSaved;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const EsgCertificateListScreen(),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.eco,
+                    color: Colors.green.shade700,
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Sertifikat ESG',
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.darkNavy,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade100,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              'BOT Chain',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        count > 0
+                            ? '$count sertifikat diterbitkan (${carbon.toStringAsFixed(1)} kg CO2e)'
+                            : 'Pencatatan donasi pangan surplus & jejak karbon',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppColors.slateText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: Colors.grey.shade400,
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

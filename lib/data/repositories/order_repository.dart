@@ -1,3 +1,4 @@
+import '../../core/services/network_connectivity_service.dart';
 import '../models/cached_order_model.dart';
 import '../services/local_database_service.dart';
 
@@ -51,6 +52,12 @@ class OrderRepository {
     String? status,
   }) async {
     final client = remoteClient;
+    final isOnline = NetworkConnectivityService.instance.isOnline;
+
+    if (!isOnline) {
+      return await _localDb.getOrders(buyerId: buyerId, status: status);
+    }
+
     if (client != null && forceRefresh) {
       try {
         final remoteOrders = await client.fetchRemoteOrders();

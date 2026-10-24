@@ -181,6 +181,11 @@ async def get_seller_dashboard(db: DbSessionDep, seller_user: RequireSellerDep) 
             "timestamp": activity.created_at.isoformat() if activity.created_at else "",
         })
 
+    from app.models.donation import Donation
+    esg_donations = db.query(Donation).join(Listing).filter(Listing.seller_id == seller.id).all()
+    esg_count = len(esg_donations)
+    total_carbon = sum(float(d.carbon_saved_kg) for d in esg_donations)
+
     data = {
         "company_name": seller.company_name,
         "active_listings_count": active_listings_count,
@@ -189,6 +194,8 @@ async def get_seller_dashboard(db: DbSessionDep, seller_user: RequireSellerDep) 
         "prev_month_orders_count": prev_month_orders_count,
         "near_expiry_listings": near_expiry_listings,
         "recent_activities": recent_activities_final,
+        "esg_certificate_count": esg_count,
+        "total_carbon_saved": round(total_carbon, 2),
     }
 
     return wrap_success({"data": data})

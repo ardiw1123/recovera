@@ -5,6 +5,7 @@ import '../../../core/sensors/shake_detector.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/services/network_connectivity_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -12,7 +13,6 @@ import '../../../data/repositories/listing_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../models/product_model.dart';
 import '../widgets/product_card.dart';
-import '../widgets/filter_bottom_sheet.dart';
 import '../../auth/screens/location_management_screen.dart';
 import '../../transactions/screens/buyer_transaction_screen.dart';
 
@@ -109,6 +109,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _shakeDetector.startListening();
     _allListings = List<Listing>.from(dummyListings);
     AuthRepository.instance.addListener(_onAuthProfileChanged);
+    NetworkConnectivityService.instance.addListener(_onConnectivityChanged);
     final client = ApiClient();
     _listingRepository = widget.repository ??
         ListingRepository(remoteClient: ListingApiService(client: client));
@@ -161,8 +162,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _shakeDetector.dispose();
     AuthRepository.instance.removeListener(_onAuthProfileChanged);
+    NetworkConnectivityService.instance.removeListener(_onConnectivityChanged);
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _onConnectivityChanged() {
+    if (!mounted) return;
+    final isOnline = NetworkConnectivityService.instance.isOnline;
+    if (isOnline) {
+      _fetchListings(forceRefresh: true);
+      _listingRepository.syncPendingDrafts().catchError(
+            (_) => const DraftSyncResult(totalCount: 0, syncedCount: 0, failedCount: 0, errors: []),
+          );
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Terhubung ke Internet: Memuat layanan lelang live...'),
+          backgroundColor: AppColors.success,
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      _fetchListings(forceRefresh: false);
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mode Offline: Menampilkan data cache SQLite lokal.'),
+          backgroundColor: AppColors.secondary,
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   /// Mengambil daftar listing terdekat dari backend REST API via FastAPI.

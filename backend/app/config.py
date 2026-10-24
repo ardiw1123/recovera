@@ -32,7 +32,11 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     cloudinary_url: str = ""
     fcm_server_key: str = ""
-    web3_rpc_url: str = "https://rpc.bot-chain.testnet"
+    bot_chain_rpc_url: str = "https://rpc.bohr.life"
+    bot_chain_chain_id: int = 968
+    bot_chain_private_key: str = ""
+    bot_chain_contract_address: str = "0x485D903159eac9D30E9EadC7abdd4Af18dc5c859"
+    bot_chain_explorer_url: str = "https://scan.bohr.life/"
 
     # Feature flag: aktifkan ML (default True: load AI models on boot with rule-based fallback)
     use_ml_model: bool = True

@@ -1,3 +1,4 @@
+import '../../core/services/network_connectivity_service.dart';
 import '../database/database_constants.dart';
 import '../models/cached_listing_model.dart';
 import '../models/draft_listing_model.dart';
@@ -87,6 +88,35 @@ class ListingRepository {
     double? radiusKm,
   }) async {
     final client = remoteClient;
+    final isOnline = NetworkConnectivityService.instance.isOnline;
+
+    // Jika perangkat offline (internet dimatikan), langsung ambil dari local database SQLite
+    if (!isOnline) {
+      try {
+        final cached = await _localDb.getListings(
+          search: search,
+          category: category,
+          maxPrice: maxPrice,
+          minDays: minDays,
+          sort: sort,
+        );
+        if (cached.isNotEmpty) {
+          return ListingResult(listings: cached, isFromCache: true);
+        }
+      } catch (_) {}
+
+      return ListingResult(
+        listings: getDemoListings(
+          search: search,
+          category: category,
+          radiusKm: radiusKm,
+          minDays: minDays,
+          sort: sort,
+        ),
+        isFromCache: true,
+      );
+    }
+
     // If remote client is configured and refresh requested, try fetching from network
     if (client != null && forceRefresh) {
       try {

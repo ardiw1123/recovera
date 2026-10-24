@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/services/network_connectivity_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -43,13 +44,22 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? SellerRepository.instance;
+    NetworkConnectivityService.instance.addListener(_onConnectivityChanged);
     _loadData();
   }
 
   @override
   void dispose() {
+    NetworkConnectivityService.instance.removeListener(_onConnectivityChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onConnectivityChanged() {
+    if (!mounted) return;
+    if (NetworkConnectivityService.instance.isOnline) {
+      _loadData();
+    }
   }
 
   Future<void> _loadData() async {

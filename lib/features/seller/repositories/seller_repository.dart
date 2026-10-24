@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../../../core/network/api_client.dart';
+import '../models/esg_certificate_model.dart';
 import '../models/seller_dashboard_model.dart';
 import '../models/seller_inventory_model.dart';
 import '../services/seller_api_service.dart';
@@ -150,5 +151,20 @@ class SellerRepository extends ChangeNotifier {
     await apiService.deleteDraft(listingId);
     _inventory.removeWhere((item) => item.id == listingId);
     notifyListeners();
+  }
+
+  /// Mengambil daftar sertifikat donasi / ESG milik seller
+  Future<List<EsgCertificateListItem>> fetchMyCertificates() async {
+    return await apiService.fetchMyCertificates();
+  }
+
+  /// Mengambil detail satu sertifikat donasi / ESG
+  Future<EsgCertificateDetail> fetchCertificateDetail(int donationId) async {
+    return await apiService.fetchCertificateDetail(donationId);
+  }
+
+  /// Memverifikasi hash transaksi secara on-chain
+  Future<BlockchainVerificationResult> verifyBlockchain(String txHash) async {
+    return await apiService.verifyBlockchain(txHash);
   }
 }

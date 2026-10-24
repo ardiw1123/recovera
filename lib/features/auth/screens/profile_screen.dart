@@ -307,20 +307,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final profile = AuthRepository.instance.currentUserProfile;
         final tokens = AuthRepository.instance.currentTokens;
 
-        final company = (profile?.companyName != null && profile!.companyName!.isNotEmpty ? profile.companyName : null) ??
-            (profile?.name != null && profile!.name.isNotEmpty ? profile.name : null) ??
-            (tokens?.name != null && tokens!.name!.isNotEmpty ? tokens.name : null) ??
+        final company =
+            (profile?.companyName != null && profile!.companyName!.isNotEmpty
+                ? profile.companyName
+                : null) ??
+            (profile?.name != null && profile!.name.isNotEmpty
+                ? profile.name
+                : null) ??
+            (tokens?.name != null && tokens!.name!.isNotEmpty
+                ? tokens.name
+                : null) ??
             _defaultCompany;
         final role = profile?.role != null
             ? (profile!.role == 'seller'
                   ? 'Distributor (Seller)'
                   : 'UMKM Kuliner (Buyer)')
             : (tokens?.role == 'seller'
-                ? 'Distributor (Seller)'
-                : _defaultRole);
+                  ? 'Distributor (Seller)'
+                  : _defaultRole);
         final email = profile?.email != null && profile!.email.isNotEmpty
             ? profile.email
-            : (tokens?.name != null && tokens!.name!.contains('@') ? tokens.name : null);
+            : (tokens?.name != null && tokens!.name!.contains('@')
+                  ? tokens.name
+                  : null);
         final city = profile?.city ?? _defaultCity;
         final headerHeight = (MediaQuery.sizeOf(context).height * 0.18)
             .clamp(132.0, 156.0)
@@ -1253,9 +1262,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         subtitleColor: AppColors.primary,
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const TransactionHistoryScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const TransactionHistoryScreen()),
           );
         },
       ),
@@ -1317,7 +1324,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
             height: 28,
             child: Switch.adaptive(
               value: _isBiometricEnabled,
-              activeColor: const Color(0xFF059669),
+              activeTrackColor: const Color(0xFF059669),
               onChanged: _onToggleBiometric,
             ),
           ),

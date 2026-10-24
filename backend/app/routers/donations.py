@@ -1,12 +1,43 @@
 from typing import Annotated
 from fastapi import APIRouter, Path, status
 
-from app.core.dependencies import DbSessionDep
-from app.schemas.donation import CertificateResponse
+from app.core.dependencies import DbSessionDep, RequireSellerDep
+from app.core.exceptions import AppException
+from app.models.user import Seller
+from app.schemas.donation import (
+    CertificateResponse,
+    SellerDonationsResponse,
+)
 from app.schemas.envelope import ResponseEnvelope, wrap_success
-from app.services.donation_service import get_donation_certificate
+from app.services.donation_service import (
+    get_donation_certificate,
+    get_seller_donations,
+)
 
 router = APIRouter(prefix="/donations", tags=["donations"])
+
+
+@router.get(
+    "/my",
+    status_code=status.HTTP_200_OK,
+    response_model=ResponseEnvelope[SellerDonationsResponse],
+)
+async def get_my_donations(
+    db: DbSessionDep,
+    current_user: RequireSellerDep,
+) -> dict:
+    seller = current_user.seller
+    if not seller:
+        seller = db.query(Seller).filter(Seller.user_id == current_user.id).first()
+    if not seller:
+        raise AppException(
+            code="SELLER_PROFILE_NOT_FOUND",
+            message="Profil seller tidak ditemukan",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    donations_data = get_seller_donations(db, seller.id)
+    return wrap_success(donations_data.model_dump())
 
 
 @router.get(
@@ -46,7 +77,6 @@ async def divert_single_listing(
     listing_id: Annotated[int, Path(ge=1)],
 ) -> dict:
     from app.models.listing import Listing
-    from app.core.exceptions import AppException
     from app.services.donation_service import divert_listing_to_donation
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
     if not listing:
@@ -58,4 +88,3 @@ async def divert_single_listing(
         "donation_id": donation.id,
         "certificate_no": donation.certificate_no,
     })
-

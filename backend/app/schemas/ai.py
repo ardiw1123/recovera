@@ -15,8 +15,10 @@ class InvoiceParsedItem(BaseModel):
 class InvoiceOcrResponse(BaseModel):
     invoice_number: str | None = None
     supplier_name: str | None = None
-    parsed_items: list[InvoiceParsedItem]
+    parsed_items: list[InvoiceParsedItem] = Field(default_factory=list)
     fallback_used: bool = False
+    rejected: bool = False
+    rejection_reason: str | None = None
 
 
 class PriceAdviceRequest(BaseModel):
