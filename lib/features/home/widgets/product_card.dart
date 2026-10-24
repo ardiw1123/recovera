@@ -170,96 +170,10 @@ class ProductCard extends StatelessWidget {
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(width: 3),
-                        Text(
-                          listing.distanceKm != null
-                              ? '${listing.distanceKm!.toStringAsFixed(1)} km'
-                              : listing.city,
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF0284C7),
-                          ),
-                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-
-                  Container(height: 1, color: const Color(0xFFF1F5F9)),
-                  const SizedBox(height: 8),
-
-                  // normal_price (coret) + start_price + tombol Beli
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Rp ${_fmt(listing.normalPrice)}',
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                color: const Color(0xFF94A3B8),
-                                decoration: TextDecoration.lineThrough,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.baseline,
-                                textBaseline: TextBaseline.alphabetic,
-                                children: [
-                                  Text(
-                                    'Rp ${_fmt(listing.currentPrice)}',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '/ ${listing.defaultUnit}',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 10,
-                                      color: const Color(0xFF64748B),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Tombol Lihat Detail / Beli
-                      Material(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          key: Key('btn_open_detail_${listing.id}'),
-                          onTap: () => _handleTap(context),
-                          borderRadius: BorderRadius.circular(12),
-                          child: const SizedBox(
-                            width: 32,
-                            height: 32,
-                            child: Icon(
-                              Icons.arrow_forward_rounded,
-                              color: AppColors.white,
-                              size: 16,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 4),
 
                     // Harga (tidak membuat baris baru terpisah di bawah foto)
                     ListenableBuilder(

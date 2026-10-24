@@ -23,11 +23,13 @@ import '../../home/widgets/empty_state_view.dart';
 ///  • Result count + sort pill
 ///  • Product card list / empty state
 class StokScreen extends StatefulWidget {
-  const StokScreen({super.key, this.listingRepository});
+  const StokScreen({
+    super.key,
+    this.listingRepository,
+    this.sensorStream,
+  });
 
   final ListingRepository? listingRepository;
-  const StokScreen({super.key, this.sensorStream});
-
   final Stream<AccelerometerEvent>? sensorStream;
 
   @override

@@ -508,9 +508,6 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
                           item.productName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          AppPrefsRepository.instance.formatPrice(
-                            item.currentPrice > 0 ? item.currentPrice : item.startPrice,
-                          ),
                           style: GoogleFonts.inter(
                             fontSize: 17,
                             fontWeight: FontWeight.w800,

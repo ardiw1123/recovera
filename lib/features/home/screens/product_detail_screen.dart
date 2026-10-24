@@ -986,63 +986,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         top: false,
         child: Stack(
           children: [
-            // ── Hero Image & Badges ──────────────────────────────────────────
-            _buildHeroImage(listing),
-
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Shelf Life Warning Badge ───────────────────────────────
-                  _buildShelfLifeBanner(listing, isUrgent),
-                  const SizedBox(height: 16),
-
-                  // ── Product Title & Brand ─────────────────────────────────
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: listing.category.color.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          listing.category.label,
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: listing.category.color,
-                          ),
-                        ),
-                      ),
-                      if (listing.brand != null) ...[
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            '•  ${listing.brand!}',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xFF64748B),
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    listing.productName,
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0F172A),
-                      height: 1.3,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
             CustomScrollView(
               slivers: [
                 // ── App Header / Sub-Header Control Bar ──────────────────────────
@@ -1486,62 +1429,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Flexible(
-                child: Text(
-                  'HARGA LIKUIDASI SAAT INI',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF94A3B8),
-                    letterSpacing: 0.5,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Hemat ${listing.effectiveDiscountPercent}%',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFDC2626),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  'Rp ${_formatPrice(listing.currentPrice)}',
-                  style: GoogleFonts.inter(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '/ ${listing.defaultUnit}',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Rp ${_formatPrice(listing.normalPrice)}',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: const Color(0xFF94A3B8),
-                    decoration: TextDecoration.lineThrough,
-                  ),
               Text(
                 'Mekanisme Dutch Auction',
                 style: GoogleFonts.inter(
@@ -1657,8 +1544,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   fontWeight: FontWeight.w600,
                   color: AppColors.primary,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           ClipRRect(
@@ -1904,10 +1791,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     color: const Color(0xFF16A34A),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
           const SizedBox(height: 6),
 
           _buildSimpleSpecRow(
@@ -2033,20 +1919,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.verified_user_rounded, color: Color(0xFF10B981), size: 18),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  'Distributor Terverifikasi',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF10B981),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: const Color(0xFF64748B),
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -2111,51 +1991,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               color: const Color(0xFF0F172A),
             ),
           ),
-          const SizedBox(height: 12),
-          _specRow('Kategori', listing.category.label),
-          _specRow('Kondisi Simpan', listing.storageType),
-          _specRow('Satuan Unit', listing.defaultUnit),
-          _specRow('Nomor Batch', listing.batchNumber),
-          _specRow('Tanggal Kedaluwarsa', _formatDate(listing.expiryDate)),
-          _specRow('Mulai Lelang', _formatDate(listing.auctionStartAt)),
-          _specRow('Status Listing', listing.status.toUpperCase(), isLast: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _specRow(String label, String value, {bool isLast = false}) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                label,
-                style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B)),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  value,
-                  textAlign: TextAlign.end,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF1E293B),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (!isLast) Container(height: 1, color: const Color(0xFFF1F5F9)),
-      ],
-    );
-  }
+          const SizedBox(height: 8),
 
           // Kartu Stempel / Cap Verifikasi ESG
           Container(
