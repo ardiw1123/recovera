@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai.engine import AIEngine
 from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.database import init_db
@@ -29,6 +31,10 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # Gagal muat model -> otomatis rule-based; API tidak pernah crash saat startup
+    app.state.ai = await run_in_threadpool(
+        AIEngine, use_ml=settings.use_ml_model
+    )
     yield
 
 
@@ -66,6 +72,32 @@ async def health_check() -> dict:
         "app": settings.app_name,
         "environment": settings.environment,
     })
+
+
+@app.get(
+    "/v1/models",
+    tags=["ai"],
+)
+async def list_ai_models() -> dict:
+    """Compatibility endpoint for AI model discovery tools probing port 8000."""
+    ai_engine = getattr(app.state, "ai", None)
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": "pricing_model",
+                "object": "model",
+                "owned_by": "recovera",
+                "status": "active" if ai_engine and ai_engine.pricing else "heuristic",
+            },
+            {
+                "id": "ranking_model",
+                "object": "model",
+                "owned_by": "recovera",
+                "status": "active" if ai_engine and ai_engine.ranking else "heuristic",
+            },
+        ],
+    }
 
 
 # Include route modules

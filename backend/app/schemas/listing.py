@@ -40,6 +40,7 @@ class ListingResponse(BaseModel):
     match_score: float | None = None
     discount_pct: float | None = None
     days_to_expiry: int | None = None
+    matching_summary: object | None = None
 
 
 class ListingDetailResponse(ListingResponse):

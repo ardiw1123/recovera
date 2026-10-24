@@ -9,7 +9,7 @@ import 'features/auth/screens/welcome_screen.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/register_screen.dart';
 import 'features/shell/main_shell.dart';
-import 'features/seller/screens/seller_inventory_screen.dart';
+import 'features/seller/screens/seller_dashboard_screen.dart';
 import 'features/seller/screens/upload_stock_flow_screen.dart';
 import 'features/home/screens/product_detail_screen.dart';
 import 'features/auth/screens/location_management_screen.dart';
@@ -61,7 +61,7 @@ class RecoveraApp extends StatelessWidget {
         '/login': (_) => const LoginScreen(),
         '/register': (_) => const RegisterScreen(),
         '/home': (_) => const MainShell(),
-        '/seller/inventory': (_) => const SellerInventoryScreen(),
+        '/seller/dashboard': (_) => const SellerDashboardScreen(),
         '/seller/upload': (_) => const UploadStockFlowScreen(),
         '/product/detail': (_) => const ProductDetailScreen(),
         '/profile/location': (_) => const LocationManagementScreen(),

@@ -20,14 +20,32 @@ class InvoiceOcrResponse(BaseModel):
 
 
 class PriceAdviceRequest(BaseModel):
-    normal_price: float = Field(gt=0)
-    expiry_date: str
-    category: str | None = None
-    qty: int = Field(default=1, gt=0)
+    normal_price: float = Field(gt=0, description="Harga normal produk", examples=[50000.0])
+    expiry_date: str = Field(description="Tanggal kedaluwarsa YYYY-MM-DD", examples=["2026-11-20"])
+    category: str | None = Field(default="Dairy", description="Kategori: Dairy | Frozen | Oil | Flour & Grain | Canned | Beverage", examples=["Dairy"])
+    qty: int = Field(default=1, gt=0, description="Kuantitas stok", examples=[50])
+    storage_type: str = Field(default="chilled", description="Tipe penyimpanan: ambient | chilled | frozen", examples=["chilled"])
+    min_price: float = Field(default=0.0, ge=0.0, description="Harga minimum batas bawah seller (0 = auto 30%)", examples=[25000.0])
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "normal_price": 50000.0,
+                "expiry_date": "2026-11-20",
+                "category": "Dairy",
+                "qty": 50,
+                "storage_type": "chilled",
+                "min_price": 25000.0
+            }
+        }
+    }
 
 
 class PriceAdviceResponse(BaseModel):
     suggested_price: float
     discount_pct: float
-    rationale: str
+    min_price_guardrail: float | None = None
     next_drop_at: str
+    rationale: str
+    source: str = "rule"                  # "ml" | "rule"
+    model_version: str | None = None      # versi model jika source="ml"

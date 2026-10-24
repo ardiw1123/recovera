@@ -5,11 +5,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/listing_repository.dart';
 import '../home/screens/home_screen.dart';
-import '../seller/screens/seller_inventory_screen.dart';
+import '../seller/screens/seller_dashboard_screen.dart';
 import '../seller/repositories/seller_repository.dart';
 import '../seller/screens/upload_stock_flow_screen.dart';
 import '../auth/screens/profile_screen.dart';
 import '../feedback/screens/saran_kesan_screen.dart';
+import '../seller/screens/seller_inventory_screen.dart';
 
 /// PBI-05 & Seller Journey — Bottom Navigation Bar
 ///
@@ -55,7 +56,7 @@ class _MainShellState extends State<MainShell> {
         // • Buyer: Home (0), Profil (1), Saran (2) — Stok dihilangkan sepenuhnya
         final pages = isSeller
             ? <Widget>[
-                SellerInventoryScreen(repository: widget.sellerRepository),
+                SellerDashboardScreen(repository: widget.sellerRepository),
                 widget.stokPage ??
                     SellerInventoryScreen(repository: widget.sellerRepository),
                 widget.profilePage ?? const ProfileScreen(),
@@ -74,10 +75,7 @@ class _MainShellState extends State<MainShell> {
         final activeIndex = _currentIndex.clamp(0, pages.length - 1);
 
         return Scaffold(
-          body: IndexedStack(
-            index: activeIndex,
-            children: pages,
-          ),
+          body: IndexedStack(index: activeIndex, children: pages),
           bottomNavigationBar: Container(
             decoration: BoxDecoration(
               color: AppColors.white,

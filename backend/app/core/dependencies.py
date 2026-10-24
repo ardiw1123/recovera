@@ -3,11 +3,13 @@ from fastapi import Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.core.exceptions import AppException
 from app.core.security import decode_token
 from app.database import get_db
 from app.models.user import User
 
+settings = get_settings()
 security_bearer = HTTPBearer(auto_error=False)
 
 DbSessionDep = Annotated[Session, Depends(get_db)]

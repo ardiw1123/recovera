@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
+import '../models/seller_dashboard_model.dart';
 import '../models/seller_inventory_model.dart';
 
 /// Service API khusus untuk alur kerja penjual (Seller Inventory & Upload Journey).
@@ -9,6 +10,29 @@ class SellerApiService {
   SellerApiService({required this.client});
 
   final ApiClient client;
+
+  /// Mengambil data dashboard lengkap untuk halaman beranda seller.
+  /// Menghubungi endpoint GET /listings/seller/dashboard
+  Future<SellerDashboardData> fetchDashboard() async {
+    try {
+      final response = await client.get<Map<String, dynamic>>(
+        '/listings/seller/dashboard',
+      );
+
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error =
+            body?['error']?['message'] ?? 'Gagal memuat dashboard penjual';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+
+      final data = body['data'] as Map<String, dynamic>;
+      return SellerDashboardData.fromJson(data);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memuat dashboard penjual');
+    }
+  }
 
   /// Mengambil daftar inventaris produk lelang milik penjual yang sedang login.
   /// Menghubungi endpoint GET /listings/seller/inventory

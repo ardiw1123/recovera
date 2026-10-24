@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     fcm_server_key: str = ""
     web3_rpc_url: str = "https://rpc.bot-chain.testnet"
 
+    # Feature flag: aktifkan ML (default True: load AI models on boot with rule-based fallback)
+    use_ml_model: bool = True
+
     @model_validator(mode="after")
     def require_postgres_outside_local_development(self):
         if self.environment.lower() not in {"development", "test", "testing"} and self.database_url.startswith("sqlite"):
