@@ -19,6 +19,7 @@ import '../../feedback/screens/saran_kesan_screen.dart';
 import 'location_management_screen.dart';
 import 'login_screen.dart';
 import '../../sky_balance/sky_balance_screen.dart';
+import '../../transactions/screens/transaction_history_screen.dart';
 
 /// PBI-03 — Layar Profil & Keamanan Akun Recovera
 ///
@@ -1237,6 +1238,26 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         iconColor: AppColors.primary,
         label: 'Informasi Bisnis',
         onTap: () {},
+      ),
+      _ProfileMenuItem(
+        key: const Key('menu_transaction_history'),
+        icon: Icons.receipt_long_rounded,
+        iconBg: const Color(0xFFEFF6FF),
+        iconColor: AppColors.primary,
+        label: AuthRepository.instance.isSeller
+            ? 'Kelola Pesanan Masuk'
+            : 'Riwayat Transaksi',
+        subtitle: AuthRepository.instance.isSeller
+            ? 'Pantau penjualan lot & serah terima batch'
+            : 'Pantau status pesanan & pelacakan mandiri',
+        subtitleColor: AppColors.primary,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const TransactionHistoryScreen(),
+            ),
+          );
+        },
       ),
       _ProfileMenuItem(
         key: const Key('menu_location_and_delivery'),

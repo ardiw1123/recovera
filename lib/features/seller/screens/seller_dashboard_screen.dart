@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../models/seller_dashboard_model.dart';
 import '../repositories/seller_repository.dart';
 import 'upload_stock_flow_screen.dart';
+import '../../transactions/screens/seller_order_screen.dart';
 
 /// Halaman Beranda Seller — Dashboard Ringkasan
 /// menggantikan SellerInventoryScreen di tab Beranda.
@@ -138,42 +139,19 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _buildAppBar(),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        color: AppColors.primary,
-        child: _buildBody(),
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _loadData,
+          color: AppColors.primary,
+          child: _buildBody(),
+        ),
       ),
       floatingActionButton: _buildFab(),
     );
   }
 
-  AppBar _buildAppBar() {
-    return AppBar(
-      backgroundColor: AppColors.primary,
-      foregroundColor: AppColors.white,
-      elevation: 0,
-      centerTitle: true,
-      title: Text(
-      'Beranda',
-        style: GoogleFonts.inter(
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          color: AppColors.white,
-        ),
-      ),
-      actions: [
-        // Ikon notifikasi di kanan atas appbar
-        IconButton(
-          icon: const Icon(Icons.notifications_none_rounded, color: AppColors.white),
-          onPressed: () {
-            // TODO: Navigasi ke halaman notifikasi
-          },
-          tooltip: 'Notifikasi',
-        ),
-      ],
-    );
-  }
+
 
   Widget _buildBody() {
     // Jika belum ada data, tampilkan loading
@@ -265,6 +243,32 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
             ],
           ),
         ),
+        // Ikon Riwayat Pesanan Seller di kanan logo
+        GestureDetector(
+          key: const Key('btn_seller_orders'),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SellerOrderScreen(),
+              ),
+            );
+          },
+          child: Container(
+            width: 36,
+            height: 36,
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: const Icon(
+              Icons.receipt_long_rounded,
+              size: 20,
+              color: Color(0xFF03045E),
+            ),
+          ),
+        ),
         // Ikon notifikasi di kanan logo
         Container(
           width: 36,
@@ -326,8 +330,15 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
             value: currentMonthOrders.toString(),
             subtitle: calculatePercent(currentMonthOrders, prevMonthOrders),
             icon: Icons.receipt_long,
-            color: Color(0xFF10B981), // success green
+            color: const Color(0xFF10B981), // success green
             bgColor: Colors.white,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SellerOrderScreen(),
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -542,6 +553,7 @@ class _BentoCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final Color bgColor;
+  final VoidCallback? onTap;
 
   const _BentoCard({
     required this.label,
@@ -550,23 +562,27 @@ class _BentoCard extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.bgColor,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -619,8 +635,9 @@ class _BentoCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ─── Widget Item Stok Mendekati Expired ─────────────────────────────

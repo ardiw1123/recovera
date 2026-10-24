@@ -12,7 +12,9 @@ import '../../../data/repositories/listing_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../models/product_model.dart';
 import '../widgets/product_card.dart';
+import '../widgets/filter_bottom_sheet.dart';
 import '../../auth/screens/location_management_screen.dart';
+import '../../transactions/screens/buyer_transaction_screen.dart';
 
 /// Dashboard utama bagi pengguna Buyer (Pembeli).
 ///
@@ -180,9 +182,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         category: _selectedCategories.length == 1
             ? _selectedCategories.first.label
             : null,
-        radiusKm: (_selectedRadiusKm != null && _selectedRadiusKm != 15.0)
-            ? _selectedRadiusKm
-            : null,
+        radiusKm: _selectedRadiusKm,
         minDays: _selectedMaxExpiryDays != null ? 1 : null,
         search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
       );
@@ -208,9 +208,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ? _selectedCategories.first.label
                 : null,
             search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
-            radiusKm: (_selectedRadiusKm != null && _selectedRadiusKm != 15.0)
-                ? _selectedRadiusKm
-                : null,
+            radiusKm: _selectedRadiusKm,
             minDays: _selectedMaxExpiryDays,
             sort: _selectedSort,
           ).map((m) => Listing.fromCachedModel(m)).toList();
@@ -648,7 +646,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ),
                                   const SizedBox(width: 6),
                                   GestureDetector(
-                                    key: const Key('proximity_radius_badge_tap'),
+                                    key: const Key('btn_proximity_filter'),
                                     onTap: () => _showFilterBottomSheet(context),
                                     behavior: HitTestBehavior.opaque,
                                     child: Container(
@@ -710,6 +708,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                     ),
                     const SizedBox(width: 12),
+
+                    // ── Tombol Riwayat Transaksi (Kanan Atas) ──
+                    GestureDetector(
+                      key: const Key('btn_home_transactions'),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const BuyerTransactionScreen(),
+                          ),
+                        );
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.receipt_long_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
 
                     // ── Tombol Notifikasi (Kanan Atas) ──
                     GestureDetector(
@@ -855,7 +884,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            key: const Key('btn_home_filter_sheet'),
+            key: const Key('btn_home_filter'),
             onTap: () => _showFilterBottomSheet(context),
             behavior: HitTestBehavior.opaque,
             child: Container(
@@ -936,7 +965,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             if (_selectedRadiusKm != null && _selectedRadiusKm != 15.0) ...[
               _buildActiveFilterPill(
-                label: 'Radius < ${_selectedRadiusKm!.toInt()} km',
+                key: const Key('chip_active_radius'),
+                closeKey: const Key('btn_clear_radius_filter'),
+                label: 'Jarak: ${_selectedRadiusKm!.toInt()} km',
                 icon: Icons.radar_rounded,
                 onRemove: () {
                   setState(() => _selectedRadiusKm = 15.0);
@@ -998,11 +1029,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildActiveFilterPill({
+    Key? key,
+    Key? closeKey,
     required String label,
     required IconData icon,
     required VoidCallback onRemove,
   }) {
     return Container(
+      key: key,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
@@ -1024,6 +1058,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(width: 4),
           GestureDetector(
+            key: closeKey,
             onTap: onRemove,
             behavior: HitTestBehavior.opaque,
             child: const Icon(
@@ -1039,6 +1074,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // ── Filter Bottom Sheet (PBI-09) ──────────────────────────────────────────
   void _showFilterBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FilterBottomSheet(
+        selectedCategories: _selectedCategories,
+        selectedExpiryPreset: _selectedMaxExpiryDays != null
+            ? (_selectedMaxExpiryDays! <= 7
+                ? '1-7'
+                : (_selectedMaxExpiryDays! <= 14
+                    ? '8-14'
+                    : '15-30'))
+            : 'all',
+        selectedSort: _selectedSort,
+        selectedRadiusKm: _selectedRadiusKm ?? 15.0,
+        onApply: (cats, expiry, sort, radius) {
+          setState(() {
+            _selectedCategories.clear();
+            _selectedCategories.addAll(cats);
+            _selectedSort = sort;
+            _selectedRadiusKm = radius;
+            if (expiry == '1-7') {
+              _selectedMaxExpiryDays = 7;
+            } else if (expiry == '8-14') {
+              _selectedMaxExpiryDays = 14;
+            } else if (expiry == '15-30') {
+              _selectedMaxExpiryDays = 30;
+            } else {
+              _selectedMaxExpiryDays = null;
+            }
+          });
+          _fetchListings();
+        },
+      ),
+    );
+    return;
+    // ignore: dead_code
     final Set<FoodCategory> tempCategories =
         Set<FoodCategory>.from(_selectedCategories);
     double? tempRadiusKm = _selectedRadiusKm;

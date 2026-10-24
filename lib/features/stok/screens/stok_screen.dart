@@ -64,12 +64,12 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
       onShake: _onShakeToRefresh,
       sensorStream: widget.sensorStream,
     );
-    _shakeDetector.startListening();
-    final client = ApiClient();
-    _listingRepository = ListingRepository(
-      remoteClient: ListingApiService(client: client),
-    );
-    _fetchListings();
+    try {
+      _shakeDetector.startListening();
+    } catch (_) {}
+    if (AuthRepository.instance.isSeller) {
+      _fetchListings();
+    }
   }
 
   Future<void> _fetchListings({bool forceRefresh = true}) async {
