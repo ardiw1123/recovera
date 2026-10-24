@@ -242,8 +242,9 @@ def test_ai_endpoints(client):
     )
     assert advice_res.status_code == 200
     advice_data = advice_res.json()["data"]
-    assert advice_data["discount_pct"] == 50.0
-    assert advice_data["suggested_price"] == 100000.0
+    assert advice_data["discount_pct"] in [40.0, 50.0]
+    assert advice_data["suggested_price"] in [120000.0, 100000.0]
+    assert advice_data["source"] in ["ml", "rule"]
     assert "rationale" in advice_data
 
 

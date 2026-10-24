@@ -20,11 +20,6 @@ def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security_bearer)],
 ) -> User:
     if not credentials or not credentials.credentials:
-        if settings.debug:
-            mock_seller = db.query(User).filter(User.role == "seller").first()
-            if mock_seller:
-                return mock_seller
-            return User(id=1, email="seller@recovera.dev", role="seller", is_verified=True)
         raise AppException(
             code="UNAUTHORIZED",
             message="Missing or invalid authentication credentials",

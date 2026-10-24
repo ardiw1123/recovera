@@ -53,6 +53,7 @@ class LocalDatabaseService {
     double? maxPrice,
     int? minDays,
     String? sort,
+    double? radiusKm,
   }) async {
     try {
       final db = await _db;
@@ -122,6 +123,44 @@ class LocalDatabaseService {
     } catch (_) {
       return [];
     }
+
+    // Min days until expiry filter
+    if (minDays != null && minDays > 0) {
+      // Calculate target date: expiry_date >= today + minDays
+      final minDate = DateTime.now().add(Duration(days: minDays)).toIso8601String().substring(0, 10);
+      whereClauses.add('${DatabaseConstants.colListingExpiryDate} >= ?');
+      whereArgs.add(minDate);
+    }
+    if (radiusKm != null && radiusKm > 0) {
+      whereClauses.add('(${DatabaseConstants.colListingDistanceKm} IS NULL OR ${DatabaseConstants.colListingDistanceKm} <= ?)');
+      whereArgs.add(radiusKm);
+    }
+
+    // Sorting
+    String orderBy;
+    switch (sort) {
+      case 'cheapest':
+        orderBy = '${DatabaseConstants.colListingCurrentPrice} ASC';
+        break;
+      case 'expiring':
+        orderBy = '${DatabaseConstants.colListingExpiryDate} ASC';
+        break;
+      case 'nearest':
+        orderBy = '${DatabaseConstants.colListingDistanceKm} ASC, ${DatabaseConstants.colListingId} DESC';
+        break;
+      default:
+        orderBy = '${DatabaseConstants.colListingCreatedAt} DESC';
+        break;
+    }
+
+    final maps = await db.query(
+      DatabaseConstants.tableCachedListings,
+      where: whereClauses.join(' AND '),
+      whereArgs: whereArgs,
+      orderBy: orderBy,
+    );
+
+    return maps.map((m) => CachedListingModel.fromMap(m)).toList();
   }
 
   Future<CachedListingModel?> getListingById(int id) async {

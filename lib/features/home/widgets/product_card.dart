@@ -135,13 +135,40 @@ class ProductCard extends StatelessWidget {
                       ],
                     ),
 
-                    // Lokasi, Jarak & Stok (sejajar di samping foto)
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.near_me_outlined,
-                          size: 11,
-                          color: Color(0xFF0284C7),
+                  // Proximity distance + city + MOQ (qty + default_unit)
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.near_me_outlined,
+                        size: 11,
+                        color: Color(0xFF0284C7),
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        listing.distanceText,
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF0284C7),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '•',
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          color: const Color(0xFF94A3B8),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          listing.city,
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: const Color(0xFF64748B),
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(width: 3),
                         Text(
@@ -154,42 +181,79 @@ class ProductCard extends StatelessWidget {
                             color: const Color(0xFF0284C7),
                           ),
                         ),
-                        if (listing.distanceKm != null) ...[
-                          const SizedBox(width: 3),
-                          Text(
-                            '•',
-                            style: GoogleFonts.inter(
-                              fontSize: 9,
-                              color: const Color(0xFF94A3B8),
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              listing.city,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  Container(height: 1, color: const Color(0xFFF1F5F9)),
+                  const SizedBox(height: 8),
+
+                  // normal_price (coret) + start_price + tombol Beli
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Rp ${_fmt(listing.normalPrice)}',
                               style: GoogleFonts.inter(
                                 fontSize: 10,
-                                color: const Color(0xFF64748B),
+                                color: const Color(0xFF94A3B8),
+                                decoration: TextDecoration.lineThrough,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
-                        const SizedBox(width: 3),
-                        Text(
-                          '•',
-                          style: GoogleFonts.inter(
-                            fontSize: 9,
-                            color: const Color(0xFF94A3B8),
-                          ),
+                            const SizedBox(height: 1),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                textBaseline: TextBaseline.alphabetic,
+                                children: [
+                                  Text(
+                                    'Rp ${_fmt(listing.currentPrice)}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '/ ${listing.defaultUnit}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      color: const Color(0xFF64748B),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 3),
-                        Flexible(
-                          child: Text(
-                            'Stok: ${listing.qty} ${listing.defaultUnit}',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              color: const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Tombol Lihat Detail / Beli
+                      Material(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          key: Key('btn_open_detail_${listing.id}'),
+                          onTap: () => _handleTap(context),
+                          borderRadius: BorderRadius.circular(12),
+                          child: const SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: Icon(
+                              Icons.arrow_forward_rounded,
+                              color: AppColors.white,
+                              size: 16,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),

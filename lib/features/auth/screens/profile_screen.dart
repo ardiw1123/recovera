@@ -50,18 +50,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final profile = AuthRepository.instance.currentUserProfile;
         final tokens = AuthRepository.instance.currentTokens;
 
-        final company =
-            profile?.companyName ??
-            profile?.name ??
-            tokens?.name ??
+        final company = (profile?.companyName != null && profile!.companyName!.isNotEmpty ? profile.companyName : null) ??
+            (profile?.name != null && profile!.name.isNotEmpty ? profile.name : null) ??
+            (tokens?.name != null && tokens!.name!.isNotEmpty ? tokens.name : null) ??
             _defaultCompany;
         final role = profile?.role != null
             ? (profile!.role == 'seller'
                   ? 'Distributor (Seller)'
                   : 'UMKM Kuliner (Buyer)')
             : (tokens?.role == 'seller'
-                  ? 'Distributor (Seller)'
-                  : _defaultRole);
+                ? 'Distributor (Seller)'
+                : _defaultRole);
+        final email = profile?.email != null && profile!.email.isNotEmpty
+            ? profile.email
+            : (tokens?.name != null && tokens!.name!.contains('@') ? tokens.name : null);
         final city = profile?.city ?? _defaultCity;
 
         return Scaffold(

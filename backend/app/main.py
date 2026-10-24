@@ -75,6 +75,32 @@ async def health_check() -> dict:
     })
 
 
+@app.get(
+    "/v1/models",
+    tags=["ai"],
+)
+async def list_ai_models() -> dict:
+    """Compatibility endpoint for AI model discovery tools probing port 8000."""
+    ai_engine = getattr(app.state, "ai", None)
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": "pricing_model",
+                "object": "model",
+                "owned_by": "recovera",
+                "status": "active" if ai_engine and ai_engine.pricing else "heuristic",
+            },
+            {
+                "id": "ranking_model",
+                "object": "model",
+                "owned_by": "recovera",
+                "status": "active" if ai_engine and ai_engine.ranking else "heuristic",
+            },
+        ],
+    }
+
+
 # Include route modules
 app.include_router(auth.router)
 app.include_router(profile.router)

@@ -40,6 +40,7 @@ class ListingResponse(BaseModel):
     match_score: float | None = None
     discount_pct: float | None = None
     days_to_expiry: int | None = None
+    matching_summary: object | None = None
 
 
 class ListingDetailResponse(ListingResponse):
@@ -77,7 +78,7 @@ class SellerInventoryDraftCreate(BaseModel):
     category: str = Field(min_length=1, max_length=50)
     storage_type: str = Field(min_length=1, max_length=20)
     default_unit: str = Field(min_length=1, max_length=20)
-    image_url: HttpUrl
+    image_url: str = Field(min_length=1)
     brand: str | None = Field(default=None, max_length=100)
     barcode: str | None = Field(default=None, max_length=50)
     batch_number: str = Field(min_length=1, max_length=50)
@@ -92,7 +93,7 @@ class SellerInventoryDraftUpdate(BaseModel):
     category: str | None = Field(default=None, min_length=1, max_length=50)
     storage_type: str | None = Field(default=None, min_length=1, max_length=20)
     default_unit: str | None = Field(default=None, min_length=1, max_length=20)
-    image_url: HttpUrl | None = None
+    image_url: str | None = None
     brand: str | None = Field(default=None, max_length=100)
     batch_number: str | None = Field(default=None, min_length=1, max_length=50)
     qty: int | None = Field(default=None, gt=0)

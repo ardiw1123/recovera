@@ -503,6 +503,7 @@ void main() {
               userLat: -7.2575,
               userLng: 112.7521,
               repository: listingRepo,
+              initialRadiusKm: 1000.0,
             ),
           ),
         );

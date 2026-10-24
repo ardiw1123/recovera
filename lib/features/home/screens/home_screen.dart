@@ -12,6 +12,7 @@ import '../../../data/repositories/listing_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../models/product_model.dart';
 import '../widgets/product_card.dart';
+import '../widgets/filter_bottom_sheet.dart';
 import '../../auth/screens/location_management_screen.dart';
 
 /// Dashboard utama bagi pengguna Buyer (Pembeli).
@@ -24,12 +25,14 @@ class HomeScreen extends StatefulWidget {
     this.repository,
     this.userLat = -6.2088,
     this.userLng = 106.8456,
+    this.initialRadiusKm = 15.0,
     this.sensorStream,
   });
 
   final ListingRepository? repository;
   final double userLat;
   final double userLng;
+  final double initialRadiusKm;
   final Stream<AccelerometerEvent>? sensorStream;
 
   @override
@@ -96,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _selectedRadius = widget.initialRadiusKm;
     WidgetsBinding.instance.addObserver(this);
     _shakeDetector = ShakeDetector(
       onShake: _onShakeToRefresh,
@@ -182,6 +186,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             : null,
         minDays: _selectedMaxExpiryDays != null ? 1 : null,
         search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
+        radiusKm: _selectedRadius,
       );
 
       if (mounted) {
@@ -258,6 +263,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .toList();
     }
 
+    if (_selectedExpiryPreset == '1-7') {
+      items = items.where((p) => p.daysUntilExpiry <= 7).toList();
+    } else if (_selectedExpiryPreset == '8-14') {
+      items = items.where((p) => p.daysUntilExpiry <= 14).toList();
+    } else if (_selectedExpiryPreset == '15-30') {
+      items = items.where((p) => p.daysUntilExpiry <= 30).toList();
+    }
+
+    if (_selectedRadius > 0) {
+      items = items
+          .where((item) => item.distanceKm == null || item.distanceKm! <= _selectedRadius)
+          .toList();
     switch (_selectedSort) {
       case 'cheapest':
         items.sort((a, b) => a.startPrice.compareTo(b.startPrice));
@@ -282,6 +299,153 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     return items;
+  }
+
+
+  void _openFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FilterBottomSheet(
+        selectedCategories: _selectedCategory != null
+            ? {_selectedCategory!}
+            : _selectedCategories,
+        selectedExpiryPreset: _selectedExpiryPreset,
+        selectedSort: _selectedSort,
+        selectedRadiusKm: _selectedRadius,
+        onApply: (cats, expiry, sort, radius) {
+          setState(() {
+            _selectedCategories = cats;
+            _selectedCategory = cats.isNotEmpty ? cats.first : null;
+            _selectedExpiryPreset = expiry;
+            _selectedSort = sort;
+            _selectedRadius = radius;
+          });
+          _fetchListings();
+        },
+      ),
+    );
+  }
+
+  Widget _buildActiveFilterBanner() {
+    return Container(
+      key: const Key('home_active_filter_banner'),
+      margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F9FF),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFBAE6FD)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_alt_rounded, size: 14, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Text(
+            'Filter: ',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  if (_selectedRadius != 15.0)
+                    Container(
+                      key: const Key('chip_active_radius'),
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF93C5FD)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Jarak: ${_selectedRadius.toInt()} km',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF1E40AF),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          GestureDetector(
+                            key: const Key('btn_clear_radius_filter'),
+                            onTap: () {
+                              setState(() => _selectedRadius = 15.0);
+                              _fetchListings();
+                            },
+                            child: const Icon(Icons.close_rounded, size: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_selectedExpiryPreset != 'all')
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF93C5FD)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Exp: $_selectedExpiryPreset Hari',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF1E40AF),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() => _selectedExpiryPreset = 'all');
+                              _fetchListings();
+                            },
+                            child: const Icon(Icons.close_rounded, size: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          GestureDetector(
+            key: const Key('btn_reset_active_filters_banner'),
+            onTap: () {
+              setState(() {
+                _selectedRadius = 15.0;
+                _selectedExpiryPreset = 'all';
+                _selectedCategory = null;
+                _selectedCategories.clear();
+              });
+              _fetchListings();
+            },
+            child: Text(
+              'Reset',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFDC2626),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _getBuyerGreeting() {
@@ -375,6 +539,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // ── Fixed Wave Header (Sticky, tidak ikut ter-scroll) ───────────
           _buildFixedWaveHeader(),
 
+              // ── Search & Filter Bar ───────────────────────────────────────
+              SliverToBoxAdapter(
+                child: _buildSearchBar(),
+              ),
+
+              // ── Category Filter Chips ─────────────────────────────────────
+              SliverToBoxAdapter(
+                child: _buildCategoryChips(),
+              ),
+
+              // ── Active Filter Banner Indicator ────────────────────────────
+              if (_selectedRadius != 15.0 || _selectedExpiryPreset != 'all')
+                SliverToBoxAdapter(
+                  child: _buildActiveFilterBanner(),
+                ),
+
+              // ── Proximity Recommendation Header ───────────────────────────
+              SliverToBoxAdapter(
+                child: _buildRecommendationHeader(listings.length),
+              ),
+
+              // ── Content Area: Loading / Error / Empty / Feed ──────────────
+              if (_isLoading && _allListings.isEmpty)
+                SliverToBoxAdapter(
+                  child: _buildLoadingSkeleton(),
+                )
+              else if (_errorMessage != null && _allListings.isEmpty)
+                SliverToBoxAdapter(
+                  child: _buildErrorState(),
+                )
+              else if (listings.isEmpty)
+                SliverToBoxAdapter(
+                  child: _buildEmptyState(),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final item = listings[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: ProductCard(listing: item),
+                        );
+                      },
+                      childCount: listings.length,
+                    ),
           // ── Offline Cache Banner Indicator ──────────────────────────────
           if (_isFromCache) _buildOfflineCacheBanner(),
 
@@ -403,6 +615,82 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       child: _buildActiveFiltersBar(),
                     ),
 
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'RECOVERA B2B',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFA7F3D0)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.verified_rounded, size: 10, color: Color(0xFF10B981)),
+                            const SizedBox(width: 2),
+                            Text(
+                              'Verified',
+                              style: GoogleFonts.inter(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF047857),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Halo, $buyerGreeting',
+                  key: const Key('buyer_greeting_title'),
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0F172A),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Temukan likuidasi stok pangan terdekat dengan harga terbaik.',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
                   // ── Proximity Recommendation Header ─────────────────────
                   SliverToBoxAdapter(
                     child: _buildRecommendationHeader(listings.length),
@@ -759,8 +1047,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ],
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1554,25 +1842,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.radar_rounded,
-                size: 18,
-                color: Color(0xFF059669),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Rekomendasi Terdekat',
-                key: const Key('section_recommendations_title'),
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
+          Expanded(
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.radar_rounded,
+                  size: 18,
+                  color: Color(0xFF059669),
                 ),
-              ),
-            ],
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Rekomendasi Terdekat',
+                    key: const Key('section_recommendations_title'),
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF0F172A),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
@@ -1696,6 +1990,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   _selectedRadiusKm = 15.0;
                   _selectedMaxExpiryDays = null;
                   _selectedSort = 'nearest';
+                  _selectedRadius = 15.0;
+                  _selectedExpiryPreset = 'all';
                 });
                 _fetchListings();
               },

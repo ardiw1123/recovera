@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../../../core/network/api_client.dart';
+import '../models/seller_dashboard_model.dart';
 import '../models/seller_inventory_model.dart';
 import '../services/seller_api_service.dart';
 
@@ -45,6 +46,24 @@ class SellerRepository extends ChangeNotifier {
       final items = await apiService.fetchSellerInventory();
       _inventory = items;
       return items;
+    } catch (e) {
+      _errorMessage = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Memuat data dashboard seller dari backend endpoint GET /listings/seller/dashboard
+  Future<SellerDashboardData> loadDashboard() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final data = await apiService.fetchDashboard();
+      return data;
     } catch (e) {
       _errorMessage = e.toString();
       rethrow;
@@ -111,5 +130,25 @@ class SellerRepository extends ChangeNotifier {
     }
     notifyListeners();
     return published;
+  }
+
+  /// Mengirim foto faktur/produk ke endpoint AI OCR
+  Future<Map<String, dynamic>> uploadInvoiceForOcr({
+    required String filePath,
+    Uint8List? bytes,
+    String? filename,
+  }) async {
+    return await apiService.uploadInvoiceForOcr(
+      filePath: filePath,
+      bytes: bytes,
+      filename: filename,
+    );
+  }
+
+  /// Menghapus draf produk dari backend dan daftar inventaris lokal
+  Future<void> deleteDraft(int listingId) async {
+    await apiService.deleteDraft(listingId);
+    _inventory.removeWhere((item) => item.id == listingId);
+    notifyListeners();
   }
 }
