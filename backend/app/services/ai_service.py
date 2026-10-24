@@ -5,7 +5,11 @@ import os
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from groq import AsyncGroq
+try:
+    from groq import AsyncGroq
+except ImportError:
+    AsyncGroq = None
+
 from app.config import get_settings
 from app.models.listing import Listing, Offer
 from app.models.notification import Notification
@@ -23,7 +27,7 @@ async def process_invoice_ocr(filename: str, content: bytes) -> InvoiceOcrRespon
     invoice_no = f"INV-{datetime.now().strftime('%Y%m%d')}-{len(content) % 1000:03d}"
     groq_api_key = (os.getenv("GROQ_API_KEY") or getattr(settings, "groq_api_key", "")).strip()
 
-    if groq_api_key:
+    if groq_api_key and AsyncGroq is not None:
         try:
             ext = filename.lower().split(".")[-1] if "." in filename else "jpg"
             mime_type = "image/png" if ext == "png" else "application/pdf" if ext == "pdf" else "image/jpeg"

@@ -131,19 +131,41 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
     );
   }
 
-  /// AppBar khusus Pembeli
+  /// AppBar khusus Pembeli dengan tema biru HomeScreen
   PreferredSizeWidget _buildAppBar() {
+    final canPop = Navigator.canPop(context);
     return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0.5,
-      titleSpacing: 16,
+      elevation: 0,
+      centerTitle: false,
+      titleSpacing: canPop ? 0 : 16,
+      leading: canPop
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              onPressed: () => Navigator.maybePop(context),
+            )
+          : null,
+      iconTheme: const IconThemeData(color: Colors.white),
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.primaryDark,
+              AppColors.primary,
+              AppColors.primaryLight,
+            ],
+          ),
+        ),
+      ),
+      backgroundColor: AppColors.primary,
       title: Row(
         children: [
           Container(
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
@@ -154,47 +176,16 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
           ),
           const SizedBox(width: 10),
           Text(
-            'Transaksi',
+            'Riwayat Transaksi',
             style: GoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF03045E),
+              color: Colors.white,
             ),
           ),
         ],
       ),
-      actions: [
-        IconButton(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Tidak ada notifikasi pesanan baru.',
-                  style: GoogleFonts.inter(color: Colors.white),
-                ),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          },
-          icon: const Icon(
-            Icons.notifications_none_rounded,
-            color: Color(0xFF404850),
-            size: 24,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: CircleAvatar(
-            radius: 16,
-            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-            child: const Icon(
-              Icons.person_rounded,
-              color: AppColors.primary,
-              size: 20,
-            ),
-          ),
-        ),
-      ],
+      actions: null,
     );
   }
 
@@ -583,9 +574,9 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
                     ),
                     elevation: 0,
                   ),
-                  icon: const Icon(Icons.explore_rounded, size: 18),
+                  icon: const Icon(Icons.location_on_rounded, size: 18),
                   label: Text(
-                    'Lihat Instruksi Ambil & Lacak (Kompas)',
+                    'Petunjuk Lokasi & Pengambilan Gudang',
                     style: GoogleFonts.inter(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
@@ -722,14 +713,10 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
         label = 'Menunggu Diproses';
         break;
       case 'in_progress':
+      case 'picked_up':
         bg = const Color(0xFFE0F2FE);
         text = const Color(0xFF0369A1);
         label = 'Siap Diambil';
-        break;
-      case 'picked_up':
-        bg = const Color(0xFFEDE9FE);
-        text = const Color(0xFF6D28D9);
-        label = 'Dalam Pengiriman';
         break;
       case 'completed':
         bg = const Color(0xFFDCFCE7);

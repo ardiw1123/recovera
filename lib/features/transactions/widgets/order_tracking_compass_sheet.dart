@@ -1,15 +1,11 @@
-import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../models/transaction_order_model.dart';
 
-/// Modal dialog pelacakan gudang & panduan kompas penunjuk arah (Self Pick-up)
+/// Modal dialog detail lokasi gudang & instruksi penjemputan mandiri (Self Pick-up)
 class OrderTrackingCompassSheet extends StatefulWidget {
   const OrderTrackingCompassSheet({
     super.key,
@@ -42,47 +38,6 @@ class OrderTrackingCompassSheet extends StatefulWidget {
 }
 
 class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
-  StreamSubscription<MagnetometerEvent>? _magSub;
-  double _headingRadians = 0.0;
-  bool _hasMagnetometer = true;
-
-  // Koordinat simulasi sudut arah ke gudang (default ~45° Timur Laut)
-  final double _targetBearingRadians = 45.0 * (math.pi / 180.0);
-
-  @override
-  void initState() {
-    super.initState();
-    _initSensors();
-  }
-
-  void _initSensors() {
-    try {
-      _magSub = magnetometerEventStream().listen(
-        (event) {
-          if (!mounted) return;
-          // Hitung heading horizontal dari magnetometer
-          final heading = math.atan2(event.y, event.x);
-          setState(() {
-            _headingRadians = heading;
-            _hasMagnetometer = true;
-          });
-        },
-        onError: (_) {
-          if (mounted) setState(() => _hasMagnetometer = false);
-        },
-        cancelOnError: false,
-      );
-    } catch (_) {
-      if (mounted) setState(() => _hasMagnetometer = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    _magSub?.cancel();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
@@ -92,7 +47,7 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.9,
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
       ),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -142,9 +97,10 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Self Pick-up',
+                            'Self Pick-up (Ambil Sendiri)',
                             style: GoogleFonts.inter(
                               fontSize: 12,
+                              fontWeight: FontWeight.w600,
                               color: const Color(0xFF64748B),
                             ),
                           ),
@@ -152,7 +108,7 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Panduan Arah & Gudang',
+                        'Panduan Lokasi & Pengambilan',
                         style: GoogleFonts.inter(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -179,23 +135,19 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Order Status Stepper
+                  // 1. Order Status Stepper (Self Pick-up: Dibayar -> Siap Diambil -> Selesai)
                   _buildStatusStepper(order.status),
                   const SizedBox(height: 20),
 
-                  // 2. Interactive Compass Widget
-                  _buildCompassCard(distanceText),
-                  const SizedBox(height: 18),
-
-                  // 3. Warehouse Address Card
+                  // 2. Warehouse Location & Address Card
                   _buildWarehouseCard(order, distanceText),
                   const SizedBox(height: 18),
 
-                  // 4. Pickup Warning & Deadline Card
+                  // 3. Pickup Warning & Deadline Card
                   _buildDeadlineCard(order),
                   const SizedBox(height: 20),
 
-                  // 5. Action Buttons
+                  // 4. Action Button
                   if (order.status != 'completed' && order.status != 'cancelled')
                     SizedBox(
                       width: double.infinity,
@@ -245,22 +197,23 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
     );
   }
 
-  // ── 1. Order Stepper Widget ───────────────────────────────────────────────
+  // ── 1. Order Stepper Widget (Self Pick-up: Tanpa 'Di Jalan') ───────────────
   Widget _buildStatusStepper(String currentStatus) {
     final stages = [
       {'code': 'paid', 'label': 'Dibayar'},
-      {'code': 'in_progress', 'label': 'Siap Ambil'},
-      {'code': 'picked_up', 'label': 'Di Jalan'},
+      {'code': 'in_progress', 'label': 'Siap Diambil'},
       {'code': 'completed', 'label': 'Selesai'},
     ];
 
     int activeIdx = 0;
-    if (currentStatus == 'in_progress') activeIdx = 1;
-    if (currentStatus == 'picked_up') activeIdx = 2;
-    if (currentStatus == 'completed') activeIdx = 3;
+    if (currentStatus == 'in_progress' || currentStatus == 'picked_up') {
+      activeIdx = 1;
+    } else if (currentStatus == 'completed') {
+      activeIdx = 2;
+    }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),
@@ -299,12 +252,13 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
                     color: isCompleted || isCurrent
                         ? AppColors.primary
                         : const Color(0xFFCBD5E1),
-                    width: isCurrent ? 2.0 : 1.0,
+                    width: 2,
                   ),
                 ),
                 child: Center(
                   child: isCompleted
-                      ? const Icon(Icons.check, size: 16, color: Colors.white)
+                      ? const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 16)
                       : Text(
                           '${stageIndex + 1}',
                           style: GoogleFonts.inter(
@@ -317,15 +271,16 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
                         ),
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
-                stages[stageIndex]['label'] as String,
+                stages[stageIndex]['label']!,
                 style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-                  color: isCurrent
+                  fontSize: 11,
+                  fontWeight:
+                      isCurrent || isCompleted ? FontWeight.w700 : FontWeight.w500,
+                  color: isCurrent || isCompleted
                       ? const Color(0xFF0F172A)
-                      : const Color(0xFF64748B),
+                      : const Color(0xFF94A3B8),
                 ),
               ),
             ],
@@ -335,198 +290,9 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
     );
   }
 
-  // ── 2. Compass Guidance Widget ────────────────────────────────────────────
-  Widget _buildCompassCard(String distanceText) {
-    // Relative target angle relative to device orientation
-    final diffAngle = _targetBearingRadians - _headingRadians;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.explore_rounded,
-                      color: Color(0xFF16A34A), size: 20),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Kompas Penunjuk Arah',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF166534),
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF86EFAC)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.radar_rounded,
-                        color: Color(0xFF16A34A), size: 14),
-                    const SizedBox(width: 4),
-                    Text(
-                      distanceText,
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF166534),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Interactive Circular Compass Dial
-          Center(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Compass Ring
-                Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF16A34A).withValues(alpha: 0.1),
-                        blurRadius: 16,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                    border: Border.all(
-                      color: const Color(0xFFDCFCE7),
-                      width: 4,
-                    ),
-                  ),
-                  child: Stack(
-                    children: [
-                      // Cardinal points
-                      const Align(
-                        alignment: Alignment.topCenter,
-                        child: Padding(
-                          padding: EdgeInsets.only(top: 4),
-                          child: Text('U',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 11,
-                                  color: Color(0xFFDC2626))),
-                        ),
-                      ),
-                      const Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: 4),
-                          child: Text('S',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 11,
-                                  color: Color(0xFF64748B))),
-                        ),
-                      ),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: EdgeInsets.only(left: 6),
-                          child: Text('B',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 11,
-                                  color: Color(0xFF64748B))),
-                        ),
-                      ),
-                      const Align(
-                        alignment: Alignment.centerRight,
-                        child: Padding(
-                          padding: EdgeInsets.only(right: 6),
-                          child: Text('T',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 11,
-                                  color: Color(0xFF64748B))),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Rotating Needle Pointer
-                Transform.rotate(
-                  angle: diffAngle,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Green Target Arrow pointing to warehouse
-                      const Icon(
-                        Icons.navigation_rounded,
-                        color: Color(0xFF16A34A),
-                        size: 48,
-                      ),
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF166534),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          Text(
-            'Arahkan gawai ke depan • Ikuti panah hijau menuju gudang',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF15803D),
-            ),
-          ),
-          if (!_hasMagnetometer) ...[
-            const SizedBox(height: 4),
-            Text(
-              '(Sensor magnetik disimulasikan secara offline)',
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                color: const Color(0xFF64748B),
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ── 3. Warehouse Location Card ────────────────────────────────────────────
+  // ── 2. Warehouse Location Card ────────────────────────────────────────────
   Widget _buildWarehouseCard(TransactionOrder order, String distanceText) {
-    final warehouseName = order.warehouseName ?? 'Gudang Pusat Distribusi';
+    final warehouseName = order.warehouseName ?? 'Gudang Penjual';
     final address = order.warehouseAddress ??
         'Kawasan Pergudangan Logistik Blok B-4, Jakarta Barat';
 
@@ -582,22 +348,61 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
                   ],
                 ),
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.near_me_rounded,
+                        color: AppColors.primary, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      distanceText,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text(
-              address,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: const Color(0xFF334155),
-                height: 1.4,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Alamat Pengambilan:',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  address,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: const Color(0xFF334155),
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 10),
@@ -637,7 +442,7 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
     );
   }
 
-  // ── 4. Deadline Warning Card ──────────────────────────────────────────────
+  // ── 3. Deadline Warning Card ──────────────────────────────────────────────
   Widget _buildDeadlineCard(TransactionOrder order) {
     return Container(
       padding: const EdgeInsets.all(12),

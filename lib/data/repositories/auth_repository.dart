@@ -104,13 +104,9 @@ class AuthRepository extends ChangeNotifier {
       await tokenStorage.saveTokens(tokens);
       _currentTokens = tokens;
       return tokens;
-    } catch (_) {
-      // Fallback offline / demo saat server backend offline/timeout
-      loginAsDemo(
-        role: 'buyer',
-        name: email.contains('@') ? email.split('@').first : 'Gevinta',
-      );
-      return _currentTokens!;
+    } catch (e) {
+      // Lempar error ke UI agar pesan validasi (password salah / akun tidak ditemukan) tampil
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -147,14 +143,9 @@ class AuthRepository extends ChangeNotifier {
       await tokenStorage.saveTokens(tokens);
       _currentTokens = tokens;
       return tokens;
-    } catch (_) {
-      // Fallback offline / demo saat server backend offline/timeout
-      loginAsDemo(
-        role: role,
-        name: name.isNotEmpty ? name : 'Gevinta',
-        companyName: companyName,
-      );
-      return _currentTokens!;
+    } catch (e) {
+      // Lempar error ke UI agar pesan validasi (email sudah terdaftar) tampil
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();

@@ -4,11 +4,21 @@ import logging
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
-import joblib
-import lightgbm
-import numpy as np
-import pandas as pd
-import sklearn
+try:
+    import joblib
+    import lightgbm
+    import numpy as np
+    import pandas as pd
+    import sklearn
+    HAS_ML = True
+except ImportError as _ml_err:
+    HAS_ML = False
+    joblib = None
+    lightgbm = None
+    np = None
+    pd = None
+    sklearn = None
+
 
 try:
     from .config import (BAND_PP, HEADROOM_PP, MODEL_DIR, PRICING_CATEGORICAL, PRICING_FEATURES,
@@ -41,8 +51,8 @@ class PriceAdvice:
 
 
 def _load_bundle(path: Path):
-    if not path.exists():
-        log.warning("model %s tidak ada -> fallback rule-based", path.name)
+    if not HAS_ML or not path.exists():
+        log.warning("model %s tidak ada atau library ML tidak terinstall -> fallback rule-based", path.name)
         return None
     try:
         b = joblib.load(path)          # hanya muat .pkl buatan sendiri (pickle = eksekusi kode)

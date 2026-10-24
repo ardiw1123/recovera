@@ -145,19 +145,41 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
     );
   }
 
-  /// AppBar khusus Penjual
+  /// AppBar khusus Penjual dengan tema biru HomeScreen
   PreferredSizeWidget _buildAppBar() {
+    final canPop = Navigator.canPop(context);
     return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0.5,
-      titleSpacing: 16,
+      elevation: 0,
+      centerTitle: false,
+      titleSpacing: canPop ? 0 : 16,
+      leading: canPop
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              onPressed: () => Navigator.maybePop(context),
+            )
+          : null,
+      iconTheme: const IconThemeData(color: Colors.white),
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.primaryDark,
+              AppColors.primary,
+              AppColors.primaryLight,
+            ],
+          ),
+        ),
+      ),
+      backgroundColor: AppColors.primary,
       title: Row(
         children: [
           Container(
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
@@ -172,43 +194,12 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
             style: GoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF03045E),
+              color: Colors.white,
             ),
           ),
         ],
       ),
-      actions: [
-        IconButton(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Semua pesanan masuk sudah ter-sinkronisasi.',
-                  style: GoogleFonts.inter(color: Colors.white),
-                ),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          },
-          icon: const Icon(
-            Icons.notifications_none_rounded,
-            color: Color(0xFF404850),
-            size: 24,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: CircleAvatar(
-            radius: 16,
-            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-            child: const Icon(
-              Icons.storefront_rounded,
-              color: AppColors.primary,
-              size: 20,
-            ),
-          ),
-        ),
-      ],
+      actions: null,
     );
   }
 
@@ -758,9 +749,8 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
       case 'paid':
         return 'Menunggu Diproses';
       case 'in_progress':
-        return 'Siap Diambil';
       case 'picked_up':
-        return 'Dalam Pengiriman';
+        return 'Siap Diambil';
       case 'completed':
         return 'Selesai';
       case 'cancelled':

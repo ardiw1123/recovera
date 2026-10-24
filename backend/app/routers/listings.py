@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 from app.core.dependencies import CurrentUserDep, DbSessionDep, RequireBuyerDep, RequireSellerDep
 from app.core.exceptions import AppException
 from app.models.listing import Listing
+from app.models.order import Order
 from app.models.product import Product
 from app.models.user import Seller
 from app.schemas.envelope import ResponseEnvelope, wrap_success
