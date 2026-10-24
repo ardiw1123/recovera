@@ -512,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 width: 24,
                                 height: 24,
                                 fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => const Icon(
+                                errorBuilder: (_, _, _) => const Icon(
                                   Icons.eco_rounded,
                                   color: Colors.white,
                                   size: 22,
