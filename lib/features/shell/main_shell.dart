@@ -5,21 +5,23 @@ import '../../../core/theme/app_colors.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/listing_repository.dart';
 import '../home/screens/home_screen.dart';
-import '../stok/screens/stok_screen.dart';
-import '../seller/screens/seller_inventory_screen.dart';
+import '../seller/screens/seller_dashboard_screen.dart';
+import '../seller/repositories/seller_repository.dart';
 import '../seller/screens/upload_stock_flow_screen.dart';
 import '../auth/screens/profile_screen.dart';
 import '../auth/screens/login_screen.dart';
 import '../feedback/screens/saran_kesan_screen.dart';
+import '../seller/screens/seller_inventory_screen.dart';
 
 /// PBI-05 & Seller Journey — Bottom Navigation Bar
 ///
 /// Beradaptasi sesuai role pengguna:
 /// • Seller (Penjual): Tab Stok menampilkan `SellerInventoryScreen` ("Stok Saya" sesuai referensi tetap)
 ///   dan tombol "+ Tambah" langsung membuka `UploadStockFlowScreen`.
-/// • Buyer (Pembeli): Tab Stok menampilkan `StokScreen` (Katalog lelang pembeli), tanpa akses rute penjual.
+/// • Buyer (Pembeli): Tab Stok dihilangkan sepenuhnya dari antarmuka pembeli (hanya Home, Profil, Saran).
 class MainShell extends StatefulWidget {
   final ListingRepository? listingRepository;
+  final SellerRepository? sellerRepository;
   final Widget? stokPage;
   final Widget? profilePage;
   final Widget? feedbackPage;
@@ -27,6 +29,7 @@ class MainShell extends StatefulWidget {
   const MainShell({
     super.key,
     this.listingRepository,
+    this.sellerRepository,
     this.stokPage,
     this.profilePage,
     this.feedbackPage,
@@ -49,13 +52,14 @@ class _MainShellState extends State<MainShell> {
         final buyerLat = profile?.baseLat ?? -6.2088;
         final buyerLng = profile?.baseLng ?? 106.8456;
 
-        // Daftar halaman adaptif berdasarkan role:
-        // Buyer: Home (katalog lelang & stok terintegrasi), Profil, Saran
-        // Seller: Beranda, Stok Saya, Profil, Saran
+        // Daftar halaman adaptif berdasarkan role
+        // • Seller: Beranda (0), Stok (1), Profil (2), Saran (3)
+        // • Buyer: Home (0), Profil (1), Saran (2) — Stok dihilangkan sepenuhnya
         final pages = isSeller
             ? <Widget>[
-                const SellerInventoryScreen(),
-                widget.stokPage ?? const SellerInventoryScreen(),
+                SellerDashboardScreen(repository: widget.sellerRepository),
+                widget.stokPage ??
+                    SellerInventoryScreen(repository: widget.sellerRepository),
                 widget.profilePage ?? const ProfileScreen(),
                 widget.feedbackPage ?? const SaranKesanScreen(),
               ]
@@ -69,11 +73,10 @@ class _MainShellState extends State<MainShell> {
                 widget.feedbackPage ?? const SaranKesanScreen(),
               ];
 
+        final activeIndex = _currentIndex.clamp(0, pages.length - 1);
+
         return Scaffold(
-          body: IndexedStack(
-            index: _currentIndex.clamp(0, pages.length - 1),
-            children: pages,
-          ),
+          body: IndexedStack(index: activeIndex, children: pages),
           bottomNavigationBar: Container(
             decoration: BoxDecoration(
               color: AppColors.white,
@@ -90,8 +93,8 @@ class _MainShellState extends State<MainShell> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: isSeller
-                    ? _buildSellerNavRow()
-                    : _buildBuyerNavRow(),
+                    ? _buildSellerNavRow(activeIndex)
+                    : _buildBuyerNavRow(activeIndex),
               ),
             ),
           ),
@@ -101,75 +104,87 @@ class _MainShellState extends State<MainShell> {
   }
 
   // ── Bottom Nav Row untuk Penjual (Sesuai seller-inventory-screen.png) ─────
-  Widget _buildSellerNavRow() {
+  Widget _buildSellerNavRow(int activeIndex) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _NavItem(
-          icon: Icons.home_outlined,
-          activeIcon: Icons.home_rounded,
-          label: 'Beranda',
-          isActive: _currentIndex == 0,
-          onTap: () => setState(() => _currentIndex = 0),
+        Expanded(
+          child: _NavItem(
+            icon: Icons.home_outlined,
+            activeIcon: Icons.home_rounded,
+            label: 'Beranda',
+            isActive: activeIndex == 0,
+            onTap: () => setState(() => _currentIndex = 0),
+          ),
         ),
-        _NavItem(
-          icon: Icons.inventory_2_outlined,
-          activeIcon: Icons.inventory_2_rounded,
-          label: 'Stok',
-          isActive: _currentIndex == 1,
-          onTap: () => setState(() => _currentIndex = 1),
+        Expanded(
+          child: _NavItem(
+            icon: Icons.inventory_2_outlined,
+            activeIcon: Icons.inventory_2_rounded,
+            label: 'Stok',
+            isActive: activeIndex == 1,
+            onTap: () => setState(() => _currentIndex = 1),
+          ),
         ),
         // Tombol Tambah di tengah
-        GestureDetector(
-          key: const Key('nav_seller_add_stock'),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const UploadStockFlowScreen(),
-              ),
-            );
-          },
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.add_circle_outline_rounded,
-                  size: 24,
-                  color: AppColors.primary,
+        Expanded(
+          child: GestureDetector(
+            key: const Key('nav_seller_add_stock'),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const UploadStockFlowScreen(),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Tambah',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+              );
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.add_circle_outline_rounded,
+                    size: 24,
                     color: AppColors.primary,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Tambah',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-        _NavItem(
-          icon: Icons.person_outline_rounded,
-          activeIcon: Icons.person_rounded,
-          label: 'Profil',
-          isActive: _currentIndex == 2,
-          onTap: () => setState(() => _currentIndex = 2),
+        Expanded(
+          child: _NavItem(
+            icon: Icons.person_outline_rounded,
+            activeIcon: Icons.person_rounded,
+            label: 'Profil',
+            isActive: activeIndex == 2,
+            onTap: () => setState(() => _currentIndex = 2),
+          ),
         ),
-        _NavItem(
-          icon: Icons.chat_bubble_outline_rounded,
-          activeIcon: Icons.chat_bubble_rounded,
-          label: 'Saran',
-          isActive: _currentIndex == 3,
-          onTap: () => setState(() => _currentIndex = 3),
+        Expanded(
+          child: _NavItem(
+            icon: Icons.chat_bubble_outline_rounded,
+            activeIcon: Icons.chat_bubble_rounded,
+            label: 'Saran',
+            isActive: activeIndex == 3,
+            onTap: () => setState(() => _currentIndex = 3),
+          ),
         ),
         _NavItem(
           icon: Icons.logout_rounded,
@@ -183,8 +198,8 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  // ── Bottom Nav Row untuk Pembeli (Home, Profil, Saran, Keluar) ───────────
-  Widget _buildBuyerNavRow() {
+  // ── Bottom Nav Row untuk Pembeli (Role guard: Tab Stok dihilangkan sepenuhnya) ──
+  Widget _buildBuyerNavRow(int activeIndex) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
@@ -192,30 +207,22 @@ class _MainShellState extends State<MainShell> {
           icon: Icons.home_outlined,
           activeIcon: Icons.home_rounded,
           label: 'Home',
-          isActive: _currentIndex == 0,
+          isActive: activeIndex == 0,
           onTap: () => setState(() => _currentIndex = 0),
         ),
         _NavItem(
           icon: Icons.person_outline_rounded,
           activeIcon: Icons.person_rounded,
           label: 'Profil',
-          isActive: _currentIndex == 1,
+          isActive: activeIndex == 1,
           onTap: () => setState(() => _currentIndex = 1),
         ),
         _NavItem(
           icon: Icons.chat_bubble_outline_rounded,
           activeIcon: Icons.chat_bubble_rounded,
           label: 'Saran',
-          isActive: _currentIndex == 2,
+          isActive: activeIndex == 2,
           onTap: () => setState(() => _currentIndex = 2),
-        ),
-        _NavItem(
-          icon: Icons.logout_rounded,
-          activeIcon: Icons.logout_rounded,
-          label: 'Keluar',
-          isActive: false,
-          iconColor: AppColors.error,
-          onTap: () => _showLogoutDialog(context),
         ),
       ],
     );
@@ -324,12 +331,15 @@ class _NavItem extends StatelessWidget {
               color: color,
             ),
             const SizedBox(height: 2),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: color,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActive ? AppColors.primary : AppColors.slateText,
+                ),
               ),
             ),
           ],

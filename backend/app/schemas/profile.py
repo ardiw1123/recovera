@@ -51,4 +51,5 @@ class ProfileUpdateRequest(BaseModel):
     base_lat: float | None = None
     base_lng: float | None = None
     pref_categories: list[str] | None = None
+    max_radius_km: int | None = None
     has_cold_storage: bool | None = None

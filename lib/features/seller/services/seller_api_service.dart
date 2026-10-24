@@ -1,6 +1,8 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
+import '../models/seller_dashboard_model.dart';
 import '../models/seller_inventory_model.dart';
 
 /// Service API khusus untuk alur kerja penjual (Seller Inventory & Upload Journey).
@@ -8,6 +10,29 @@ class SellerApiService {
   SellerApiService({required this.client});
 
   final ApiClient client;
+
+  /// Mengambil data dashboard lengkap untuk halaman beranda seller.
+  /// Menghubungi endpoint GET /listings/seller/dashboard
+  Future<SellerDashboardData> fetchDashboard() async {
+    try {
+      final response = await client.get<Map<String, dynamic>>(
+        '/listings/seller/dashboard',
+      );
+
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error =
+            body?['error']?['message'] ?? 'Gagal memuat dashboard penjual';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+
+      final data = body['data'] as Map<String, dynamic>;
+      return SellerDashboardData.fromJson(data);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memuat dashboard penjual');
+    }
+  }
 
   /// Mengambil daftar inventaris produk lelang milik penjual yang sedang login.
   /// Menghubungi endpoint GET /listings/seller/inventory
@@ -182,6 +207,88 @@ class SellerApiService {
       }
       throw ApiException.fromDioException(
           e, 'Gagal mempublikasikan produk lelang');
+    }
+  }
+
+  /// Mengirim foto faktur/produk ke endpoint POST /ai/invoice untuk ekstraksi OCR Gemini.
+  Future<Map<String, dynamic>> uploadInvoiceForOcr({
+    required String filePath,
+    Uint8List? bytes,
+    String? filename,
+  }) async {
+    try {
+      MultipartFile multipartFile;
+      if (bytes != null && bytes.isNotEmpty) {
+        multipartFile = MultipartFile.fromBytes(
+          bytes,
+          filename: filename ?? 'invoice.jpg',
+        );
+      } else if (filePath.isNotEmpty &&
+          (filePath.startsWith('http://') || filePath.startsWith('https://'))) {
+        multipartFile = MultipartFile.fromBytes(
+          Uint8List.fromList([0, 1, 2, 3]),
+          filename: filename ?? 'invoice.jpg',
+        );
+      } else if (filePath.isNotEmpty) {
+        try {
+          multipartFile = await MultipartFile.fromFile(
+            filePath,
+            filename: filename ?? filePath.split('/').last.split('\\').last,
+          );
+        } catch (_) {
+          multipartFile = MultipartFile.fromBytes(
+            Uint8List.fromList([0, 1, 2, 3]),
+            filename: filename ?? 'invoice.jpg',
+          );
+        }
+      } else {
+        multipartFile = MultipartFile.fromBytes(
+          Uint8List.fromList([0, 1, 2, 3]),
+          filename: filename ?? 'invoice.jpg',
+        );
+      }
+
+      final formData = FormData.fromMap({
+        'file': multipartFile,
+      });
+
+      final response = await client.post<Map<String, dynamic>>(
+        '/ai/invoice',
+        data: formData,
+      );
+
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error =
+            body?['error']?['message'] ?? 'Gagal memindai faktur dengan OCR AI';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+
+      return body['data'] as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(
+          e, 'Gagal memindai faktur dengan OCR AI');
+    }
+  }
+
+  /// Menghapus draf produk lelang dari sistem.
+  /// Menghubungi endpoint DELETE /listings/seller/inventory/{listing_id}
+  Future<void> deleteDraft(int listingId) async {
+    try {
+      final response = await client.delete<Map<String, dynamic>>(
+        '/listings/seller/inventory/$listingId',
+      );
+
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error =
+            body?['error']?['message'] ?? 'Gagal menghapus draf produk';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal menghapus draf produk');
     }
   }
 }

@@ -1,7 +1,9 @@
+import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 from fastapi import APIRouter, Body, Path, Query, Request, status
-from fastapi.concurrency import run_in_threadpool
+
+logger = logging.getLogger(__name__)
 
 from app.core.dependencies import CurrentUserDep, DbSessionDep, RequireBuyerDep, RequireSellerDep
 from app.core.exceptions import AppException
@@ -51,12 +53,14 @@ def _validate_inventory_listing(listing: Listing) -> list[str]:
     product = listing.product
     if not product or not product.name.strip() or not product.category.strip():
         errors.append("Product name and category are required")
-    if not product or not product.image_url:
-        errors.append("A product image URL is required")
+    if not product or not product.image_url or not str(product.image_url).strip():
+        errors.append("Foto produk wajib diunggah")
     if listing.qty <= 0:
         errors.append("Quantity must be greater than zero")
     if listing.expiry_date <= date.today():
         errors.append("Expiry date must be in the future")
+    elif (listing.expiry_date - date.today()).days < 30:
+        errors.append("Masa simpan minimal 30 hari")
     if listing.min_price > listing.start_price or listing.start_price > listing.normal_price:
         errors.append("Prices must satisfy minimum price <= starting price <= normal price")
     return errors
@@ -73,58 +77,211 @@ async def get_seller_inventory(db: DbSessionDep, seller_user: RequireSellerDep) 
     ])
 
 
+@router.get("/seller/dashboard", response_model=ResponseEnvelope[dict])
+async def get_seller_dashboard(db: DbSessionDep, seller_user: RequireSellerDep) -> dict:
+    seller = db.query(Seller).filter(Seller.user_id == seller_user.id).first()
+    if not seller:
+        return wrap_success({"data": {"company_name": "", "active_listings_count": 0, "prev_month_active_count": 0, "current_month_orders_count": 0, "prev_month_orders_count": 0, "near_expiry_listings": [], "recent_activities": []}})
+
+    from datetime import date, datetime, timedelta
+
+    today = date.today()
+    first_day_this_month = today.replace(day=1)
+    # Calculate first day of previous month
+    if first_day_this_month.month == 1:
+        first_day_prev_month = date(today.year - 1, 12, 1)
+    else:
+        first_day_prev_month = date(today.year, first_day_this_month.month - 1, 1)
+
+    # active_listings_count: listing milik seller ini yang statusnya 'active'
+    active_listings = db.query(Listing).filter(Listing.seller_id == seller.id, Listing.status == 'active').all()
+    active_listings_count = len(active_listings)
+
+    # prev_month_active_count: listing milik seller ini yang statusnya 'active' dan created_at di bulan lalu
+    prev_month_active_listings = db.query(Listing).filter(
+        Listing.seller_id == seller.id,
+        Listing.status == 'active',
+        Listing.created_at >= first_day_prev_month,
+        Listing.created_at < first_day_this_month
+    ).all()
+    prev_month_active_count = len(prev_month_active_listings)
+
+    # current_month_orders_count: order yang listing.seller_id = seller ini, dan orders.created_at di bulan ini
+    current_month_orders = db.query(Order).join(Listing).filter(
+        Listing.seller_id == seller.id,
+        Order.created_at >= datetime(first_day_this_month.year, first_day_this_month.month, 1),
+        Order.created_at <= datetime.combine(today, datetime.min.time())
+    ).all()
+    current_month_orders_count = len(current_month_orders)
+
+    # prev_month_orders_count: sama seperti di atas tapi untuk bulan lalu
+    prev_month_orders = db.query(Order).join(Listing).filter(
+        Listing.seller_id == seller.id,
+        Order.created_at >= datetime(first_day_prev_month.year, first_day_prev_month.month, 1),
+        Order.created_at < datetime(first_day_this_month.year, first_day_this_month.month, 1)
+    ).all()
+    prev_month_orders_count = len(prev_month_orders)
+
+    # near_expiry_listings: 3 listing aktif milik seller ini, urutkan berdasarkan expiry_date dari yang terdekat
+    near_expiry = db.query(Listing).filter(Listing.seller_id == seller.id, Listing.status == 'active').order_by(Listing.expiry_date.asc()).limit(3).all()
+    near_expiry_listings = []
+    for listing in near_expiry:
+        days_remaining = (listing.expiry_date - today).days
+        product = listing.product
+        near_expiry_listings.append({
+            "id": listing.id,
+            "product_name": product.name if product else "Produk Tanpa Nama",
+            "days_remaining": max(days_remaining, 0),
+            "qty": listing.qty,
+            "unit": product.default_unit if product else "pcs",
+            "category": product.category if product else "Umum",
+        })
+
+    # recent_activities: gabungkan log dari order terbaru seller (stok terjual) dan listing terbaru (upload stok), urutkan berdasarkan waktu terbaru, ambil 5 teratas
+    recent_activities_payload = []
+
+    # Dari order terbaru yang terkait dengan listing seller
+    recent_orders = db.query(Order).join(Listing).filter(
+        Listing.seller_id == seller.id
+    ).order_by(Order.created_at.desc()).limit(5).all()
+
+    for order in recent_orders:
+        product = order.listing.product
+        recent_activities_payload.append({
+            "type": "sold",
+            "title": f"{product.name if product else 'Produk'} terjual",
+            "subtitle": "Berhasil dicairkan",
+            "timestamp": order.created_at.isoformat() if order.created_at else "",
+        })
+
+    # Dari listing terbaru seller
+    recent_listings = db.query(Listing).filter(Listing.seller_id == seller.id).order_by(Listing.created_at.desc()).limit(5).all()
+
+    for listing in recent_listings:
+        product = listing.product
+        recent_activities_payload.append({
+            "type": "uploaded",
+            "title": f"{product.name if product else 'Produk'} ditambahkan",
+            "subtitle": "Berhasil diunggah",
+            "timestamp": listing.created_at.isoformat() if listing.created_at else "",
+        })
+
+    # Gabungkan dan urutkan berdasarkan waktu terbaru, ambil 5 teratas
+    all_activities = recent_orders + recent_listings
+    all_activities.sort(key=lambda x: x.created_at or datetime.min, reverse=True)
+    recent_activities_final = all_activities[:5]
+
+    for activity in recent_activities_final:
+        product = activity.product if hasattr(activity, 'product') and activity.product else None
+        recent_activities_payload.append({
+            "type": "sold" if hasattr(activity, 'status') and activity.status == "sold" else "uploaded",
+            "title": f"{product.name if product else 'Produk'} terjual" if hasattr(activity, 'status') and activity.status == "sold" else f"{product.name if product else 'Produk'} ditambahkan",
+            "subtitle": "Berhasil dicairkan" if hasattr(activity, 'status') and activity.status == "sold" else "Berhasil diunggah",
+            "timestamp": activity.created_at.isoformat() if activity.created_at else "",
+        })
+
+    data = {
+        "company_name": seller.company_name,
+        "active_listings_count": active_listings_count,
+        "prev_month_active_count": prev_month_active_count,
+        "current_month_orders_count": current_month_orders_count,
+        "prev_month_orders_count": prev_month_orders_count,
+        "near_expiry_listings": near_expiry_listings,
+        "recent_activities": recent_activities_final,
+    }
+
+    return wrap_success({"data": data})
+
+
 @router.post("/seller/inventory/drafts", status_code=status.HTTP_201_CREATED)
 async def create_seller_inventory_draft(
+    request: Request,
     db: DbSessionDep,
     seller_user: RequireSellerDep,
     payload: Annotated[SellerInventoryDraftCreate, Body()],
 ) -> dict:
-    seller = db.query(Seller).filter(Seller.user_id == seller_user.id).first()
-    if not seller:
-        raise AppException("SELLER_NOT_FOUND", "Seller profile is not configured", status.HTTP_400_BAD_REQUEST)
-    if payload.expiry_date <= date.today():
-        raise AppException("INVALID_EXPIRY_DATE", "Expiry date must be in the future", status.HTTP_422_UNPROCESSABLE_ENTITY)
+    try:
+        seller = db.query(Seller).filter(Seller.user_id == seller_user.id).first()
+        if not seller:
+            raise AppException("SELLER_NOT_FOUND", "Seller profile is not configured", status.HTTP_400_BAD_REQUEST)
+        
+        if payload.expiry_date <= date.today():
+            raise AppException("INVALID_EXPIRY_DATE", "Expiry date must be in the future", status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-    product = db.query(Product).filter(Product.sku == payload.sku).first()
-    if product is None:
-        product = Product(
-            sku=payload.sku, barcode=payload.barcode, name=payload.name.strip(),
-            brand=payload.brand, category=payload.category.strip(),
-            storage_type=payload.storage_type, default_unit=payload.default_unit,
-            image_url=str(payload.image_url),
+        if payload.qty <= 0:
+            raise AppException("INVALID_QUANTITY", "Quantity must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if payload.normal_price <= 0 or payload.min_price <= 0:
+            raise AppException("INVALID_PRICE", "Prices must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if payload.min_price > payload.normal_price:
+            raise AppException("INVALID_PRICE_RANGE", "Minimum price cannot exceed normal price", status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        if (payload.expiry_date - date.today()).days < 30:
+            raise AppException("INVALID_EXPIRY_DATE", "Masa simpan minimal 30 hari agar lelang Dutch Auction berjalan. Pilih tanggal kedaluwarsa yang lebih jauh.", status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        if not payload.image_url or not str(payload.image_url).strip():
+            raise AppException("IMAGE_REQUIRED", "Foto produk wajib diunggah", status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        product = db.query(Product).filter(Product.sku == payload.sku).first()
+        if product is None:
+            product = Product(
+                sku=payload.sku, 
+                barcode=payload.barcode, 
+                name=payload.name.strip(),
+                brand=payload.brand, 
+                category=payload.category.strip(),
+                storage_type=payload.storage_type, 
+                default_unit=payload.default_unit,
+                image_url=str(payload.image_url) if payload.image_url else None,
+            )
+            db.add(product)
+            db.flush()
+        elif payload.image_url and not product.image_url:
+            product.image_url = str(payload.image_url)
+
+        ai_engine = getattr(request.app.state, "ai", None)
+        suggested = calculate_price_advice(
+            normal_price=payload.normal_price,
+            expiry_date_str=payload.expiry_date.isoformat(),
+            category=payload.category,
+            qty=payload.qty,
+            storage_type=payload.storage_type,
+            min_price=payload.min_price,
+            ai_engine=ai_engine,
         )
-        db.add(product)
-        db.flush()
-    elif not product.image_url:
-        product.image_url = str(payload.image_url)
-
-    suggested = calculate_price_advice(
-        normal_price=payload.normal_price,
-        expiry_date_str=payload.expiry_date.isoformat(),
-        category=payload.category,
-        qty=payload.qty,
-    )
-    now = datetime.now(timezone.utc)
-    listing = Listing(
-        product_id=product.id, seller_id=seller.id, batch_number=payload.batch_number,
-        qty=payload.qty, normal_price=payload.normal_price,
-        start_price=suggested.suggested_price, min_price=payload.min_price,
-        drop_interval_minutes=60, drop_percentage=2.5,
-        expiry_date=payload.expiry_date, auction_start_at=now,
-        auction_end_at=datetime.combine(payload.expiry_date, datetime.min.time(), tzinfo=timezone.utc),
-        status="draft",
-    )
-    if listing.min_price > listing.start_price:
-        raise AppException("INVALID_MIN_PRICE", "Minimum price cannot exceed the recommended starting price", status.HTTP_422_UNPROCESSABLE_ENTITY)
-    db.add(listing)
-    db.commit()
-    db.refresh(listing)
-    errors = _validate_inventory_listing(listing)
-    return wrap_success({
-        "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
-        "validation": {"valid": not errors, "errors": errors},
-        "price_recommendation": suggested.model_dump(),
-    })
+        now = datetime.now(timezone.utc)
+        listing = Listing(
+            product_id=product.id, seller_id=seller.id, batch_number=payload.batch_number,
+            qty=payload.qty, normal_price=payload.normal_price,
+            start_price=suggested.suggested_price, min_price=payload.min_price,
+            drop_interval_minutes=60, drop_percentage=2.5,
+            expiry_date=payload.expiry_date, auction_start_at=now,
+            auction_end_at=datetime.combine(payload.expiry_date, datetime.min.time(), tzinfo=timezone.utc),
+            status="draft",
+        )
+        if listing.min_price > listing.start_price:
+            raise AppException("INVALID_MIN_PRICE", "Minimum price cannot exceed the recommended starting price", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        db.add(listing)
+        db.commit()
+        db.refresh(listing)
+        errors = _validate_inventory_listing(listing)
+        return wrap_success({
+            "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
+            "validation": {"valid": not errors, "errors": errors},
+            "price_recommendation": suggested.model_dump(),
+        })
+    except AppException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise AppException(
+            "DRAFT_CREATION_FAILED", 
+            f"Failed to create inventory draft: {str(e)}", 
+            status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @router.patch("/seller/inventory/{listing_id}")
@@ -134,28 +291,81 @@ async def update_seller_inventory_draft(
     listing_id: Annotated[int, Path(ge=1)],
     payload: Annotated[SellerInventoryDraftUpdate, Body()],
 ) -> dict:
+    try:
+        _, listing = _owned_listing(db, seller_user.id, listing_id)
+        if listing.status not in {"draft", "review"}:
+            raise AppException("LISTING_NOT_EDITABLE", "Only drafts can be edited", status.HTTP_409_CONFLICT)
+        
+        values = payload.model_dump(exclude_unset=True)
+        
+        # Update product fields
+        for field in ("name", "category", "storage_type", "default_unit", "image_url", "brand"):
+            if field in values:
+                value = values[field]
+                if field == "image_url" and value:
+                    setattr(listing.product, field, str(value))
+                elif field == "image_url" and value is None:
+                    # Allow clearing image_url
+                    pass
+                else:
+                    setattr(listing.product, field, value)
+        
+        # Update listing fields with validation
+        if "qty" in values and values["qty"] <= 0:
+            raise AppException("INVALID_QUANTITY", "Quantity must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if "normal_price" in values and values["normal_price"] <= 0:
+            raise AppException("INVALID_PRICE", "Normal price must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if "min_price" in values and values["min_price"] <= 0:
+            raise AppException("INVALID_PRICE", "Minimum price must be greater than zero", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        if "expiry_date" in values:
+            if values["expiry_date"] <= date.today():
+                raise AppException("INVALID_EXPIRY_DATE", "Expiry date must be in the future", status.HTTP_422_UNPROCESSABLE_ENTITY)
+            if (values["expiry_date"] - date.today()).days < 30:
+                raise AppException("INVALID_EXPIRY_DATE", "Masa simpan minimal 30 hari agar lelang Dutch Auction berjalan. Pilih tanggal kedaluwarsa yang lebih jauh.", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        
+        for field in ("batch_number", "qty", "normal_price", "start_price", "min_price", "expiry_date"):
+            if field in values:
+                setattr(listing, field, values[field])
+        
+        errors = _validate_inventory_listing(listing)
+        if errors:
+            listing.status = "draft"
+        else:
+            listing.status = "review"
+        
+        db.commit()
+        db.refresh(listing)
+        return wrap_success({
+            "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
+            "validation": {"valid": not errors, "errors": errors},
+        })
+    except AppException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise AppException(
+            "DRAFT_UPDATE_FAILED",
+            f"Failed to update inventory draft: {str(e)}",
+            status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@router.delete("/seller/inventory/{listing_id}", status_code=status.HTTP_200_OK)
+async def delete_seller_inventory_draft(
+    db: DbSessionDep,
+    seller_user: RequireSellerDep,
+    listing_id: Annotated[int, Path(ge=1)],
+) -> dict:
     _, listing = _owned_listing(db, seller_user.id, listing_id)
     if listing.status not in {"draft", "review"}:
-        raise AppException("LISTING_NOT_EDITABLE", "Only drafts can be edited", status.HTTP_409_CONFLICT)
-    values = payload.model_dump(exclude_unset=True)
-    for field in ("name", "category", "storage_type", "default_unit", "image_url", "brand"):
-        if field in values:
-            value = values[field]
-            setattr(listing.product, field, str(value) if field == "image_url" and value else value)
-    for field in ("batch_number", "qty", "normal_price", "start_price", "min_price", "expiry_date"):
-        if field in values:
-            setattr(listing, field, values[field])
-    errors = _validate_inventory_listing(listing)
-    if errors:
-        listing.status = "draft"
-    else:
-        listing.status = "review"
+        raise AppException("LISTING_NOT_DELETABLE", "Hanya produk berstatus draft yang dapat dihapus", status.HTTP_409_CONFLICT)
+    db.delete(listing)
     db.commit()
-    db.refresh(listing)
-    return wrap_success({
-        "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
-        "validation": {"valid": not errors, "errors": errors},
-    })
+    return wrap_success({"deleted": True, "id": listing_id})
 
 
 @router.post("/seller/inventory/{listing_id}/validate")
@@ -175,14 +385,21 @@ async def validate_seller_inventory_draft(
 
 @router.post("/seller/inventory/{listing_id}/recommendation")
 async def recommend_seller_inventory_price(
+    request: Request,
     db: DbSessionDep,
     seller_user: RequireSellerDep,
     listing_id: Annotated[int, Path(ge=1)],
 ) -> dict:
     _, listing = _owned_listing(db, seller_user.id, listing_id)
+    ai_engine = getattr(request.app.state, "ai", None)
     advice = calculate_price_advice(
-        normal_price=float(listing.normal_price), expiry_date_str=listing.expiry_date.isoformat(),
-        category=listing.product.category, qty=listing.qty,
+        normal_price=float(listing.normal_price),
+        expiry_date_str=listing.expiry_date.isoformat(),
+        category=listing.product.category if listing.product else None,
+        qty=listing.qty,
+        storage_type=listing.product.storage_type if listing.product else "ambient",
+        min_price=float(listing.min_price),
+        ai_engine=ai_engine,
     )
     lower = advice.suggested_price * 0.8
     upper = advice.suggested_price * 1.2
@@ -208,8 +425,10 @@ async def publish_seller_inventory_listing(
     advice = calculate_price_advice(
         normal_price=float(listing.normal_price),
         expiry_date_str=listing.expiry_date.isoformat(),
-        category=listing.product.category,
+        category=listing.product.category if listing.product else None,
         qty=listing.qty,
+        storage_type=listing.product.storage_type if listing.product else "ambient",
+        min_price=float(listing.min_price),
         ai_engine=ai_engine,
     )
     if not 0.8 * advice.suggested_price <= float(listing.start_price) <= 1.2 * advice.suggested_price and not payload.acknowledge_price_warning:
@@ -222,23 +441,28 @@ async def publish_seller_inventory_listing(
     # ── AI Ranking: Match Top-5 buyers & create offers ───────────────────────
     matching_summary = {"total_offers_sent": 0, "top_buyers": []}
     if ai_engine is not None:
-        matching_summary = await run_in_threadpool(
-            match_and_create_offers_for_listing,
-            db=db,
-            listing=listing,
-            ai_engine=ai_engine,
-            top_k=5,
-        )
+        try:
+            matching_summary = match_and_create_offers_for_listing(
+                db=db,
+                listing=listing,
+                ai_engine=ai_engine,
+                top_k=5,
+            )
+        except Exception as e:
+            logger.error("AI matching on publish encountered an issue: %s", e)
 
-    return wrap_success({
-        "listing": _format_listing_response(listing, *calculate_current_dutch_price(listing)),
-        "matching_summary": matching_summary,
-    })
+    return wrap_success(
+        _format_listing_response(
+            listing,
+            *calculate_current_dutch_price(listing),
+            matching_summary=matching_summary,
+        )
+    )
 
 
 def _format_listing_response(item: Listing, cur_price: float, next_drop: str | None, distance: float | None = None,
                               match_score: float | None = None, discount_pct: float | None = None,
-                              days_to_expiry: int | None = None) -> dict:
+                              days_to_expiry: int | None = None, matching_summary: dict | None = None) -> dict:
     prod_data = ProductResponse.model_validate(item.product, from_attributes=True).model_dump() if item.product else None
     seller_data = item.seller
 
@@ -270,6 +494,7 @@ def _format_listing_response(item: Listing, cur_price: float, next_drop: str | N
         match_score=match_score,
         discount_pct=discount_pct,
         days_to_expiry=days_to_expiry,
+        matching_summary=matching_summary,
     ).model_dump()
 
 
@@ -355,6 +580,13 @@ async def create_listing(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
+    if exp_date <= date.today():
+        raise AppException(
+            code="INVALID_EXPIRY_DATE",
+            message="Expiry date must be in the future",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
     now_utc = datetime.now(timezone.utc)
     start_at = (
         datetime.fromisoformat(payload.auction_start_at)
@@ -372,13 +604,21 @@ async def create_listing(
     if end_at.tzinfo is None:
         end_at = end_at.replace(tzinfo=timezone.utc)
 
-    # Calculate initial discount if start_price not provided
+    # Calculate initial discount using AI if start_price not provided
+    ai_engine = getattr(request.app.state, "ai", None)
     if payload.start_price is not None:
         start_price = payload.start_price
     else:
-        days_to_exp = max(0, (exp_date - date.today()).days)
-        discount = get_initial_discount_percentage(days_to_exp)
-        start_price = round(payload.normal_price * (1.0 - (discount / 100.0)), 2)
+        advice = calculate_price_advice(
+            normal_price=payload.normal_price,
+            expiry_date_str=payload.expiry_date,
+            category=product.category,
+            qty=payload.qty,
+            storage_type=product.storage_type or "ambient",
+            min_price=payload.min_price,
+            ai_engine=ai_engine,
+        )
+        start_price = advice.suggested_price
 
     if payload.min_price > start_price:
         raise AppException(
@@ -407,22 +647,27 @@ async def create_listing(
     db.refresh(listing)
 
     # ── AI Ranking: Match Top-5 buyers & create offers ───────────────────────
-    ai_engine = getattr(request.app.state, "ai", None)
     matching_summary = {"total_offers_sent": 0, "top_buyers": []}
     if ai_engine is not None:
-        matching_summary = await run_in_threadpool(
-            match_and_create_offers_for_listing,
-            db=db,
-            listing=listing,
-            ai_engine=ai_engine,
-            top_k=5,
-        )
+        try:
+            matching_summary = match_and_create_offers_for_listing(
+                db=db,
+                listing=listing,
+                ai_engine=ai_engine,
+                top_k=5,
+            )
+        except Exception as e:
+            logger.error("AI matching on create_listing encountered an issue: %s", e)
 
     cur_price, next_drop = calculate_current_dutch_price(listing)
-    return wrap_success({
-        "listing": _format_listing_response(listing, cur_price, next_drop),
-        "matching_summary": matching_summary,
-    })
+    return wrap_success(
+        _format_listing_response(
+            listing,
+            cur_price,
+            next_drop,
+            matching_summary=matching_summary,
+        )
+    )
 
 
 @router.get(

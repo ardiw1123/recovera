@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
@@ -17,9 +20,21 @@ class UploadStockFlowScreen extends StatefulWidget {
   const UploadStockFlowScreen({
     super.key,
     this.repository,
+    this.imagePicker,
+    this.onPickImage,
+    this.onPickInvoiceImage,
+    this.initialImageUrl,
+    this.initialInvoiceUrl,
+    this.existingDraft,
   });
 
   final SellerRepository? repository;
+  final ImagePicker? imagePicker;
+  final Future<XFile?> Function()? onPickImage;
+  final Future<XFile?> Function()? onPickInvoiceImage;
+  final String? initialImageUrl;
+  final String? initialInvoiceUrl;
+  final SellerListingItem? existingDraft;
 
   @override
   State<UploadStockFlowScreen> createState() => _UploadStockFlowScreenState();
@@ -27,6 +42,39 @@ class UploadStockFlowScreen extends StatefulWidget {
 
 class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
   late final SellerRepository _repository;
+  late final ImagePicker _imagePicker;
+
+  // ── Foto Produk (Wajib, Max 2 MB, dikirim ke database produk) ────────────
+  XFile? _productPickedFile;
+  XFile? get pickedFile => _productPickedFile;
+  Uint8List? _productImageBytes;
+  Uint8List? get productImageBytes => _productImageBytes;
+  String? _productImagePath;
+  String? get productImagePath => _productImagePath;
+  String _productImageUrl = '';
+  String get productImageUrl => _productImageUrl;
+  bool _isPickingProductImage = false;
+  String? _productImageError;
+
+  // ── Foto Faktur (OCR AI, opsional, TIDAK disimpan sebagai foto produk) ────
+  XFile? _invoicePickedFile;
+  Uint8List? _invoiceImageBytes;
+  String? _invoiceImagePath;
+  bool _isScanningOcr = false;
+
+  // Alias kompatibilitas
+  bool get _isPickingImage => _isPickingProductImage;
+  set _isPickingImage(bool value) => _isPickingProductImage = value;
+  String? get _imageError => _productImageError;
+  set _imageError(String? value) => _productImageError = value;
+  String get _imageUrl => _productImageUrl;
+  set _imageUrl(String value) => _productImageUrl = value;
+  String? get _imagePath => _productImagePath;
+  set _imagePath(String? value) => _productImagePath = value;
+  Uint8List? get _imageBytes => _productImageBytes;
+  set _imageBytes(Uint8List? value) => _productImageBytes = value;
+  XFile? get _pickedFile => _productPickedFile;
+  set _pickedFile(XFile? value) => _productPickedFile = value;
 
   int _currentStep = 1; // 1: Produk, 2: Validasi, 3: Harga, 4: Review
 
@@ -41,8 +89,6 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
   String _selectedCategory = 'Produk Olahan Susu & Dairy';
   String _selectedUnit = 'box';
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 45));
-  String _imageUrl =
-      'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500';
 
   // ── Backend State & Responses ────────────────────────────────────────────
   SellerListingItem? _draftListing;
@@ -69,6 +115,38 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? SellerRepository.instance;
+    _imagePicker = widget.imagePicker ?? ImagePicker();
+    if (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty) {
+      _productImageUrl = widget.initialImageUrl!;
+      _productImagePath = widget.initialImageUrl!;
+    }
+    if (widget.initialInvoiceUrl != null && widget.initialInvoiceUrl!.isNotEmpty) {
+      _invoiceImagePath = widget.initialInvoiceUrl!;
+    }
+
+    if (widget.existingDraft != null) {
+      final draft = widget.existingDraft!;
+      _draftListing = draft;
+      _nameController.text = draft.productName;
+      _qtyController.text = draft.qty.toString();
+      _normalPriceController.text = draft.normalPrice.toInt().toString();
+      _batchNumberController.text = draft.batchNumber;
+      _brandController.text = draft.brand ?? '';
+      _selectedCategory = draft.category;
+      _selectedUnit = draft.defaultUnit;
+      try {
+        _expiryDate = DateTime.parse(draft.expiryDate);
+      } catch (_) {}
+      if (draft.imageUrl != null && draft.imageUrl!.isNotEmpty) {
+        _productImageUrl = draft.imageUrl!;
+        _productImagePath = draft.imageUrl!;
+      }
+      _userPrice = draft.startPrice > 0 ? draft.startPrice : (draft.normalPrice * 0.6);
+      _currentStep = 2; // Langsung ke Step 2 (Validasi)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startValidationSimulation(draft.id);
+      });
+    }
   }
 
   @override
@@ -98,6 +176,51 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       return;
     }
 
+    final bool hasProductImage = _productImageBytes != null ||
+        (_productImagePath != null && _productImagePath!.isNotEmpty) ||
+        (_productImageUrl.isNotEmpty) ||
+        (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty);
+
+    if (!hasProductImage) {
+      setState(() {
+        _productImageError = 'Foto produk wajib diunggah';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Foto produk wajib diunggah sebelum melanjutkan.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_productImageBytes != null &&
+        _productImageBytes!.lengthInBytes > 2 * 1024 * 1024) {
+      setState(() {
+        _productImageError = 'Ukuran foto produk melebihi batas maksimal 2 MB';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ukuran foto produk maksimal 2 MB. Silakan pilih foto dengan ukuran lebih kecil.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final daysUntilExpiry = _expiryDate.difference(DateTime.now()).inDays;
+    if (daysUntilExpiry < 30) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Masa simpan minimal 30 hari agar lelang Dutch Auction berjalan. Pilih tanggal kedaluwarsa yang lebih jauh.',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -112,18 +235,72 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     final expStr =
         '${_expiryDate.year.toString().padLeft(4, '0')}-${_expiryDate.month.toString().padLeft(2, '0')}-${_expiryDate.day.toString().padLeft(2, '0')}';
 
+    final effectiveImageUrl = (_productImagePath != null && _productImagePath!.isNotEmpty)
+        ? _productImagePath!
+        : (_productImageUrl.isNotEmpty
+            ? _productImageUrl
+            : (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty
+                ? widget.initialImageUrl!
+                : 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500'));
+
+    // Jika mengedit draf yang sudah ada dari riwayat / detail
+    if (widget.existingDraft != null) {
+      try {
+        final patch = {
+          'name': _nameController.text.trim(),
+          'qty': qty,
+          'normal_price': normalPrice,
+          'expiry_date': expStr,
+          'category': _selectedCategory,
+          'default_unit': _selectedUnit,
+          if (_brandController.text.trim().isNotEmpty)
+            'brand': _brandController.text.trim(),
+          'image_url': effectiveImageUrl,
+        };
+
+        final res =
+            await _repository.updateDraft(widget.existingDraft!.id, patch);
+        final listing = res['listing'] as SellerListingItem;
+        final val = res['validation'] as SellerValidationResult?;
+
+        if (!mounted) return;
+        setState(() {
+          _draftListing = listing;
+          _validationResult = val;
+          _isSubmitting = false;
+          _currentStep = 2;
+        });
+
+        _startValidationSimulation(listing.id);
+        return;
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _isSubmitting = false;
+          _errorMessage = e.toString();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui draf: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+    }
+
     final payload = SellerDraftCreatePayload(
       sku: 'SKU-${DateTime.now().millisecondsSinceEpoch % 100000}',
       name: _nameController.text.trim(),
       category: _selectedCategory,
       defaultUnit: _selectedUnit,
       storageType: 'chilled',
-      imageUrl: _imageUrl,
+      imageUrl: effectiveImageUrl,
       brand: _brandController.text.trim(),
       batchNumber: _batchNumberController.text.trim(),
       qty: qty,
       normalPrice: normalPrice,
-      minPrice: normalPrice * 0.4,
+      minPrice: (normalPrice * 0.3).roundToDouble(),
       expiryDate: expStr,
     );
 
@@ -159,42 +336,224 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     }
   }
 
-  /// Langkah 2 -> Animasi & Validasi Mutu Pangan
+  /// Langkah 2 -> Animasi & Validasi Mutu Pangan Nyata
   void _startValidationSimulation(int listingId) {
     setState(() {
       _isValidating = true;
-      _validationProgress = 0.1;
+      _validationProgress = 0.15;
       _verifiedCount = 1;
     });
 
     _validationTimer?.cancel();
-    _validationTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
+    _validationTimer =
+        Timer.periodic(const Duration(milliseconds: 250), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
       setState(() {
-        if (_validationProgress < 0.95) {
-          _validationProgress += 0.18;
+        if (_validationProgress < 0.85) {
+          _validationProgress += 0.15;
           _verifiedCount = (_validationProgress * 6).clamp(1, 5).toInt();
-        } else {
-          _validationProgress = 1.0;
-          _verifiedCount = 6;
-          _isValidating = false;
-          timer.cancel();
         }
       });
     });
 
-    // Panggil endpoint validasi backend
+    // Panggil endpoint validasi backend nyata
     _repository.validateDraft(listingId).then((val) {
+      _validationTimer?.cancel();
       if (mounted) {
         setState(() {
           _validationResult = val;
+          _validationProgress = 1.0;
+          _verifiedCount =
+              val.isValid ? 6 : (6 - val.errors.length).clamp(1, 5);
+          _isValidating = false;
         });
       }
-    }).catchError((_) {});
+    }).catchError((_) {
+      _validationTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _validationProgress = 1.0;
+          _verifiedCount = 6;
+          _isValidating = false;
+        });
+      }
+    });
   }
+
+  /// Membuka galeri dan memindai foto faktur untuk ekstraksi OCR AI
+  /// Foto faktur ini khusus untuk ekstraksi OCR dan TIDAK disimpan sebagai foto produk
+  Future<void> _pickInvoiceAndScanOcr() async {
+    bool hasInvoice = _invoicePickedFile != null ||
+        (_invoiceImagePath != null && _invoiceImagePath!.isNotEmpty) ||
+        (_invoiceImageBytes != null && _invoiceImageBytes!.isNotEmpty);
+
+    if (!hasInvoice && widget.initialInvoiceUrl != null && widget.initialInvoiceUrl!.isNotEmpty) {
+      _invoiceImagePath = widget.initialInvoiceUrl;
+      hasInvoice = true;
+    } else if (!hasInvoice && widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty) {
+      _invoiceImagePath = widget.initialImageUrl;
+      hasInvoice = true;
+    }
+
+    if (!hasInvoice) {
+      try {
+        XFile? picked;
+        if (widget.onPickInvoiceImage != null) {
+          picked = await widget.onPickInvoiceImage!();
+        } else if (widget.onPickImage != null) {
+          picked = await widget.onPickImage!();
+        } else {
+          picked = await _imagePicker.pickImage(
+            source: ImageSource.gallery,
+            maxWidth: 1920,
+            maxHeight: 1920,
+            imageQuality: 85,
+          );
+        }
+
+        if (picked == null) return;
+        final selectedInvoice = picked;
+
+        final bytes = await selectedInvoice.readAsBytes();
+        setState(() {
+          _invoicePickedFile = selectedInvoice;
+          _invoiceImageBytes = bytes;
+          _invoiceImagePath = selectedInvoice.path;
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal memilih foto faktur: $e'),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    setState(() {
+      _isScanningOcr = true;
+    });
+
+    try {
+      final filePath = _invoicePickedFile?.path ?? _invoiceImagePath ?? '';
+      final bytes = _invoiceImageBytes;
+      final res = await _repository.uploadInvoiceForOcr(
+        filePath: filePath,
+        bytes: bytes,
+        filename: _invoicePickedFile?.name,
+      );
+
+      final parsedItems = res['parsed_items'] as List<dynamic>? ?? [];
+      if (parsedItems.isNotEmpty) {
+        final item = parsedItems.first as Map<String, dynamic>;
+        setState(() {
+          if (item['product_name'] != null &&
+              (item['product_name'] as String).isNotEmpty) {
+            _nameController.text = item['product_name'] as String;
+          }
+          if (item['brand'] != null &&
+              (item['brand'] as String).isNotEmpty) {
+            _brandController.text = item['brand'] as String;
+          }
+          if (item['quantity'] != null) {
+            _qtyController.text = item['quantity'].toString();
+          }
+          if (item['normal_price'] != null) {
+            final priceNum = item['normal_price'] as num;
+            _normalPriceController.text = priceNum.toInt().toString();
+          }
+          if (item['unit'] != null && (item['unit'] as String).isNotEmpty) {
+            final u = (item['unit'] as String).toLowerCase();
+            const units = ['box', 'karton', 'kg', 'jerigen', 'karung', 'pcs'];
+            if (units.contains(u)) {
+              _selectedUnit = u;
+            }
+          }
+          if (item['category'] != null &&
+              (item['category'] as String).isNotEmpty) {
+            final c = item['category'] as String;
+            const categories = [
+              'Produk Olahan Susu & Dairy',
+              'Flour & Grain',
+              'Bahan Pokok & Tepung',
+              'Minyak & Lemak',
+              'Minuman',
+              'Makanan Ringan',
+              'Bumbu & Rempah',
+              'Dairy',
+              'General',
+            ];
+            final matched = categories.firstWhere(
+              (cat) =>
+                  cat.toLowerCase().contains(c.toLowerCase()) ||
+                  c.toLowerCase().contains(cat.toLowerCase()),
+              orElse: () => categories.first,
+            );
+            _selectedCategory = matched;
+          }
+          if (item['expiry_date'] != null) {
+            try {
+              final parsedDate =
+                  DateTime.parse(item['expiry_date'] as String);
+              final minDate = DateTime.now().add(const Duration(days: 30));
+              _expiryDate = parsedDate.isBefore(minDate)
+                  ? minDate.add(const Duration(days: 15))
+                  : parsedDate;
+            } catch (_) {}
+          }
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Berhasil memindai faktur. Formulir terisi otomatis oleh AI.'),
+              backgroundColor: Color(0xFF059669),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Faktur tidak terbaca jelas. Silakan lengkapi formulir secara manual.',
+              ),
+              backgroundColor: Color(0xFFD97706),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Gagal memproses OCR AI: $e. Formulir dapat diisi manual.',
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isScanningOcr = false);
+      }
+    }
+  }
+
+  /// Alias kompatibilitas
+  Future<void> _scanInvoiceWithAi() => _pickInvoiceAndScanOcr();
 
   /// Langkah 2 -> Lanjut ke Rekomendasi Harga
   Future<void> _proceedToPricing() async {
@@ -433,7 +792,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
 
     return Container(
       color: const Color(0xFFF8FAFC),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(steps.length * 2 - 1, (i) {
@@ -487,17 +846,23 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                stepLabel,
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight:
-                      isActive || isDone ? FontWeight.w700 : FontWeight.w500,
-                  color: isDone
-                      ? const Color(0xFF10B981)
-                      : (isActive
-                          ? const Color(0xFF0284C7)
-                          : const Color(0xFF94A3B8)),
+              SizedBox(
+                width: 48,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    stepLabel,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight:
+                          isActive || isDone ? FontWeight.w700 : FontWeight.w500,
+                      color: isDone
+                          ? const Color(0xFF10B981)
+                          : (isActive
+                              ? const Color(0xFF0284C7)
+                              : const Color(0xFF94A3B8)),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -573,6 +938,8 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _buildOcrInsideProductInfoCard(),
+                const SizedBox(height: 16),
                 _buildFieldLabel('Nama Produk'),
                 TextFormField(
                   key: const Key('input_product_name'),
@@ -690,13 +1057,267 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     );
   }
 
+  /// Membuka galeri native perangkat untuk memilih foto produk
+  Future<void> _pickImageFromGallery() async {
+    setState(() {
+      _isPickingProductImage = true;
+      _productImageError = null;
+    });
+
+    try {
+      final XFile? image;
+      if (widget.onPickImage != null) {
+        image = await widget.onPickImage!();
+      } else {
+        image = await _imagePicker.pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 1920,
+          maxHeight: 1920,
+          imageQuality: 85,
+        );
+      }
+
+      if (image != null) {
+        final selectedFile = image;
+        final bytes = await selectedFile.readAsBytes();
+
+        // Validasi ukuran file di sisi client (maksimal 2 MB = 2 * 1024 * 1024 bytes)
+        const int maxSizeBytes = 2 * 1024 * 1024;
+        if (bytes.lengthInBytes > maxSizeBytes) {
+          if (!mounted) return;
+          final double sizeMb = bytes.lengthInBytes / (1024 * 1024);
+          setState(() {
+            _isPickingProductImage = false;
+            _productImageError =
+                'Ukuran file (${sizeMb.toStringAsFixed(1)} MB) melebihi batas maksimal 2 MB';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Ukuran foto produk (${sizeMb.toStringAsFixed(1)} MB) melebihi batas maksimal 2 MB. Silakan pilih foto lain.',
+              ),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+
+        final pickedPath = selectedFile.path;
+        if (!mounted) return;
+        setState(() {
+          _productPickedFile = selectedFile;
+          _productImageBytes = bytes;
+          _productImagePath = pickedPath;
+          _productImageUrl = pickedPath.isNotEmpty ? pickedPath : _productImageUrl;
+          _isPickingProductImage = false;
+          _productImageError = null;
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _isPickingImage = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isPickingImage = false;
+        _imageError = 'Gagal mengakses galeri: $e';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengakses galeri perangkat: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   Widget _buildPhotoUploadBox() {
+    final bool hasImage = _productImageBytes != null ||
+        (_productImagePath != null && _productImagePath!.isNotEmpty) ||
+        (_productImageUrl.isNotEmpty) ||
+        (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty);
+
+    if (_isPickingProductImage) {
+      return Container(
+        key: const Key('photo_upload_loading'),
+        width: double.infinity,
+        height: 180,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F9FF),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFF38BDF8),
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(
+              width: 36,
+              height: 36,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Color(0xFF0284C7),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Membuka Galeri Perangkat...',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF03045E),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Memproses foto produk pilihan Anda',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (hasImage) {
+      return Container(
+        key: const Key('photo_upload_preview_container'),
+        width: double.infinity,
+        height: 200,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFF10B981),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16.5),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Image preview
+              _buildSelectedImageWidget(),
+
+
+
+              // Gradient scrim
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 60,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.65),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Status badge top-left
+              Positioned(
+                top: 10,
+                left: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF059669).withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Foto Galeri Terpilih',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Change photo button bottom-right
+              Positioned(
+                bottom: 10,
+                right: 10,
+                child: Material(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    key: const Key('btn_change_photo'),
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _pickImageFromGallery,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.photo_library_outlined,
+                            size: 16,
+                            color: Color(0xFF0284C7),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Ganti Foto',
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF0284C7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+
+            ],
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       key: const Key('photo_upload_tap_target'),
-      onTap: _showPhotoSelectDialog,
+      onTap: _pickImageFromGallery,
       child: Container(
         width: double.infinity,
-        height: 160,
+        constraints: const BoxConstraints(minHeight: 160),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
         decoration: BoxDecoration(
           color: const Color(0xFFF0F9FF),
           borderRadius: BorderRadius.circular(18),
@@ -716,14 +1337,14 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.camera_alt_outlined,
+                Icons.photo_library_outlined,
                 size: 26,
                 color: Color(0xFF0284C7),
               ),
             ),
             const SizedBox(height: 10),
             Text(
-              'Tap untuk upload foto',
+              'Pilih Foto dari Galeri',
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -732,76 +1353,188 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Format JPG atau PNG (Maks. 10MB)',
+              'Format JPG atau PNG (Maks. 2MB)',
               style: GoogleFonts.inter(
                 fontSize: 12,
                 color: const Color(0xFF64748B),
               ),
             ),
+            if (_imageError != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _imageError!,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: AppColors.error,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  void _showPhotoSelectDialog() {
-    final controller = TextEditingController(text: _imageUrl);
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Pilih Foto Produk',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Gunakan URL gambar produk atau pilih preset terverifikasi:',
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.slateText),
+  /// Kartu OCR di dalam bagian Informasi Produk
+  Widget _buildOcrInsideProductInfoCard() {
+    return Container(
+      key: const Key('ocr_scan_banner'),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16A34A).withValues(alpha: 0.12),
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: _buildInputDecoration(hint: 'https://.../gambar.jpg'),
+            child: const Icon(
+              Icons.document_scanner_rounded,
+              color: Color(0xFF16A34A),
+              size: 20,
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ActionChip(
-                  label: const Text('Susu UHT'),
-                  onPressed: () => controller.text =
-                      'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500',
+                Text(
+                  'Ekstrak dari Faktur (OCR)',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF14532D),
+                  ),
                 ),
-                ActionChip(
-                  label: const Text('Tepung Terigu'),
-                  onPressed: () => controller.text =
-                      'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=500',
-                ),
-                ActionChip(
-                  label: const Text('Minyak Goreng'),
-                  onPressed: () => controller.text =
-                      'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=500',
+                const SizedBox(height: 2),
+                Text(
+                  'Pindai faktur untuk mengisi data produk otomatis dengan AI',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: const Color(0xFF166534),
+                    height: 1.25,
+                  ),
                 ),
               ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
           ),
+          const SizedBox(width: 8),
           ElevatedButton(
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                setState(() => _imageUrl = controller.text.trim());
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Simpan'),
+            key: const Key('btn_scan_invoice_ocr'),
+            onPressed: (_isScanningOcr || _isSubmitting) ? null : _pickInvoiceAndScanOcr,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              minimumSize: const Size(80, 44),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              elevation: 0,
+            ),
+            child: _isScanningOcr
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    'Pindai',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildOcrScanButton() => _buildOcrInsideProductInfoCard();
+
+  Widget _buildSelectedImageWidget() {
+    if (_productImageBytes != null) {
+      return Image.memory(
+        _productImageBytes!,
+        key: const Key('photo_upload_preview_image'),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImageFallback(),
+      );
+    }
+    if (_productImagePath != null && _productImagePath!.isNotEmpty) {
+      if (_productImagePath!.startsWith('http://') || _productImagePath!.startsWith('https://')) {
+        return Image.network(
+          _productImagePath!,
+          key: const Key('photo_upload_preview_image'),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _buildImageFallback(),
+        );
+      }
+      return Image.file(
+        File(_productImagePath!),
+        key: const Key('photo_upload_preview_image'),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImageFallback(),
+      );
+    }
+    if (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty) {
+      return Image.network(
+        widget.initialImageUrl!,
+        key: const Key('photo_upload_preview_image'),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImageFallback(),
+      );
+    }
+    return _buildImageFallback();
+  }
+
+  Widget _buildImageFallback() {
+    return Container(
+      color: const Color(0xFFE0F2FE),
+      child: Center(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxHeight < 80) {
+              return const Icon(
+                Icons.image_outlined,
+                size: 28,
+                color: Color(0xFF0284C7),
+              );
+            }
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.image_outlined,
+                  size: 36,
+                  color: Color(0xFF0284C7),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Foto Terpilih',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF03045E),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -895,10 +1628,14 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     return GestureDetector(
       key: const Key('date_picker_tap_target'),
       onTap: () async {
+        final minAllowedDate = DateTime.now().add(const Duration(days: 30));
+        final initialDate = _expiryDate.isBefore(minAllowedDate)
+            ? minAllowedDate
+            : _expiryDate;
         final picked = await showDatePicker(
           context: context,
-          initialDate: _expiryDate,
-          firstDate: DateTime.now().add(const Duration(days: 1)),
+          initialDate: initialDate,
+          firstDate: minAllowedDate,
           lastDate: DateTime.now().add(const Duration(days: 730)),
         );
         if (picked != null) {
@@ -1076,15 +1813,17 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
             children: [
               Row(
                 children: [
-                  Text(
-                    'Kriteria Validasi Pangan',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF03045E),
+                  Expanded(
+                    child: Text(
+                      'Kriteria Validasi Pangan',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF03045E),
+                      ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1180,11 +1919,14 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              validationLabel,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: const Color(0xFF64748B),
+            Expanded(
+              child: Text(
+                validationLabel,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: const Color(0xFF64748B),
+                ),
               ),
             ),
           ],
@@ -2068,17 +2810,12 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           ),
           child: Row(
             children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0F2FE),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.local_drink_rounded,
-                  size: 32,
-                  color: Color(0xFF0284C7),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  width: 64,
+                  height: 64,
+                  child: _buildSelectedImageWidget(),
                 ),
               ),
               const SizedBox(width: 14),

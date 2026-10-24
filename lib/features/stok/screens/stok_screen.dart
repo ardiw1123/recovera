@@ -5,6 +5,7 @@ import '../../../core/sensors/shake_detector.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/listing_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../../home/models/product_model.dart';
@@ -22,6 +23,9 @@ import '../../home/widgets/empty_state_view.dart';
 ///  • Result count + sort pill
 ///  • Product card list / empty state
 class StokScreen extends StatefulWidget {
+  const StokScreen({super.key, this.listingRepository});
+
+  final ListingRepository? listingRepository;
   const StokScreen({super.key, this.sensorStream});
 
   final Stream<AccelerometerEvent>? sensorStream;
@@ -44,10 +48,15 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
   Set<FoodCategory> _selectedCategories = {};
   String _expiryPreset = 'all';
   String _sortKey = 'cheapest';
+  double _radiusKm = 15.0;
 
   @override
   void initState() {
     super.initState();
+    _listingRepository = widget.listingRepository ??
+        ListingRepository(
+          remoteClient: ListingApiService(client: ApiClient()),
+        );
     WidgetsBinding.instance.addObserver(this);
     _shakeDetector = ShakeDetector(
       onShake: _onShakeToRefresh,
@@ -164,11 +173,13 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
         selectedCategories: _selectedCategories,
         selectedExpiryPreset: _expiryPreset,
         selectedSort: _sortKey,
-        onApply: (cats, expiry, sort) {
+        selectedRadiusKm: _radiusKm,
+        onApply: (cats, expiry, sort, radius) {
           setState(() {
             _selectedCategories = cats;
             _expiryPreset = expiry;
             _sortKey = sort;
+            _radiusKm = radius;
           });
         },
       ),
@@ -213,6 +224,56 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
   // ── Build ─────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    // Role Guard: Stok screen is strictly for sellers
+    if (!AuthRepository.instance.isSeller) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          title: Text(
+            'Stok Lelang',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.gpp_bad_rounded,
+                  size: 64,
+                  color: AppColors.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Akses Terbatas: Khusus Penjual',
+                  key: const Key('stok_buyer_access_restricted_title'),
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0F172A),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Fitur manajemen stok lelang hanya dapat diakses oleh akun penjual.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: AppColors.slateText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final products = _filteredProducts;
 
     return Scaffold(
@@ -488,15 +549,19 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'KATEGORI PANGAN B2B',
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF94A3B8),
-                    letterSpacing: 0.8,
+                Expanded(
+                  child: Text(
+                    'KATEGORI PANGAN B2B',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF94A3B8),
+                      letterSpacing: 0.8,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () {
                     setState(() {
@@ -713,35 +778,43 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Text(
-                'Menampilkan $count barang',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1E293B),
-                ),
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Menampilkan $count barang',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 4,
+                    height: 4,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFCBD5E1),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'B2B Verified',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Container(
-                width: 5,
-                height: 5,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFCBD5E1),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'B2B Verified',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: const Color(0xFF64748B),
-                ),
-              ),
-            ],
+            ),
           ),
+          const SizedBox(width: 8),
           GestureDetector(
             onTap: _openFilterSheet,
             child: Container(

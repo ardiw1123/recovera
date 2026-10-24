@@ -2,7 +2,7 @@
 
 FastAPI backend service for **Recovera (B2B Near-Expiry Food Liquidation & Diversion Platform)**.
 
-Designed with a modular, scalable architecture supporting both local development (SQLite/PostgreSQL) and production deployment (Docker & Docker Compose).
+Designed with a modular, scalable architecture supporting both local development (SQLite / Supabase PostgreSQL) and cloud container deployment (Docker) connected to managed Supabase PostgreSQL.
 
 ---
 
@@ -13,6 +13,7 @@ The project follows domain-driven separation of concerns:
 ```
 backend/
 ├── app/
+│   ├── ai/                    # ML / heuristic pricing & buyer ranking engines
 │   ├── core/                  # Security (bcrypt, JWT), dependencies, custom error handlers
 │   │   ├── dependencies.py    # Annotated dependencies (DbSessionDep, CurrentUserDep, role guards)
 │   │   ├── exceptions.py      # Standard envelope error handlers
@@ -42,7 +43,7 @@ backend/
 │   │   ├── envelope.py        # Standard API envelope response models
 │   │   └── ...
 │   ├── services/              # Pure business logic separated from HTTP controllers
-│   │   ├── ai_service.py      # OCR parsing & price advisor logic
+│   │   ├── ai_service.py      # OCR parsing & price advisor logic (Groq LLM)
 │   │   ├── auth_service.py    # Registration, login, token rotation
 │   │   ├── donation_service.py# ESG certificate & blockchain verification
 │   │   ├── listing_service.py # Dutch auction dynamic pricing & multi-timezone
@@ -52,8 +53,8 @@ backend/
 │   └── main.py                # FastAPI app entrypoint, CORS, lifespan
 ├── alembic/                   # Database migrations
 ├── tests/                     # Automated pytest suite
-├── Dockerfile                 # Container image specification
-├── docker-compose.yml         # Container orchestration (API + PostgreSQL)
+├── Dockerfile                 # Container image specification (Python 3.11-slim)
+├── docker-compose.yml         # Container orchestration configuration
 ├── requirements.txt           # Python package dependencies
 ├── pyproject.toml             # Project metadata and tooling config
 └── README.md
@@ -105,7 +106,7 @@ All API endpoints return consistent envelope JSON responses following `docs/reco
 | `listings` | `PATCH` | `/listings/{id}` | Seller | Update stock quantity or reserve price |
 | `listings` | `POST` | `/listings/{id}/buy` | Buyer | Buy Now purchase with biometric confirmation |
 | `ai` | `POST` | `/ai/invoice` | Seller | Multipart invoice upload -> extracted products |
-| `ai` | `POST` | `/ai/price-advice` | Seller | Rule-based dynamic price recommendation & rationale |
+| `ai` | `POST` | `/ai/price-advice` | Seller | Dynamic price recommendation & ML prediction |
 | `orders` | `GET` | `/orders` | Authenticated | List purchase or sales history |
 | `orders` | `GET` | `/orders/{id}` | Authenticated | Order detail and pickup coordinates |
 | `orders` | `PATCH` | `/orders/{id}/status` | Authenticated | Update status (`picked_up`, `completed`) |
@@ -137,39 +138,149 @@ Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
-By default, `DATABASE_URL` is set to `sqlite:///./recovera.db`, so no local PostgreSQL installation is required to start developing immediately.
+Konfigurasi database pada `.env`:
+- **Supabase PostgreSQL (Direkomendasikan):**
+  ```env
+  DATABASE_URL=postgresql://postgres.[ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres
+  ```
+  *(Catatan: Anda juga dapat menggunakan alias `SUPABASE_DATABASE_URL`).*
+- **SQLite (Fallback Pengembangan Lokal):**
+  ```env
+  DATABASE_URL=sqlite:///./recovera.db
+  ```
+- **Kredensial AI & Layanan Eksternal:**
+  ```env
+  GROQ_API_KEY=gsk_...
+  SECRET_KEY=your-secure-random-secret-key
+  ```
 
-### Step 3: Run the Development Server
-Using FastAPI CLI:
+### Step 3: Menjalankan Migrasi Database (Alembic)
+Terapkan migrasi skema tabel ke instance Supabase PostgreSQL Anda:
 ```bash
-fastapi dev app/main.py
+alembic upgrade head
 ```
-Or with Uvicorn:
+
+### Step 4: Menjalankan Server Pengembangan
+Menggunakan Uvicorn:
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
-The API will be accessible at `http://localhost:8000`.
+API akan aktif dan dapat diakses di `http://localhost:8000` (Swagger docs di `http://localhost:8000/docs`).
 
-### Step 4: Run Tests
+### Step 5: Menjalankan Pengujian Otomatis
 ```bash
 pytest tests -v
 ```
 
 ---
 
-## 5. Docker & Containerization
+## 5. Docker Deployment Guide (Dengan Supabase PostgreSQL)
 
-### Run with Docker Compose (API + PostgreSQL)
-Start both the PostgreSQL database and FastAPI service:
-```bash
-docker compose up --build
-```
-This automatically configures:
-- FastAPI container on port `8000` with hot-reloading
-- PostgreSQL 16 container on port `5432` with health checks and persistent volume storage
+Aplikasi Recovera menggunakan **Supabase PostgreSQL** sebagai basis data cloud terkelola (bukan database PostgreSQL lokal di container). Oleh karena itu, deployment Docker **hanya perlu menjalankan container service FastAPI (`api`)** yang langsung terhubung ke instance Supabase melalui jaringan internet.
 
-### Build Docker Image Standalone
+### Persyaratan Awal (Prerequisites)
+1. [Docker](https://docs.docker.com/get-docker/) terinstal dan aktif.
+2. File `.env` di folder `backend/` telah dikonfigurasi dengan string koneksi Supabase Anda:
+   ```env
+   ENVIRONMENT=production
+   DATABASE_URL=postgresql://postgres.[ref]:[YOUR_PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres
+   SECRET_KEY=3862b7b8dde0ec462eb4bc7df030c36943ffc2fb13082318bcab35a18c8cd25a
+   GROQ_API_KEY=gsk_...
+   CORS_ORIGINS=*
+   USE_ML_MODEL=true
+   ```
+
+> [!TIP]
+> **Panduan Port Supabase Connection:**
+> - **Port 6543 (Transaction Pooler - Sangat Direkomendasikan):** Menggunakan Supavisor pooler untuk mencegah kehabisan koneksi (*connection exhaustion*) saat container melayani banyak request bersamaan.
+> - **Port 5432 (Session Mode / Direct):** Digunakan jika Anda menjalankan operasi DDL atau migrasi schema yang membutuhkan fitur sesi khusus.
+
+---
+
+### Opsi A: Menjalankan Container Mandiri (Docker Standalone) — Direkomendasikan
+
+Metode ini paling efisien untuk VPS (Ubuntu/Debian) atau cloud server.
+
+#### 1. Build Docker Image
+Jalankan perintah berikut di dalam direktori `backend/`:
 ```bash
 docker build -t recovera-api .
-docker run -p 8000:8000 -e DATABASE_URL=sqlite:///./recovera.db recovera-api
 ```
+
+#### 2. Jalankan Container dengan Membaca File `.env`
+```bash
+docker run -d \
+  --name recovera-backend \
+  -p 8000:8000 \
+  --restart unless-stopped \
+  --env-file .env \
+  recovera-api
+```
+
+#### 3. Alternatif: Melewatkan Environment Variable Langsung
+```bash
+docker run -d \
+  --name recovera-backend \
+  -p 8000:8000 \
+  --restart unless-stopped \
+  -e ENVIRONMENT=production \
+  -e DATABASE_URL="postgresql://postgres.[ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres" \
+  -e GROQ_API_KEY="gsk_..." \
+  -e SECRET_KEY="your-secure-random-secret-key" \
+  recovera-api
+```
+
+#### 4. Memeriksa Status & Log Container
+```bash
+# Cek apakah container berjalan lancar
+docker ps
+
+# Pantau log aplikasi secara real-time
+docker logs -f recovera-backend
+```
+Setelah berjalan, API dapat diakses di port `8000`. Endpoint `/docs` dapat digunakan untuk health check.
+
+#### 5. Menghentikan atau Me-restart Container
+```bash
+# Restart container
+docker restart recovera-backend
+
+# Hentikan dan hapus container
+docker stop recovera-backend
+docker rm recovera-backend
+```
+
+---
+
+### Opsi B: Menjalankan Migrasi Database (Alembic) di Supabase via Docker
+
+Jika Anda baru pertama kali menghubungkan ke database Supabase atau ada perubahan skema tabel baru:
+```bash
+# Jalankan migrasi di dalam container yang sedang berjalan
+docker exec -it recovera-backend alembic upgrade head
+```
+
+---
+
+### Opsi C: Menjalankan Khusus Service API pada Docker Compose
+
+Karena database PostgreSQL sudah berada di Supabase (cloud), Anda tidak perlu menyalakan container `db` bawaan `docker-compose.yml`. Anda cukup mengeksekusi service `api`:
+
+```bash
+docker compose run --rm --service-ports api uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+---
+
+### Opsi D: Deployment ke Cloud PaaS (Railway, Render, Fly.io) Menggunakan Docker
+
+Bila ingin mendepoy image Docker ke platform cloud publik:
+1. Hubungkan repository GitHub ke layanan cloud pilihan (**Railway**, **Render**, atau **Fly.io**).
+2. Layanan akan otomatis mendeteksi `Dockerfile` di folder `backend/`.
+3. Masukkan variabel lingkungan pada dashboard platform:
+   - `ENVIRONMENT` = `production`
+   - `DATABASE_URL` = `postgresql://postgres.[ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres`
+   - `GROQ_API_KEY` = `gsk_...`
+   - `SECRET_KEY` = string rahasia acak
+   - `PORT` = `8000` (atau biarkan default platform)
+4. Deploy akan otomatis berjalan dengan protokol HTTPS publik. URL backend tersebut kemudian siap dipasang pada aplikasi Flutter Recovera (`ApiConstants.baseUrl`).

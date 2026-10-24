@@ -20,3 +20,42 @@ async def get_certificate(
 ) -> dict:
     certificate = get_donation_certificate(db, donation_id)
     return wrap_success(certificate.model_dump())
+
+
+@router.post(
+    "/divert-expired",
+    status_code=status.HTTP_200_OK,
+)
+async def process_expired_diversions(
+    db: DbSessionDep,
+) -> dict:
+    from app.services.donation_service import check_and_divert_expired_listings
+    diverted = check_and_divert_expired_listings(db)
+    return wrap_success({
+        "diverted_count": len(diverted),
+        "diverted_listing_ids": [d.listing_id for d in diverted],
+    })
+
+
+@router.post(
+    "/listings/{listing_id}/divert",
+    status_code=status.HTTP_200_OK,
+)
+async def divert_single_listing(
+    db: DbSessionDep,
+    listing_id: Annotated[int, Path(ge=1)],
+) -> dict:
+    from app.models.listing import Listing
+    from app.core.exceptions import AppException
+    from app.services.donation_service import divert_listing_to_donation
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not listing:
+        raise AppException("LISTING_NOT_FOUND", "Listing not found", status.HTTP_404_NOT_FOUND)
+    donation = divert_listing_to_donation(db, listing)
+    return wrap_success({
+        "listing_id": listing.id,
+        "status": listing.status,
+        "donation_id": donation.id,
+        "certificate_no": donation.certificate_no,
+    })
+
