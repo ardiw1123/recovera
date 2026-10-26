@@ -51,3 +51,33 @@ class PriceAdviceResponse(BaseModel):
     rationale: str
     source: str = "rule"                  # "ml" | "rule"
     model_version: str | None = None      # versi model jika source="ml"
+
+
+class ChatHistoryItem(BaseModel):
+    role: str = Field(description="'user' atau 'assistant'")
+    content: str = Field(description="Isi pesan")
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000, description="Pesan dari user")
+    history: list[ChatHistoryItem] = Field(default_factory=list, description="Riwayat obrolan sesi saat ini")
+
+
+class RichCardAction(BaseModel):
+    label: str
+    route: str
+    params: dict = Field(default_factory=dict)
+
+
+class RichCardData(BaseModel):
+    type: str = Field(description="'product_simulation' | 'market_stat' | 'quick_tip'")
+    data: dict = Field(default_factory=dict)
+    action: RichCardAction | None = None
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    intent: str = Field(default="general_faq", description="'general_faq' | 'product_opportunity' | 'market_trends' | 'rejected'")
+    rich_card: RichCardData | None = None
+    suggested_followups: list[str] = Field(default_factory=list)
+

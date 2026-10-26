@@ -16,6 +16,7 @@ import '../widgets/filter_bottom_sheet.dart';
 import '../widgets/product_card.dart';
 import '../../auth/screens/location_management_screen.dart';
 import '../../transactions/screens/buyer_transaction_screen.dart';
+import '../../chat/screens/chatbot_screen.dart';
 
 /// Dashboard utama bagi pengguna Buyer (Pembeli).
 ///
@@ -281,9 +282,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .toList();
     }
 
+    // Invariant: Produk yang sudah melewati tanggal kedaluwarsa (<= 0) tidak ditampilkan di etalase pembeli
+    items = items.where((item) => item.effectiveDaysToExpiry > 0).toList();
+
     if (_selectedMaxExpiryDays != null) {
       items = items
-          .where((item) => item.effectiveDaysToExpiry <= _selectedMaxExpiryDays!)
+          .where((item) =>
+              item.effectiveDaysToExpiry > 0 &&
+              item.effectiveDaysToExpiry <= _selectedMaxExpiryDays!)
           .toList();
     }
 
@@ -349,6 +355,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return 'Jakarta Pusat, Indonesia';
   }
 
+  Widget _buildChatbotFab() {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.38),
+            blurRadius: 14,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: FloatingActionButton(
+        key: const Key('fab_chatbot_buyer'),
+        tooltip: 'Rera',
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const ChatbotScreen(),
+            ),
+          );
+        },
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        shape: const CircleBorder(),
+        child: const Icon(
+          Icons.smart_toy_rounded,
+          color: AppColors.white,
+          size: 26,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // ── Role Guard: Seller restriction ───────────────────────────────────────
@@ -405,6 +446,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      floatingActionButton: _buildChatbotFab(),
       body: Column(
         children: [
           // ── Fixed Wave Header (Sticky, tidak ikut ter-scroll) ───────────
@@ -561,53 +603,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
                                   letterSpacing: -0.6,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  'RECOVERA B2B',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981).withValues(alpha: 0.25),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: const Color(0xFF6EE7B7).withValues(alpha: 0.4),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.verified_rounded,
-                                      size: 9,
-                                      color: Color(0xFF6EE7B7),
-                                    ),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      'Verified',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFF6EE7B7),
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               ),
                             ],

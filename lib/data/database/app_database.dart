@@ -184,11 +184,44 @@ class AppDatabase {
       );
     ''');
 
+    // 6. chat_messages (riwayat percakapan chatbot lokal offline)
+    batch.execute('''
+      CREATE TABLE ${DatabaseConstants.tableChatMessages} (
+        ${DatabaseConstants.colChatId} INTEGER PRIMARY KEY AUTOINCREMENT,
+        ${DatabaseConstants.colChatUserId} INTEGER NOT NULL,
+        ${DatabaseConstants.colChatRole} TEXT NOT NULL,
+        ${DatabaseConstants.colChatMessage} TEXT NOT NULL,
+        ${DatabaseConstants.colChatIntent} TEXT,
+        ${DatabaseConstants.colChatRichCardJson} TEXT,
+        ${DatabaseConstants.colChatCreatedAt} TEXT NOT NULL
+      );
+    ''');
+    batch.execute('''
+      CREATE INDEX idx_chat_messages_user
+      ON ${DatabaseConstants.tableChatMessages} (${DatabaseConstants.colChatUserId});
+    ''');
+
     await batch.commit(noResult: true);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Migration logic for future schema increments
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${DatabaseConstants.tableChatMessages} (
+          ${DatabaseConstants.colChatId} INTEGER PRIMARY KEY AUTOINCREMENT,
+          ${DatabaseConstants.colChatUserId} INTEGER NOT NULL,
+          ${DatabaseConstants.colChatRole} TEXT NOT NULL,
+          ${DatabaseConstants.colChatMessage} TEXT NOT NULL,
+          ${DatabaseConstants.colChatIntent} TEXT,
+          ${DatabaseConstants.colChatRichCardJson} TEXT,
+          ${DatabaseConstants.colChatCreatedAt} TEXT NOT NULL
+        );
+      ''');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_user
+        ON ${DatabaseConstants.tableChatMessages} (${DatabaseConstants.colChatUserId});
+      ''');
+    }
   }
 
   Future<void> close() async {

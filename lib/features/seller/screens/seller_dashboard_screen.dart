@@ -8,6 +8,7 @@ import '../repositories/seller_repository.dart';
 import 'esg_certificate_list_screen.dart';
 import 'upload_stock_flow_screen.dart';
 import '../../transactions/screens/seller_order_screen.dart';
+import '../../chat/screens/chatbot_screen.dart';
 
 /// Halaman Beranda Seller — Dashboard Ringkasan
 /// menggantikan SellerInventoryScreen di tab Beranda.
@@ -634,22 +635,32 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   }
 
   Widget _buildFab() {
-    return FloatingActionButton.extended(
-      onPressed: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const UploadStockFlowScreen(),
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.38),
+            blurRadius: 14,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
           ),
-        );
-      },
-      backgroundColor: AppColors.primary,
-      icon: const Icon(Icons.add, color: AppColors.white),
-      label: Text(
-        'Upload Stok',
-        style: GoogleFonts.inter(
-          fontWeight: FontWeight.w600,
-          color: AppColors.white,
-        ),
+        ],
+      ),
+      child: FloatingActionButton(
+        key: const Key('fab_chatbot_seller'),
+        tooltip: 'Rera',
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const ChatbotScreen(),
+            ),
+          );
+        },
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.smart_toy_rounded, color: AppColors.white, size: 26),
       ),
     );
   }

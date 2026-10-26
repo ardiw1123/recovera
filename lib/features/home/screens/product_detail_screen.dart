@@ -459,6 +459,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return buf.toString();
   }
 
+  String _formatExpiryDate(DateTime dt) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    final day = dt.day.toString().padLeft(2, '0');
+    final month = months[(dt.month - 1).clamp(0, 11)];
+    final year = dt.year;
+    return '$day $month $year';
+  }
+
   // ── Helper Data Zona Waktu ─────────────────────────────────────────────────
   Map<String, dynamic> _getTzInfo(String tz) {
     final utc = _currentTime.toUtc();
@@ -1833,10 +1844,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           _buildSimpleSpecRow(
             label: 'Kedaluwarsa',
-            value: '18 Nov 2026',
-            badge: 'Sisa ${listing.effectiveDaysToExpiry} Hari',
-            badgeColor: const Color(0xFFFEE2E2),
-            badgeTextColor: const Color(0xFFDC2626),
+            value: _formatExpiryDate(listing.expiryDate),
+            badge: listing.effectiveDaysToExpiry > 0
+                ? 'Sisa ${listing.effectiveDaysToExpiry} Hari'
+                : 'Sudah Kedaluwarsa',
+            badgeColor: listing.effectiveDaysToExpiry <= 3
+                ? const Color(0xFFFEE2E2)
+                : const Color(0xFFFEF3C7),
+            badgeTextColor: listing.effectiveDaysToExpiry <= 3
+                ? const Color(0xFFDC2626)
+                : const Color(0xFFD97706),
           ),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           _buildSimpleSpecRow(

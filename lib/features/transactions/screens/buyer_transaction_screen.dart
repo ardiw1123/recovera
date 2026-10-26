@@ -222,7 +222,7 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
         ),
         const SizedBox(height: 12),
 
-        // SQLite Offline/Sync Banner
+        // Offline Storage & Sync Banner
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
@@ -233,14 +233,14 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
           child: Row(
             children: [
               const Icon(
-                Icons.bolt_rounded,
+                Icons.offline_pin_rounded,
                 color: Color(0xFF0284C7),
                 size: 18,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Menampilkan data lokal (SQLite cached_orders) • Otomatis sinkron',
+                  'Tersimpan di mode offline • Otomatis sinkron',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
