@@ -9,8 +9,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('Sky Balance'), findsOneWidget);
-    expect(find.text('START'), findsOneWidget);
-    expect(find.text('HOW TO PLAY'), findsOneWidget);
-    expect(find.text('BACK TO RECOVERA'), findsOneWidget);
+    expect(find.text('PLAY'), findsOneWidget);
+    expect(find.text('How to play'), findsOneWidget);
+    expect(find.text('Back to Recovera'), findsOneWidget);
   });
 }

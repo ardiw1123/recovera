@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <style>
+      .outline { stroke: #059669; stroke-width: 3px; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <!-- Group for whole frog -->
+  <g id="frog">
+    <!-- Back legs (folded, sitting pose on left and right) -->
+    <!-- Left back leg (thigh / knee folded up) -->
+    <path class="outline" fill="#10B981" d="M 82 282 C 60 262 60 216 92 205 C 122 195 142 225 142 260 C 132 284 104 294 82 282 Z" />
+    <!-- Right back leg (thigh / knee folded up) -->
+    <path class="outline" fill="#10B981" d="M 318 282 C 340 262 340 216 308 205 C 278 195 258 225 258 260 C 268 284 296 294 318 282 Z" />
+
+    <!-- Spots on back thighs -->
+    <circle fill="#059669" cx="88" cy="235" r="9" />
+    <circle fill="#059669" cx="74" cy="256" r="6" />
+    <circle fill="#059669" cx="312" cy="235" r="9" />
+    <circle fill="#059669" cx="326" cy="256" r="6" />
+
+    <!-- Hind feet with webbed rounded toes -->
+    <!-- Left hind foot -->
+    <path class="outline" fill="#059669" d="M 104 314 C 104 314 96 322 88 322 C 81 322 76 317 76 311 C 76 306 72 312 65 312 C 58 312 53 306 54 300 C 55 294 48 298 42 294 C 36 290 38 281 44 277 C 56 270 78 280 94 294 Z" />
+    <!-- Right hind foot -->
+    <path class="outline" fill="#059669" d="M 296 314 C 296 314 304 322 312 322 C 319 322 324 317 324 311 C 324 306 328 312 335 312 C 342 312 347 306 346 300 C 345 294 352 298 358 294 C 364 290 362 281 356 277 C 344 270 322 280 306 294 Z" />
+
+    <!-- Frog Body (torso) -->
+    <path class="outline" fill="#10B981" d="M 125 185 C 105 215 105 285 140 312 C 165 328 235 328 260 312 C 295 285 295 215 275 185 Z" />
+
+    <!-- Cream belly -->
+    <path class="outline" fill="#D1FAE5" d="M 152 205 C 135 228 132 288 160 307 C 178 318 222 318 240 307 C 268 288 265 228 248 205 C 228 198 172 198 152 205 Z" />
+
+    <!-- Bulging eye globes / sockets (green mounds extending from head silhouette) -->
+    <circle class="outline" fill="#10B981" cx="132" cy="115" r="46" />
+    <circle class="outline" fill="#10B981" cx="268" cy="115" r="46" />
+
+    <!-- Frog Head (wide, flattened rounded head overlapping eye bases) -->
+    <path class="outline" fill="#10B981" d="M 132 112 C 160 118 240 118 268 112 C 316 116 338 150 332 188 C 324 230 270 236 200 236 C 130 236 76 230 68 188 C 62 150 84 116 132 112 Z" />
+
+    <!-- Left Eye interior (sclera, pupil, iris/reflection) -->
+    <circle class="outline" fill="#FFFFFF" cx="132" cy="115" r="34" />
+    <ellipse fill="#03045E" cx="132" cy="115" rx="20" ry="22" />
+    <circle fill="#FFFFFF" cx="125" cy="107" r="7" />
+    <circle fill="#FFFFFF" cx="140" cy="123" r="3.5" />
+
+    <!-- Right Eye interior (sclera, pupil, iris/reflection) -->
+    <circle class="outline" fill="#FFFFFF" cx="268" cy="115" r="34" />
+    <ellipse fill="#03045E" cx="268" cy="115" rx="20" ry="22" />
+    <circle fill="#FFFFFF" cx="261" cy="107" r="7" />
+    <circle fill="#FFFFFF" cx="276" cy="123" r="3.5" />
+
+    <!-- Dark green spots on head -->
+    <circle fill="#059669" cx="200" cy="120" r="7" />
+    <circle fill="#059669" cx="184" cy="127" r="4.5" />
+    <circle fill="#059669" cx="216" cy="127" r="4.5" />
+
+    <!-- Nostrils (two small dots) -->
+    <ellipse fill="#059669" cx="191" cy="154" rx="3" ry="2.2" />
+    <ellipse fill="#059669" cx="209" cy="154" rx="3" ry="2.2" />
+
+    <!-- Wide frog smile spanning most of the face -->
+    <path class="outline" fill="none" stroke="#03045E" stroke-width="3.5" d="M 112 185 C 138 215 262 215 288 185" />
+    <!-- Smile corner dimples -->
+    <path fill="none" stroke="#03045E" stroke-width="3" stroke-linecap="round" d="M 108 181 C 110 184 113 187 117 188" />
+    <path fill="none" stroke="#03045E" stroke-width="3" stroke-linecap="round" d="M 292 181 C 290 184 287 187 283 188" />
+
+    <!-- Cheek accents -->
+    <ellipse fill="#00B4D8" cx="106" cy="195" rx="10" ry="6" />
+    <ellipse fill="#00B4D8" cx="294" cy="195" rx="10" ry="6" />
+
+    <!-- Front legs and feet (sitting slightly inward between hind legs) -->
+    <!-- Left front leg -->
+    <path class="outline" fill="#059669" d="M 148 245 C 142 270 140 295 142 316 C 146 318 154 318 158 316 C 158 295 160 270 166 245 Z" />
+    <!-- Left front webbed toes -->
+    <path class="outline" fill="#059669" d="M 132 327 C 130 323 133 317 138 317 C 143 317 146 322 147 317 C 148 313 154 313 156 317 C 158 321 161 316 166 317 C 171 318 172 325 167 329 C 158 335 141 334 132 327 Z" />
+
+    <!-- Right front leg -->
+    <path class="outline" fill="#059669" d="M 252 245 C 258 270 260 295 258 316 C 254 318 246 318 242 316 C 242 295 240 270 234 245 Z" />
+    <!-- Right front webbed toes -->
+    <path class="outline" fill="#059669" d="M 268 327 C 270 323 267 317 262 317 C 257 317 254 322 253 317 C 252 313 246 313 244 317 C 242 321 239 316 234 317 C 229 318 228 325 233 329 C 242 335 259 334 268 327 Z" />
+  </g>
+</svg>

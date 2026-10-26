@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320" fill="none">
+  <!-- Motion arrows indicating sideways steering / tilt -->
+  <!-- Left curved arrow (tilting down / steer left) -->
+  <g id="arrow-left">
+    <path d="M 96 114 C 74 138 68 174 82 208" stroke="#0077B6" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M 82 208 L 70 192 M 82 208 L 98 198" stroke="#0077B6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M 96 114 C 74 138 68 174 82 208" stroke="#03045E" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <path d="M 82 208 L 70 192 M 82 208 L 98 198" stroke="#03045E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+  <!-- Right curved arrow (tilting up / steer right) -->
+  <g id="arrow-right">
+    <path d="M 384 206 C 406 182 412 146 398 112" stroke="#0077B6" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M 398 112 L 410 128 M 398 112 L 382 122" stroke="#0077B6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M 384 206 C 406 182 412 146 398 112" stroke="#03045E" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <path d="M 398 112 L 410 128 M 398 112 L 382 122" stroke="#03045E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+  <!-- Smartphone rotated -12 degrees around center (240, 160) -->
+  <g transform="rotate(-12 240 160)">
+    <!-- Phone body shadow/edge highlight -->
+    <rect x="174" y="60" width="132" height="200" rx="26" fill="#0077B6" stroke="#03045E" stroke-width="3"/>
+
+    <!-- Subtle side buttons on phone edge -->
+    <rect x="169" y="105" width="4" height="24" rx="2" fill="#64748B" stroke="#03045E" stroke-width="2"/>
+    <rect x="169" y="136" width="4" height="24" rx="2" fill="#64748B" stroke="#03045E" stroke-width="2"/>
+    <rect x="307" y="115" width="4" height="30" rx="2" fill="#64748B" stroke="#03045E" stroke-width="2"/>
+
+    <!-- Speaker notch pill -->
+    <rect x="226" y="69" width="28" height="4" rx="2" fill="#03045E"/>
+
+    <!-- Screen frame/field -->
+    <rect x="183" y="80" width="114" height="162" rx="14" fill="#00B4D8" stroke="#03045E" stroke-width="3"/>
+
+    <!-- Screen Content: Sky Game Scene (clipped to screen) -->
+    <g clip-path="url(#screen-clip)">
+      <!-- Soft sky clouds in background -->
+      <path d="M 174 135 C 174 125 186 122 192 125 C 196 117 210 117 214 125 C 220 123 226 128 225 135 Z" fill="#90E0EF"/>
+      <path d="M 255 110 C 255 102 265 100 270 102 C 274 95 286 95 290 102 C 295 100 300 105 300 110 Z" fill="#90E0EF"/>
+      
+      <!-- Lower floating cloud platform -->
+      <path d="M 205 218 C 205 208 217 205 224 208 C 230 198 250 198 256 208 C 265 205 275 212 275 220 C 275 228 205 228 205 218 Z" fill="#FFFFFF" stroke="#03045E" stroke-width="3" stroke-linejoin="round"/>
+
+      <!-- Screen glare / glass shine angled stripe -->
+      <path d="M 183 80 L 250 80 L 205 242 L 183 242 Z" fill="#FFFFFF" opacity="0.18"/>
+
+      <!-- Tiny Frog Character -->
+      <g id="frog" transform="translate(240 182)">
+        <!-- Frog feet / legs -->
+        <ellipse cx="-16" cy="7" rx="6" ry="4" fill="#10B981" stroke="#03045E" stroke-width="3"/>
+        <ellipse cx="16" cy="7" rx="6" ry="4" fill="#10B981" stroke="#03045E" stroke-width="3"/>
+
+        <!-- Frog body -->
+        <ellipse cx="0" cy="0" rx="19" ry="14" fill="#10B981" stroke="#03045E" stroke-width="3"/>
+
+        <!-- Frog belly patch -->
+        <ellipse cx="0" cy="4" rx="11" ry="8" fill="#90E0EF"/>
+
+        <!-- Eye mounts (eyeball bumps) -->
+        <circle cx="-9" cy="-12" r="7" fill="#10B981" stroke="#03045E" stroke-width="3"/>
+        <circle cx="9" cy="-12" r="7" fill="#10B981" stroke="#03045E" stroke-width="3"/>
+
+        <!-- Eyeball whites -->
+        <circle cx="-9" cy="-12" r="4.5" fill="#FFFFFF"/>
+        <circle cx="9" cy="-12" r="4.5" fill="#FFFFFF"/>
+
+        <!-- Pupils looking in steering direction -->
+        <circle cx="-10.5" cy="-12" r="2.5" fill="#03045E"/>
+        <circle cx="7.5" cy="-12" r="2.5" fill="#03045E"/>
+
+        <!-- Eye highlights -->
+        <circle cx="-11.5" cy="-13" r="0.8" fill="#FFFFFF"/>
+        <circle cx="6.5" cy="-13" r="0.8" fill="#FFFFFF"/>
+
+        <!-- Cheeks -->
+        <circle cx="-12" cy="1" r="2.5" fill="#90E0EF" opacity="0.8"/>
+        <circle cx="12" cy="1" r="2.5" fill="#90E0EF" opacity="0.8"/>
+
+        <!-- Smile -->
+        <path d="M -4 2 Q 0 6 4 2" fill="none" stroke="#03045E" stroke-width="2.5" stroke-linecap="round"/>
+      </g>
+    </g>
+
+    <!-- Clip path matching phone screen -->
+    <defs>
+      <clipPath id="screen-clip">
+        <rect x="184.5" y="81.5" width="111" height="159" rx="12.5"/>
+      </clipPath>
+    </defs>
+  </g>
+</svg>
