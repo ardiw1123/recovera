@@ -1,7 +1,7 @@
 import math
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 from app.models.listing import Listing
@@ -103,7 +103,13 @@ def search_listings(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[dict], int]:
-    query = db.query(Listing).join(Product).join(Seller).filter(Listing.status == "active")
+    query = (
+        db.query(Listing)
+        .options(joinedload(Listing.product), joinedload(Listing.seller))
+        .join(Product)
+        .join(Seller)
+        .filter(Listing.status == "active")
+    )
 
     if search:
         search_filter = f"%{search.strip()}%"
