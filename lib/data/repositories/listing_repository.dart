@@ -90,35 +90,8 @@ class ListingRepository {
     final client = remoteClient;
     final isOnline = NetworkConnectivityService.instance.isOnline;
 
-    // Jika perangkat offline (internet dimatikan), langsung ambil dari local database SQLite
-    if (!isOnline) {
-      try {
-        final cached = await _localDb.getListings(
-          search: search,
-          category: category,
-          maxPrice: maxPrice,
-          minDays: minDays,
-          sort: sort,
-        );
-        if (cached.isNotEmpty) {
-          return ListingResult(listings: cached, isFromCache: true);
-        }
-      } catch (_) {}
-
-      return ListingResult(
-        listings: getDemoListings(
-          search: search,
-          category: category,
-          radiusKm: radiusKm,
-          minDays: minDays,
-          sort: sort,
-        ),
-        isFromCache: true,
-      );
-    }
-
-    // If remote client is configured and refresh requested, try fetching from network
-    if (client != null && forceRefresh) {
+    // Jika forceRefresh true atau perangkat online, utamakan panggilan remote ke API
+    if (client != null && (forceRefresh || isOnline)) {
       try {
         final remoteItems = await client.fetchRemoteListings(
           search: search,
