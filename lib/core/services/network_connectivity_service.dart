@@ -12,8 +12,8 @@ class NetworkConnectivityService extends ChangeNotifier {
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<List<ConnectivityResult>>? _subscription;
 
-  bool _isOnline = false;
-  List<ConnectivityResult> _currentResults = [ConnectivityResult.none];
+  bool _isOnline = true;
+  List<ConnectivityResult> _currentResults = [ConnectivityResult.wifi];
 
   /// Menunjukkan apakah perangkat saat ini terhubung ke internet (Wi-Fi, Data Seluler, Ethernet, dll.)
   bool get isOnline => _isOnline;
@@ -29,11 +29,15 @@ class NetworkConnectivityService extends ChangeNotifier {
 
   /// Inisialisasi pengecekan konektivitas dan mulai mendengarkan event perubahan jaringan
   Future<void> init() async {
+    if (kIsWeb) {
+      _updateStatus([ConnectivityResult.wifi]);
+      return;
+    }
     try {
       final results = await _connectivity.checkConnectivity();
       _updateStatus(results);
     } catch (_) {
-      _updateStatus([ConnectivityResult.none]);
+      _updateStatus([ConnectivityResult.wifi]);
     }
 
     _subscription?.cancel();
@@ -44,19 +48,23 @@ class NetworkConnectivityService extends ChangeNotifier {
 
   /// Cek status konektivitas saat ini secara eksplisit
   Future<bool> checkConnection() async {
+    if (kIsWeb) {
+      _updateStatus([ConnectivityResult.wifi]);
+      return true;
+    }
     try {
       final results = await _connectivity.checkConnectivity();
       _updateStatus(results);
       return _isOnline;
     } catch (_) {
-      _updateStatus([ConnectivityResult.none]);
-      return false;
+      _updateStatus([ConnectivityResult.wifi]);
+      return true;
     }
   }
 
   void _updateStatus(List<ConnectivityResult> results) {
     _currentResults = results;
-    final hasConnection =
+    final hasConnection = kIsWeb ||
         results.any((result) => result != ConnectivityResult.none);
 
     if (_isOnline != hasConnection) {

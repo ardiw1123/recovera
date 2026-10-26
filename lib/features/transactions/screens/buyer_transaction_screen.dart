@@ -43,22 +43,23 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
   Future<void> _loadBuyerOrders() async {
     setState(() => _isLoading = true);
     try {
-      final cachedList = await _orderRepository.getOrders();
-      if (cachedList.isNotEmpty) {
-        final mappedList = cachedList
-            .map((item) => TransactionOrder.fromCachedOrder(item))
-            .toList();
-        if (mounted) {
-          setState(() {
-            _orderList = mappedList;
-          });
+      final cachedList = await _orderRepository.getOrders(forceRefresh: true);
+      final mappedList = cachedList
+          .map((item) => TransactionOrder.fromCachedOrder(item))
+          .toList();
+
+      // Tambahkan dummyBuyerOrders jika belum ada, agar riwayat tetap kaya
+      final existingIds = mappedList.map((e) => e.id).toSet();
+      for (final dummy in dummyBuyerOrders) {
+        if (!existingIds.contains(dummy.id)) {
+          mappedList.add(dummy);
         }
-      } else {
-        if (mounted) {
-          setState(() {
-            _orderList = List<TransactionOrder>.from(dummyBuyerOrders);
-          });
-        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _orderList = mappedList;
+        });
       }
     } catch (_) {
       if (mounted) {
