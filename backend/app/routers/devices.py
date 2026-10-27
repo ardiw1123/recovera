@@ -20,25 +20,24 @@ async def register_device_token(
     current_user: CurrentUserDep,
     payload: Annotated[DeviceTokenRequest, Body()],
 ) -> dict:
-    existing = (
-        db.query(DeviceToken)
-        .filter(
-            DeviceToken.user_id == current_user.id,
-            DeviceToken.fcm_token == payload.fcm_token,
-        )
-        .first()
-    )
+    identifier_column = DeviceToken.fid if payload.fid else DeviceToken.fcm_token
+    identifier = payload.fid or payload.fcm_token
+    existing = db.query(DeviceToken).filter(
+        DeviceToken.user_id == current_user.id,
+        identifier_column == identifier,
+    ).first()
 
     now_utc = datetime.now(timezone.utc)
     if existing:
         existing.updated_at = now_utc
     else:
-        new_token = DeviceToken(
+        new_device = DeviceToken(
             user_id=current_user.id,
+            fid=payload.fid,
             fcm_token=payload.fcm_token,
             updated_at=now_utc,
         )
-        db.add(new_token)
+        db.add(new_device)
 
     db.commit()
-    return wrap_success({"message": "Device token registered successfully"})
+    return wrap_success({"message": "Device registered successfully"})

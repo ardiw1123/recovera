@@ -75,4 +75,20 @@ def execute_buy_now(
     db.commit()
     db.refresh(order)
 
+    try:
+        from app.services.push_service import notify_user
+        seller_user_id = listing.seller.user_id if listing.seller else None
+        if seller_user_id:
+            notify_user(
+                db,
+                seller_user_id,
+                "Pesanan Baru Masuk!",
+                f"Pesanan baru untuk {listing.product.name if listing.product else 'produk Anda'}.",
+                "new_order",
+                {"order_id": order.id},
+            )
+    except Exception:
+        # Notifikasi tidak boleh menggagalkan transaksi yang sudah berhasil.
+        pass
+
     return order

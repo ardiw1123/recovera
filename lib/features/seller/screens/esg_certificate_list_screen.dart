@@ -5,7 +5,9 @@ import '../repositories/seller_repository.dart';
 import 'esg_certificate_detail_screen.dart';
 
 class EsgCertificateListScreen extends StatefulWidget {
-  const EsgCertificateListScreen({super.key});
+  const EsgCertificateListScreen({super.key, this.sellerId});
+
+  final int? sellerId;
 
   @override
   State<EsgCertificateListScreen> createState() =>
@@ -24,7 +26,9 @@ class _EsgCertificateListScreenState extends State<EsgCertificateListScreen> {
 
   void _loadCertificates() {
     setState(() {
-      _certificatesFuture = _repository.fetchMyCertificates();
+      _certificatesFuture = widget.sellerId == null
+          ? _repository.fetchMyCertificates()
+          : _repository.fetchSellerCertificates(widget.sellerId!);
     });
   }
 
@@ -84,8 +88,11 @@ class _EsgCertificateListScreenState extends State<EsgCertificateListScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.error_outline,
-                          size: 48, color: Colors.red),
+                      const Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: Colors.red,
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         'Gagal memuat sertifikat: ${snapshot.error}',
@@ -155,7 +162,7 @@ class _EsgCertificateListScreenState extends State<EsgCertificateListScreen> {
                 final item = items[index];
                 final isRecorded =
                     item.blockchainStatus.toLowerCase() == 'tercatat' ||
-                        item.certificateTxHash != null;
+                    item.certificateTxHash != null;
                 final gradeColor = _getGradeColor(item.grade);
 
                 return Card(
@@ -175,9 +182,8 @@ class _EsgCertificateListScreenState extends State<EsgCertificateListScreen> {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => EsgCertificateDetailScreen(
-                            donationId: item.id,
-                          ),
+                          builder: (_) =>
+                              EsgCertificateDetailScreen(donationId: item.id),
                         ),
                       );
                     },
@@ -201,7 +207,9 @@ class _EsgCertificateListScreenState extends State<EsgCertificateListScreen> {
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: isRecorded
                                       ? Colors.green.shade50
@@ -255,7 +263,9 @@ class _EsgCertificateListScreenState extends State<EsgCertificateListScreen> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: gradeColor.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(4),
@@ -285,8 +295,11 @@ class _EsgCertificateListScreenState extends State<EsgCertificateListScreen> {
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.park,
-                                      size: 16, color: Colors.green.shade700),
+                                  Icon(
+                                    Icons.park,
+                                    size: 16,
+                                    color: Colors.green.shade700,
+                                  ),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${item.carbonSavedKg.toStringAsFixed(1)} kg CO2e terselamatkan',

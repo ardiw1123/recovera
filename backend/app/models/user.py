@@ -88,7 +88,8 @@ class DeviceToken(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    fcm_token = Column(Text, nullable=False)
+    fcm_token = Column(Text, nullable=True)
+    fid = Column(Text, nullable=True)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     user = relationship("User", back_populates="device_tokens")

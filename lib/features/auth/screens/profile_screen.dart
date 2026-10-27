@@ -17,6 +17,7 @@ import '../services/profile_photo_service.dart';
 import '../widgets/auth_widgets.dart';
 import '../../feedback/screens/saran_kesan_screen.dart';
 import 'location_management_screen.dart';
+import 'business_info_edit_screen.dart';
 import 'login_screen.dart';
 import '../../sky_balance/sky_balance_screen.dart';
 import '../../transactions/screens/transaction_history_screen.dart';
@@ -325,11 +326,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             : (tokens?.role == 'seller'
                   ? 'Distributor (Seller)'
                   : _defaultRole);
-        final email = profile?.email != null && profile!.email.isNotEmpty
-            ? profile.email
-            : (tokens?.name != null && tokens!.name!.contains('@')
-                  ? tokens.name
-                  : null);
         final city = profile?.city ?? _defaultCity;
         final headerHeight = (MediaQuery.sizeOf(context).height * 0.18)
             .clamp(132.0, 156.0)
@@ -1246,7 +1242,14 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         iconBg: const Color(0xFFEFF6FF),
         iconColor: AppColors.primary,
         label: 'Informasi Bisnis',
-        onTap: () {},
+        onTap: () async {
+          final updated = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(builder: (_) => const BusinessInfoEditScreen()),
+          );
+          if (updated == true && mounted) {
+            setState(() {});
+          }
+        },
       ),
       _ProfileMenuItem(
         key: const Key('menu_transaction_history'),

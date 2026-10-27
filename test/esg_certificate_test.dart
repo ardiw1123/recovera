@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recovera/features/seller/models/esg_certificate_model.dart';
-import 'package:recovera/features/seller/models/seller_dashboard_model.dart';
-import 'package:recovera/features/seller/screens/esg_certificate_detail_screen.dart';
-import 'package:recovera/features/seller/screens/esg_certificate_list_screen.dart';
-import 'package:recovera/features/seller/screens/seller_dashboard_screen.dart';
-import 'package:recovera/features/seller/repositories/seller_repository.dart';
 
 void main() {
   group('ESG Certificate Models Test', () {

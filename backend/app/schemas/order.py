@@ -24,4 +24,4 @@ class OrderResponse(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
-    status: Literal["picked_up", "completed"] = Field(description="Order status update transition")
+    status: Literal["in_progress", "completed"] = Field(description="Order status update transition")

@@ -11,6 +11,9 @@ abstract class RemoteOrderClient {
     int qty = 1,
     bool biometricVerified = true,
   }) => null;
+  Future<CachedOrderModel>? updateOrderStatus(int orderId, String status) =>
+      null;
+  Future<void>? remindSeller(int orderId) => null;
 }
 
 /// Repository for orders, providing offline caching and coordinates for compass navigation.
@@ -18,10 +21,8 @@ class OrderRepository {
   final LocalDatabaseService _localDb;
   final RemoteOrderClient? remoteClient;
 
-  OrderRepository({
-    LocalDatabaseService? localDb,
-    this.remoteClient,
-  }) : _localDb = localDb ?? LocalDatabaseService();
+  OrderRepository({LocalDatabaseService? localDb, this.remoteClient})
+    : _localDb = localDb ?? LocalDatabaseService();
 
   /// Buy a listing via backend API and cache the resulting order.
   Future<CachedOrderModel> buyListing(
@@ -86,6 +87,21 @@ class OrderRepository {
   /// Get specific cached order by ID.
   Future<CachedOrderModel?> getOrderById(int id) async {
     return await _localDb.getOrderById(id);
+  }
+
+  Future<CachedOrderModel> updateOrderStatus(int orderId, String status) async {
+    final client = remoteClient;
+    if (client == null) throw StateError('No remote order client configured.');
+    final order = await client.updateOrderStatus(orderId, status);
+    if (order == null) throw StateError('Failed to update order status.');
+    await _localDb.upsertOrder(order);
+    return order;
+  }
+
+  Future<void> remindSeller(int orderId) async {
+    final client = remoteClient;
+    if (client == null) throw StateError('No remote order client configured.');
+    await client.remindSeller(orderId);
   }
 
   /// Cache a single order into SQLite.

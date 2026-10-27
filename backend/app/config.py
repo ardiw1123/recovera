@@ -30,8 +30,14 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     groq_api_key: str = ""
-    cloudinary_url: str = ""
-    fcm_server_key: str = ""
+    supabase_url: str = ""
+    supabase_secret_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"),
+    )
+    supabase_storage_bucket: str = "product-images"
+    firebase_credentials_path: str = ""
+    firebase_credentials_json: str = ""
     bot_chain_rpc_url: str = "https://rpc.bohr.life"
     bot_chain_chain_id: int = 968
     bot_chain_private_key: str = ""
