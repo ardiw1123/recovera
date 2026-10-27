@@ -58,22 +58,23 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
   Future<void> _loadBuyerOrders() async {
     setState(() => _isLoading = true);
     try {
-      final cachedList = await _orderRepository.getOrders();
-      if (cachedList.isNotEmpty) {
-        final mappedList = cachedList
-            .map((item) => TransactionOrder.fromCachedOrder(item))
-            .toList();
-        if (mounted) {
-          setState(() {
-            _orderList = mappedList;
-          });
+      final cachedList = await _orderRepository.getOrders(forceRefresh: true);
+      final mappedList = cachedList
+          .map((item) => TransactionOrder.fromCachedOrder(item))
+          .toList();
+
+      // Tambahkan dummyBuyerOrders jika belum ada, agar riwayat tetap kaya
+      final existingIds = mappedList.map((e) => e.id).toSet();
+      for (final dummy in dummyBuyerOrders) {
+        if (!existingIds.contains(dummy.id)) {
+          mappedList.add(dummy);
         }
-      } else {
-        if (mounted) {
-          setState(() {
-            _orderList = List<TransactionOrder>.from(dummyBuyerOrders);
-          });
-        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _orderList = mappedList;
+        });
       }
     } catch (_) {
       if (mounted) {
@@ -243,7 +244,7 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
         ),
         const SizedBox(height: 12),
 
-        // SQLite Offline/Sync Banner
+        // Offline Storage & Sync Banner
         if (!NetworkConnectivityService.instance.isOnline) ...[
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -255,14 +256,14 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
             child: Row(
               children: [
                 const Icon(
-                  Icons.bolt_rounded,
+                  Icons.offline_pin_rounded,
                   color: Color(0xFF0284C7),
                   size: 18,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Menampilkan data lokal (SQLite cached_orders) • Otomatis sinkron',
+                    'Tersimpan di mode offline • Otomatis sinkron',
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,

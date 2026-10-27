@@ -19,6 +19,7 @@ import '../widgets/filter_bottom_sheet.dart';
 import '../widgets/product_card.dart';
 import '../../auth/screens/location_management_screen.dart';
 import '../../transactions/screens/buyer_transaction_screen.dart';
+import '../../chat/screens/chatbot_screen.dart';
 import 'notification_list_screen.dart';
 
 /// Dashboard utama bagi pengguna Buyer (Pembeli).
@@ -318,10 +319,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .toList();
     }
 
+    // Invariant: Produk yang sudah melewati tanggal kedaluwarsa (<= 0) tidak ditampilkan di etalase pembeli
+    items = items.where((item) => item.effectiveDaysToExpiry > 0).toList();
+
     if (_selectedMaxExpiryDays != null) {
       items = items
           .where(
-            (item) => item.effectiveDaysToExpiry <= _selectedMaxExpiryDays!,
+            (item) =>
+                item.effectiveDaysToExpiry > 0 &&
+                item.effectiveDaysToExpiry <= _selectedMaxExpiryDays!,
           )
           .toList();
     }
@@ -395,6 +401,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return 'Jakarta Pusat, Indonesia';
   }
 
+  Widget _buildChatbotFab() {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.38),
+            blurRadius: 14,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: FloatingActionButton(
+        key: const Key('fab_chatbot_buyer'),
+        tooltip: 'Rera',
+        onPressed: () {
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const ChatbotScreen()));
+        },
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        shape: const CircleBorder(),
+        child: const Icon(
+          Icons.smart_toy_rounded,
+          color: AppColors.white,
+          size: 26,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // ── Role Guard: Seller restriction ───────────────────────────────────────
@@ -451,6 +489,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      floatingActionButton: _buildChatbotFab(),
       body: Column(
         children: [
           // ── Fixed Wave Header (Sticky, tidak ikut ter-scroll) ───────────

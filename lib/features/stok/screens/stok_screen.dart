@@ -169,11 +169,11 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
 
     // Filter by expiry preset (listings.expiry_date derived → daysUntilExpiry)
     if (_expiryPreset == '1-7') {
-      list = list.where((p) => p.daysUntilExpiry <= 7).toList();
+      list = list.where((p) => p.daysUntilExpiry > 0 && p.daysUntilExpiry <= 7).toList();
     } else if (_expiryPreset == '8-14') {
-      list = list.where((p) => p.daysUntilExpiry <= 14).toList();
+      list = list.where((p) => p.daysUntilExpiry > 0 && p.daysUntilExpiry <= 14).toList();
     } else if (_expiryPreset == '15-30') {
-      list = list.where((p) => p.daysUntilExpiry <= 30).toList();
+      list = list.where((p) => p.daysUntilExpiry > 0 && p.daysUntilExpiry <= 30).toList();
     }
 
     // Sort (pakai field DB: start_price, expiry_date, discount_percent)

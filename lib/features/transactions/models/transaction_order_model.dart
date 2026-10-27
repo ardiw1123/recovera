@@ -89,6 +89,35 @@ class TransactionOrder {
     );
   }
 
+  static String _resolveSellerName(CachedOrderModel cached) {
+    if (cached.warehouseAddress != null && cached.warehouseAddress!.isNotEmpty) {
+      final parts = cached.warehouseAddress!.split(',');
+      if (parts.isNotEmpty) {
+        final candidate = parts.first.trim();
+        if (candidate.isNotEmpty && !candidate.toLowerCase().startsWith('jl.')) {
+          return candidate;
+        }
+      }
+    }
+
+    final pName = cached.productName.toLowerCase();
+    if (pName.contains('tepung')) {
+      return 'PT Bogasari Flour Mills';
+    } else if (pName.contains('susu')) {
+      return 'PT Maju Pangan Abadi';
+    } else if (pName.contains('minyak')) {
+      return 'CV Berkah Nabati';
+    } else if (pName.contains('keju')) {
+      return 'PT Prima Dairy Food';
+    } else if (pName.contains('nugget') || pName.contains('sosis')) {
+      return 'PT Charoen Pokphand';
+    } else if (pName.contains('sarden')) {
+      return 'PT Heinz ABC Indonesia';
+    }
+
+    return 'PT Sumber Pangan Abadi';
+  }
+
   /// Konversi dari CachedOrderModel SQLite
   factory TransactionOrder.fromCachedOrder(CachedOrderModel cached) {
     return TransactionOrder(
@@ -106,7 +135,7 @@ class TransactionOrder {
       status: cached.status,
       createdAt: DateTime.tryParse(cached.createdAt) ?? DateTime.now(),
       pickupDeadline: DateTime.now().add(const Duration(hours: 24)),
-      partnerName: 'Distributor Pangan Terverifikasi',
+      partnerName: _resolveSellerName(cached),
       warehouseAddress: cached.warehouseAddress,
       warehouseLat: cached.warehouseLat,
       warehouseLng: cached.warehouseLng,

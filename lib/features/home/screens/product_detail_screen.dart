@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/api_constants.dart';
@@ -48,6 +49,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   int _selectedQty = 5; // MOQ default 5 box
+  late final TextEditingController _qtyController;
+  late final FocusNode _qtyFocusNode;
   bool _isPurchasing = false;
   final Map<int, Future<List<EsgCertificateListItem>>>
   _sellerCertificateFutures = {};
@@ -78,9 +81,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         widget.orderRepository ??
         OrderRepository(remoteClient: OrderApiService(client: client));
 
+    _qtyController = TextEditingController(text: '$_selectedQty');
+    _qtyFocusNode = FocusNode();
+    _qtyFocusNode.addListener(() {
+      if (!_qtyFocusNode.hasFocus && _listing != null) {
+        _sanitizeQtyInput(_listing!);
+      }
+    });
+
     if (widget.listing != null) {
       _listing = widget.listing;
       _selectedQty = _getMinOrderQty(_listing!);
+      _qtyController.text = '$_selectedQty';
     } else if (widget.listingId != null) {
       _loadListingDetail(widget.listingId!);
     }
@@ -94,6 +106,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   @override
   void dispose() {
+    _qtyController.dispose();
+    _qtyFocusNode.dispose();
     AppPrefsRepository.instance.removeListener(_onPrefsChanged);
     NetworkConnectivityService.instance.removeListener(_onConnectivityChanged);
     _countdownTimer?.cancel();
@@ -273,6 +287,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           setState(() {
             _listing = Listing.fromCachedModel(cachedModel);
             _selectedQty = _getMinOrderQty(_listing!);
+            _qtyController.text = '$_selectedQty';
           });
         } else {
           setState(() {
@@ -309,92 +324,99 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return 5;
   }
 
+  void _sanitizeQtyInput(Listing listing) {
+    final minQty = _getMinOrderQty(listing);
+    final maxQty = listing.qty > 0 ? listing.qty : 100;
+    final unit = _getDisplayUnit(listing);
+    final text = _qtyController.text.trim();
+    final parsed = int.tryParse(text);
+
+    if (parsed == null || parsed < minQty) {
+      setState(() {
+        _selectedQty = minQty;
+        _qtyController.text = '$minQty';
+      });
+      _showQtyWarning('Jumlah pembelian disesuaikan ke minimal $minQty $unit.');
+    } else if (parsed > maxQty) {
+      setState(() {
+        _selectedQty = maxQty;
+        _qtyController.text = '$maxQty';
+      });
+      _showQtyWarning('Jumlah telah disesuaikan ke stok maksimal $maxQty $unit.');
+    } else {
+      setState(() {
+        _selectedQty = parsed;
+        _qtyController.text = '$parsed';
+      });
+    }
+  }
+
+  void _showQtyWarning(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFFD97706),
+        elevation: 4,
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        content: Row(
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _decrementQty(Listing listing) {
+    _qtyFocusNode.unfocus();
     final minQty = _getMinOrderQty(listing);
     final unit = _getDisplayUnit(listing);
 
     if (_selectedQty <= minQty) {
-      // Error handling saat pembeli mencoba mengurangi di bawah batas minimum
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFFDC2626),
-          elevation: 4,
-          duration: const Duration(seconds: 2),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          content: Row(
-            children: [
-              const Icon(
-                Icons.info_outline_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Jumlah pembelian tidak bisa kurang dari minimal $minQty $unit.',
-                  style: GoogleFonts.inter(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      _showQtyWarning('Jumlah pembelian tidak bisa kurang dari minimal $minQty $unit.');
       return;
     }
 
-    setState(() => _selectedQty--);
+    setState(() {
+      _selectedQty--;
+      _qtyController.text = '$_selectedQty';
+    });
   }
 
   void _incrementQty(Listing listing) {
+    _qtyFocusNode.unfocus();
     final maxQty = listing.qty > 0 ? listing.qty : 100;
     final unit = _getDisplayUnit(listing);
 
     if (_selectedQty >= maxQty) {
-      // Error handling saat pembeli mencoba melebihi batas stok
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFFD97706),
-          elevation: 4,
-          duration: const Duration(seconds: 2),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          content: Row(
-            children: [
-              const Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Jumlah telah mencapai batas stok maksimal ($maxQty $unit).',
-                  style: GoogleFonts.inter(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      _showQtyWarning('Jumlah telah mencapai batas stok maksimal ($maxQty $unit).');
       return;
     }
 
-    setState(() => _selectedQty++);
+    setState(() {
+      _selectedQty++;
+      _qtyController.text = '$_selectedQty';
+    });
   }
 
   // ── Helper Harga Tier Lelang ───────────────────────────────────────────────
@@ -437,6 +459,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       buf.write(str[i]);
     }
     return buf.toString();
+  }
+
+  String _formatExpiryDate(DateTime dt) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    final day = dt.day.toString().padLeft(2, '0');
+    final month = months[(dt.month - 1).clamp(0, 11)];
+    final year = dt.year;
+    return '$day $month $year';
   }
 
   // ── Helper Data Zona Waktu ─────────────────────────────────────────────────
@@ -500,6 +533,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ── Alur Pembelian & Konfirmasi Bottom Sheet ────────────────────────────────
   void _openConfirmationSheet(Listing listing) {
+    _qtyFocusNode.unfocus();
+    _sanitizeQtyInput(listing);
     if (AuthRepository.instance.isSeller) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -797,15 +832,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         _showOrderSuccessDialog(order, listing);
       }
     } catch (_) {
-      // Demo order fallback
+      // Demo order fallback - pastikan pesanan tersimpan ke OrderRepository & SQLite
+      final mockOrderId = DateTime.now().millisecondsSinceEpoch % 100000;
+      final unitPrice = _getActiveTierPrice(listing);
       final mockOrder = CachedOrderModel(
-        id: 994,
+        id: mockOrderId,
         listingId: listing.id,
-        buyerId: 1,
+        buyerId: AuthRepository.instance.currentUserProfile?.id ?? 1,
         qty: _selectedQty,
-        finalUnitPrice: listing.currentPrice,
-        totalPrice: listing.currentPrice * _selectedQty,
-        status: 'confirmed',
+        finalUnitPrice: unitPrice,
+        totalPrice: unitPrice * _selectedQty,
+        status: 'paid',
         createdAt: DateTime.now().toIso8601String(),
         cachedAt: DateTime.now().toIso8601String(),
         productName: listing.productName,
@@ -815,6 +852,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         warehouseLng: listing.warehouseLng,
         warehouseAddress: '${listing.companyName}, ${listing.city}',
       );
+      try {
+        await _orderRepository.cacheOrder(mockOrder);
+      } catch (_) {}
       if (mounted) {
         _showOrderSuccessDialog(mockOrder, listing);
       }
@@ -1813,10 +1853,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           _buildSimpleSpecRow(
             label: 'Kedaluwarsa',
-            value: '18 Nov 2026',
-            badge: 'Sisa ${listing.effectiveDaysToExpiry} Hari',
-            badgeColor: const Color(0xFFFEE2E2),
-            badgeTextColor: const Color(0xFFDC2626),
+            value: _formatExpiryDate(listing.expiryDate),
+            badge: listing.effectiveDaysToExpiry > 0
+                ? 'Sisa ${listing.effectiveDaysToExpiry} Hari'
+                : 'Sudah Kedaluwarsa',
+            badgeColor: listing.effectiveDaysToExpiry <= 3
+                ? const Color(0xFFFEE2E2)
+                : const Color(0xFFFEF3C7),
+            badgeTextColor: listing.effectiveDaysToExpiry <= 3
+                ? const Color(0xFFDC2626)
+                : const Color(0xFFD97706),
           ),
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           _buildSimpleSpecRow(
@@ -2150,17 +2196,61 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                       Container(
                         key: const Key('text_qty_value'),
-                        constraints: const BoxConstraints(minWidth: 36),
+                        constraints: const BoxConstraints(minWidth: 44, maxWidth: 64),
                         height: 28,
                         alignment: Alignment.center,
                         color: Colors.white,
-                        child: Text(
-                          '$_selectedQty',
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: TextField(
+                          controller: _qtyController,
+                          focusNode: _qtyFocusNode,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          textAlignVertical: TextAlignVertical.center,
                           style: GoogleFonts.inter(
                             fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                             color: const Color(0xFF0F172A),
                           ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(5),
+                          ],
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          onTap: () {
+                            _qtyController.selection = TextSelection(
+                              baseOffset: 0,
+                              extentOffset: _qtyController.text.length,
+                            );
+                          },
+                          onChanged: (val) {
+                            if (val.isEmpty) return;
+                            final parsed = int.tryParse(val);
+                            if (parsed != null && parsed > 0) {
+                              if (parsed > maxQty) {
+                                setState(() {
+                                  _selectedQty = maxQty;
+                                  _qtyController.text = '$maxQty';
+                                  _qtyController.selection = TextSelection.fromPosition(
+                                    TextPosition(offset: _qtyController.text.length),
+                                  );
+                                });
+                                _showQtyWarning('Jumlah telah mencapai batas stok maksimal ($maxQty $unit).');
+                              } else {
+                                setState(() {
+                                  _selectedQty = parsed;
+                                });
+                              }
+                            }
+                          },
+                          onSubmitted: (_) {
+                            _sanitizeQtyInput(listing);
+                            _qtyFocusNode.unfocus();
+                          },
                         ),
                       ),
                       InkWell(

@@ -385,8 +385,10 @@ class _ExpiryBadge extends StatelessWidget {
       textColor = const Color(0xFF16A34A); // Hijau
     }
 
+    final text = days <= 0 ? 'Sudah Kedaluwarsa' : 'Sisa $days Hari';
+
     return Text(
-      'Sisa $days Hari',
+      text,
       style: GoogleFonts.inter(
         fontSize: 10,
         fontWeight: FontWeight.w600,

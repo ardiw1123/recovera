@@ -16,10 +16,8 @@ import 'esg_certificate_list_screen.dart';
 import 'seller_inventory_screen.dart';
 import '../../transactions/screens/seller_order_screen.dart';
 import '../../../features/home/screens/notification_list_screen.dart';
+import '../../chat/screens/chatbot_screen.dart';
 
-/// Halaman Beranda Seller — Dashboard Ringkasan
-/// menggantikan SellerInventoryScreen di tab Beranda.
-/// Menampilkan ringkasan aktif, stok expired, dan aktivitas terbaru.
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key, this.repository});
 

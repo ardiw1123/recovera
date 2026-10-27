@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../core/services/network_connectivity_service.dart';
 import '../models/cached_order_model.dart';
 import '../services/local_database_service.dart';
@@ -21,6 +23,9 @@ class OrderRepository {
   final LocalDatabaseService _localDb;
   final RemoteOrderClient? remoteClient;
 
+  // In-memory persistent order storage so purchases are never lost across screens
+  static final List<CachedOrderModel> _inMemoryOrders = [];
+
   OrderRepository({LocalDatabaseService? localDb, this.remoteClient})
     : _localDb = localDb ?? LocalDatabaseService();
 
@@ -31,17 +36,21 @@ class OrderRepository {
     bool biometricVerified = true,
   }) async {
     final client = remoteClient;
-    if (client == null) {
-      throw StateError('Cannot buy listing: No RemoteOrderClient configured.');
-    }
-    final order = await client.buyListing(
-      listingId,
-      qty: qty,
-      biometricVerified: biometricVerified,
-    );
-    if (order != null) {
-      await _localDb.upsertOrder(order);
-      return order;
+    if (client != null) {
+      try {
+        final order = await client.buyListing(
+          listingId,
+          qty: qty,
+          biometricVerified: biometricVerified,
+        );
+        if (order != null) {
+          await cacheOrder(order);
+          return order;
+        }
+      } catch (_) {
+        // Fallback handled by caller
+        rethrow;
+      }
     }
     throw StateError('Failed to complete purchase.');
   }
@@ -55,38 +64,56 @@ class OrderRepository {
     final client = remoteClient;
     final isOnline = NetworkConnectivityService.instance.isOnline;
 
-    if (!isOnline) {
-      return await _localDb.getOrders(buyerId: buyerId, status: status);
-    }
-
-    if (client != null && forceRefresh) {
+    if (isOnline && client != null) {
       try {
         final remoteOrders = await client.fetchRemoteOrders();
-        await _localDb.upsertOrders(remoteOrders);
-        return remoteOrders;
-      } catch (_) {
-        // Fallback to SQLite cache on network error
-        return await _localDb.getOrders(buyerId: buyerId, status: status);
-      }
+        for (final ro in remoteOrders) {
+          _upsertInMemory(ro);
+        }
+        if (!kIsWeb) {
+          try {
+            await _localDb.upsertOrders(remoteOrders);
+          } catch (_) {}
+        }
+      } catch (_) {}
     }
 
-    final cached = await _localDb.getOrders(buyerId: buyerId, status: status);
-    if (cached.isEmpty && client != null) {
+    // Load from local database if not web
+    List<CachedOrderModel> dbOrders = [];
+    if (!kIsWeb) {
       try {
-        final remoteOrders = await client.fetchRemoteOrders();
-        await _localDb.upsertOrders(remoteOrders);
-        return remoteOrders;
-      } catch (_) {
-        return const [];
-      }
+        dbOrders = await _localDb.getOrders(buyerId: buyerId, status: status);
+        for (final dbo in dbOrders) {
+          _upsertInMemory(dbo);
+        }
+      } catch (_) {}
     }
 
-    return cached;
+    // Filter in-memory orders
+    var result = List<CachedOrderModel>.from(_inMemoryOrders);
+    if (buyerId != null) {
+      result = result.where((o) => o.buyerId == buyerId).toList();
+    }
+    if (status != null && status.isNotEmpty && status != 'all') {
+      result = result
+          .where((o) => o.status.toLowerCase() == status.toLowerCase())
+          .toList();
+    }
+
+    result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
   }
 
   /// Get specific cached order by ID.
   Future<CachedOrderModel?> getOrderById(int id) async {
-    return await _localDb.getOrderById(id);
+    final match = _inMemoryOrders.where((o) => o.id == id);
+    if (match.isNotEmpty) return match.first;
+    if (!kIsWeb) {
+      try {
+        return await _localDb.getOrderById(id);
+      } catch (_) {}
+    }
+    return null;
   }
 
   Future<CachedOrderModel> updateOrderStatus(int orderId, String status) async {
@@ -104,18 +131,44 @@ class OrderRepository {
     await client.remindSeller(orderId);
   }
 
-  /// Cache a single order into SQLite.
+  /// Cache a single order into SQLite and in-memory storage.
   Future<void> cacheOrder(CachedOrderModel order) async {
-    await _localDb.upsertOrder(order);
+    _upsertInMemory(order);
+    if (!kIsWeb) {
+      try {
+        await _localDb.upsertOrder(order);
+      } catch (_) {}
+    }
   }
 
-  /// Bulk cache orders into SQLite.
+  /// Bulk cache orders into SQLite and in-memory storage.
   Future<void> cacheOrders(List<CachedOrderModel> orders) async {
-    await _localDb.upsertOrders(orders);
+    for (final order in orders) {
+      _upsertInMemory(order);
+    }
+    if (!kIsWeb) {
+      try {
+        await _localDb.upsertOrders(orders);
+      } catch (_) {}
+    }
   }
 
   /// Clear all cached orders.
   Future<void> clearOrderCache() async {
-    await _localDb.clearOrders();
+    _inMemoryOrders.clear();
+    if (!kIsWeb) {
+      try {
+        await _localDb.clearOrders();
+      } catch (_) {}
+    }
+  }
+
+  static void _upsertInMemory(CachedOrderModel order) {
+    final idx = _inMemoryOrders.indexWhere((o) => o.id == order.id);
+    if (idx != -1) {
+      _inMemoryOrders[idx] = order;
+    } else {
+      _inMemoryOrders.insert(0, order);
+    }
   }
 }

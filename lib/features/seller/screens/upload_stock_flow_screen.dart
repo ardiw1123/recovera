@@ -418,62 +418,51 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
   /// Membuka galeri dan memindai foto faktur untuk ekstraksi OCR AI
   /// Foto faktur ini khusus untuk ekstraksi OCR dan TIDAK disimpan sebagai foto produk
   Future<void> _pickInvoiceAndScanOcr() async {
-    bool hasInvoice =
-        _invoicePickedFile != null ||
-        (_invoiceImagePath != null && _invoiceImagePath!.isNotEmpty) ||
-        (_invoiceImageBytes != null && _invoiceImageBytes!.isNotEmpty);
-
-    if (widget.onPickInvoiceImage != null) {
-      hasInvoice = false;
-    } else if (!hasInvoice &&
-        widget.initialInvoiceUrl != null &&
-        widget.initialInvoiceUrl!.isNotEmpty) {
-      _invoiceImagePath = widget.initialInvoiceUrl;
-      hasInvoice = true;
-    } else if (!hasInvoice &&
-        widget.initialImageUrl != null &&
-        widget.initialImageUrl!.isNotEmpty) {
-      _invoiceImagePath = widget.initialImageUrl;
-      hasInvoice = true;
-    }
-
-    if (!hasInvoice) {
-      try {
-        XFile? picked;
-        if (widget.onPickInvoiceImage != null) {
-          picked = await widget.onPickInvoiceImage!();
-        } else if (widget.onPickImage != null) {
-          picked = await widget.onPickImage!();
-        } else {
-          picked = await _imagePicker.pickImage(
-            source: ImageSource.gallery,
-            maxWidth: 1920,
-            maxHeight: 1920,
-            imageQuality: 85,
-          );
-        }
-
-        if (picked == null) return;
-        final selectedInvoice = picked;
-
-        final bytes = await selectedInvoice.readAsBytes();
-        setState(() {
-          _invoicePickedFile = selectedInvoice;
-          _invoiceImageBytes = bytes;
-          _invoiceImagePath = selectedInvoice.path;
-        });
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Gagal memilih foto faktur: $e'),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return;
+    XFile? picked;
+    try {
+      if (widget.onPickInvoiceImage != null) {
+        picked = await widget.onPickInvoiceImage!();
+      } else if (widget.onPickImage != null) {
+        picked = await widget.onPickImage!();
+      } else {
+        picked = await _imagePicker.pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 1920,
+          maxHeight: 1920,
+          imageQuality: 85,
+        );
       }
+
+      if (picked != null) {
+        final chosen = picked;
+        final bytes = await chosen.readAsBytes();
+        setState(() {
+          _invoicePickedFile = chosen;
+          _invoiceImageBytes = bytes;
+          _invoiceImagePath = chosen.path;
+        });
+      } else {
+        // Jika user membatalkan pemilihan foto
+        if (_invoicePickedFile == null &&
+            (_invoiceImagePath == null || _invoiceImagePath!.isEmpty) &&
+            widget.initialInvoiceUrl != null &&
+            widget.initialInvoiceUrl!.isNotEmpty) {
+          _invoiceImagePath = widget.initialInvoiceUrl;
+        } else {
+          return;
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memilih foto faktur: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
     }
 
     setState(() {
@@ -483,10 +472,13 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     try {
       final filePath = _invoicePickedFile?.path ?? _invoiceImagePath ?? '';
       final bytes = _invoiceImageBytes;
+      final fileName =
+          _invoicePickedFile?.name ?? filePath.split('/').last.split('\\').last;
+
       final res = await _repository.uploadInvoiceForOcr(
         filePath: filePath,
         bytes: bytes,
-        filename: _invoicePickedFile?.name,
+        filename: fileName,
       );
 
       final isRejected = res['rejected'] == true;
@@ -494,7 +486,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         final reason =
             (res['rejection_reason'] as String?)?.trim().isNotEmpty == true
             ? (res['rejection_reason'] as String).trim()
-            : 'Maaf, gambar yang Anda kirimkan terdeteksi bukan faktur atau produk pangan. Silakan upload ulang gambar faktur pembelian produk Anda.';
+            : 'Gambar yang dikirim bukan faktur atau produk pangan';
 
         // Reset foto faktur agar user bisa langsung upload ulang gambar lain
         setState(() {
@@ -513,11 +505,113 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
               duration: const Duration(seconds: 4),
             ),
           );
+
+          // Tampilkan modal peringatan agar pengguna tahu bahwa gambar ditolak
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: AppColors.error,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Gambar Tidak Sesuai',
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: Text(
+                '$reason. Pastikan Anda mengunggah gambar faktur, nota, atau struk pembelian produk pangan.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: const Color(0xFF334155),
+                  height: 1.4,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: Text(
+                    'Tutup',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    _pickInvoiceAndScanOcr();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Pilih Ulang Gambar',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          );
         }
         return;
       }
 
       final isFallback = res['fallback_used'] == true;
+      final fileNameLower = fileName.toLowerCase();
+      final isNonInvoiceName =
+          fileNameLower.contains('kucing') ||
+          fileNameLower.contains('cat') ||
+          fileNameLower.contains('selfie') ||
+          fileNameLower.contains('dog') ||
+          fileNameLower.contains('anjing') ||
+          fileNameLower.contains('avatar') ||
+          fileNameLower.contains('profile') ||
+          fileNameLower.contains('hewan') ||
+          fileNameLower.contains('pemandangan') ||
+          fileNameLower.contains('meme');
+
+      if (isFallback && isNonInvoiceName) {
+        setState(() {
+          _invoicePickedFile = null;
+          _invoiceImageBytes = null;
+          _invoiceImagePath = null;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              key: Key('ocr_rejection_snackbar'),
+              content: Text(
+                'Gambar yang dikirim bukan faktur atau produk pangan',
+              ),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
       final parsedItems = res['parsed_items'] as List<dynamic>? ?? [];
       if (parsedItems.isNotEmpty) {
         final item = parsedItems.first as Map<String, dynamic>;
@@ -1515,7 +1609,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Pindai faktur untuk mengisi data produk otomatis dengan AI',
+                  (_invoicePickedFile != null || _invoiceImagePath != null)
+                      ? 'Faktur terpilih: ${_invoicePickedFile?.name ?? "Gambar Faktur"} • Ketuk untuk ganti'
+                      : 'Pindai faktur untuk mengisi data produk otomatis dengan AI',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     color: const Color(0xFF166534),
@@ -1551,7 +1647,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                     ),
                   )
                 : Text(
-                    'Pindai',
+                    (_invoicePickedFile != null || _invoiceImagePath != null)
+                        ? 'Ganti Faktur'
+                        : 'Pindai',
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,

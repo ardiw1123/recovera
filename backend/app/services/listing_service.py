@@ -119,6 +119,9 @@ def search_listings(
         query = query.filter(Product.category.ilike(category.strip()))
 
     today = date.today()
+    # Invariant: Jangan tampilkan produk yang sudah kedaluwarsa di etalase pembeli
+    query = query.filter(Listing.expiry_date > today)
+
     if min_days is not None:
         min_expiry_date = today + timedelta(days=min_days)
         query = query.filter(Listing.expiry_date >= min_expiry_date)

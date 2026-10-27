@@ -24,7 +24,11 @@ def _format_order(order: Order) -> dict:
             batch_number=listing.batch_number,
             warehouse_lat=listing.seller.warehouse_lat if listing.seller else None,
             warehouse_lng=listing.seller.warehouse_lng if listing.seller else None,
-            warehouse_address=listing.seller.address if listing.seller else None,
+            warehouse_address=(
+                f"{listing.seller.company_name}, {listing.seller.city or listing.seller.address}"
+                if (listing.seller and listing.seller.company_name)
+                else (listing.seller.address if listing.seller else None)
+            ),
         ).model_dump()
 
     return OrderResponse(
