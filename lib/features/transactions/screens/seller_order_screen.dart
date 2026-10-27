@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/network/api_client.dart';
 import '../../../data/repositories/order_repository.dart';
+import '../../../data/services/order_api_service.dart';
 import '../data/sample_transaction_orders.dart';
 import '../models/transaction_order_model.dart';
 
@@ -10,10 +12,7 @@ import '../models/transaction_order_model.dart';
 /// Menampilkan ringkasan omset penjualan, total lot terjual, daftar pesanan masuk dari UMKM,
 /// serta aksi penjual untuk memperbarui alur penyiapan dan serah terima batch.
 class SellerOrderScreen extends StatefulWidget {
-  const SellerOrderScreen({
-    super.key,
-    this.orderRepository,
-  });
+  const SellerOrderScreen({super.key, this.orderRepository});
 
   final OrderRepository? orderRepository;
 
@@ -34,7 +33,9 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
   @override
   void initState() {
     super.initState();
-    _orderRepository = widget.orderRepository ?? OrderRepository();
+    _orderRepository =
+        widget.orderRepository ??
+        OrderRepository(remoteClient: OrderApiService(client: ApiClient()));
     _loadSellerOrders();
   }
 
@@ -42,11 +43,12 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
   Future<void> _loadSellerOrders() async {
     setState(() => _isLoading = true);
     try {
-      // Gunakan data dummy seller yang realistis dan konsisten
-      await Future.delayed(const Duration(milliseconds: 150));
+      final cachedList = await _orderRepository.getOrders(forceRefresh: true);
       if (mounted) {
         setState(() {
-          _sellerOrders = List<TransactionOrder>.from(dummySellerOrders);
+          _sellerOrders = cachedList
+              .map(TransactionOrder.fromCachedOrder)
+              .toList();
         });
       }
     } catch (_) {
@@ -63,26 +65,40 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
   }
 
   /// Memperbarui status pesanan seller
-  void _updateOrderStatus(TransactionOrder targetOrder, String newStatus) async {
+  void _updateOrderStatus(
+    TransactionOrder targetOrder,
+    String newStatus,
+  ) async {
     setState(() {
-      final index = _sellerOrders.indexWhere((order) => order.id == targetOrder.id);
+      final index = _sellerOrders.indexWhere(
+        (order) => order.id == targetOrder.id,
+      );
       if (index != -1) {
         _sellerOrders[index] = _sellerOrders[index].copyWith(status: newStatus);
       }
     });
 
     try {
-      await _orderRepository.cacheOrder(
-        targetOrder.copyWith(status: newStatus).toCachedOrder(),
-      );
-    } catch (_) {}
+      await _orderRepository.updateOrderStatus(targetOrder.id, newStatus);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Status pesanan gagal diperbarui: $e')),
+        );
+      }
+      _loadSellerOrders();
+      return;
+    }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           'Pesanan ${targetOrder.orderCode} berhasil diperbarui ke: ${_getStatusLabel(newStatus)}',
-          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         backgroundColor: const Color(0xFF10B981),
         behavior: SnackBarBehavior.floating,
@@ -295,14 +311,16 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
                 label:
                     'Siap Diambil (${_sellerOrders.where((o) => o.status == 'in_progress').length})',
                 isSelected: _selectedStatusFilter == 'in_progress',
-                onTap: () => setState(() => _selectedStatusFilter = 'in_progress'),
+                onTap: () =>
+                    setState(() => _selectedStatusFilter = 'in_progress'),
               ),
               const SizedBox(width: 8),
               _buildFilterChip(
                 label:
                     'Selesai (${_sellerOrders.where((o) => o.status == 'completed').length})',
                 isSelected: _selectedStatusFilter == 'completed',
-                onTap: () => setState(() => _selectedStatusFilter = 'completed'),
+                onTap: () =>
+                    setState(() => _selectedStatusFilter = 'completed'),
               ),
             ],
           ),
@@ -481,7 +499,9 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
           color: isSelected ? const Color(0xFF03045E) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? const Color(0xFF03045E) : const Color(0xFFCBD5E1),
+            color: isSelected
+                ? const Color(0xFF03045E)
+                : const Color(0xFFCBD5E1),
           ),
           boxShadow: isSelected
               ? [
@@ -619,7 +639,9 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(6),
@@ -901,8 +923,14 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
               _buildInvoiceLine('Nama Barang', order.productName),
               _buildInvoiceLine('Nomor Batch', order.batchNumber),
               _buildInvoiceLine('Jumlah / Qty', order.unit),
-              _buildInvoiceLine('Harga Satuan Final', _formatCurrencyRupiah(order.unitPrice)),
-              _buildInvoiceLine('Status Pembayaran', 'Lunas (Dana Terverifikasi)'),
+              _buildInvoiceLine(
+                'Harga Satuan Final',
+                _formatCurrencyRupiah(order.unitPrice),
+              ),
+              _buildInvoiceLine(
+                'Status Pembayaran',
+                'Lunas (Dana Terverifikasi)',
+              ),
               const Divider(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -40,6 +40,17 @@ async def get_my_donations(
     return wrap_success(donations_data.model_dump())
 
 
+@router.get("/sellers/{seller_id}/certificates", response_model=ResponseEnvelope[SellerDonationsResponse])
+async def get_public_seller_certificates(
+    db: DbSessionDep,
+    seller_id: Annotated[int, Path(ge=1)],
+) -> dict:
+    seller = db.query(Seller).filter(Seller.id == seller_id).first()
+    if not seller:
+        raise AppException("SELLER_NOT_FOUND", "Profil penjual tidak ditemukan", status.HTTP_404_NOT_FOUND)
+    return wrap_success(get_seller_donations(db, seller_id).model_dump())
+
+
 @router.get(
     "/{donation_id}/certificate",
     status_code=status.HTTP_200_OK,

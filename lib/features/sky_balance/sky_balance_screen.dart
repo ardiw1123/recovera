@@ -23,7 +23,10 @@ import 'widgets/sky_result_view.dart';
 import 'widgets/sky_tutorial_view.dart';
 
 class SkyBalanceScreen extends StatefulWidget {
-  const SkyBalanceScreen({super.key});
+  const SkyBalanceScreen({super.key, this.isActive = true, this.onExit});
+
+  final bool isActive;
+  final VoidCallback? onExit;
 
   @override
   State<SkyBalanceScreen> createState() => _SkyBalanceScreenState();
@@ -87,7 +90,10 @@ class _SkyBalanceScreenState extends State<SkyBalanceScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _soundEnabled) {
+      if (mounted &&
+          widget.isActive &&
+          _soundEnabled &&
+          _stage == SkyBalanceStage.menu) {
         _audio.startBgm();
       }
     });
@@ -327,10 +333,9 @@ class _SkyBalanceScreenState extends State<SkyBalanceScreen>
       _lastLandingCount = _body.landingCount;
       _audio.playJump();
     }
-    final double height = math.max(
-      0,
-      FlightWorldLayout.startY - _body.y,
-    ).toDouble();
+    final double height = math
+        .max(0, FlightWorldLayout.startY - _body.y)
+        .toDouble();
     if (height > _heightReached) {
       _score += height - _heightReached;
       _heightReached = height;
@@ -571,6 +576,10 @@ class _SkyBalanceScreenState extends State<SkyBalanceScreen>
     _countdownTimer?.cancel();
     _sensor.stopListening();
     _audio.stopBgm();
+    if (widget.onExit != null) {
+      widget.onExit!();
+      return;
+    }
     final NavigatorState navigator = Navigator.of(context);
     if (navigator.canPop()) {
       navigator.pop();
@@ -781,9 +790,8 @@ class _SkyBalanceScreenState extends State<SkyBalanceScreen>
               onResume: _resumeGame,
               onRestart: _startCountdown,
               onHome: _returnToMenu,
-              onRecalibrate: () => unawaited(
-                _beginCalibration(resumeAfter: true),
-              ),
+              onRecalibrate: () =>
+                  unawaited(_beginCalibration(resumeAfter: true)),
             ),
           ],
         );

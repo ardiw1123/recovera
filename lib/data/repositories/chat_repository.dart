@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import '../../core/constants/api_constants.dart';
 import '../../core/network/api_client.dart';
 import '../../features/home/models/product_model.dart';
 import '../database/app_database.dart';

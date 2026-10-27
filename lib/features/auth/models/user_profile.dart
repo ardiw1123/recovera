@@ -15,6 +15,9 @@ class UserProfile {
     this.baseLng,
     this.warehouseLat,
     this.warehouseLng,
+    this.prefCategories = const [],
+    this.maxRadiusKm = 15,
+    this.hasColdStorage = false,
   });
 
   final int id;
@@ -31,6 +34,9 @@ class UserProfile {
   final double? baseLng;
   final double? warehouseLat;
   final double? warehouseLng;
+  final List<String> prefCategories;
+  final int maxRadiusKm;
+  final bool hasColdStorage;
 
   /// Koordinat umum pengguna (baseLat untuk buyer, warehouseLat untuk seller)
   double? get lat => baseLat ?? warehouseLat;
@@ -59,14 +65,34 @@ class UserProfile {
       name: json['name'] as String? ?? '',
       phone: json['phone'] as String?,
       photoUrl: json['photo_url'] as String?,
-      companyName: (seller?['company_name'] as String?) ?? json['company_name'] as String?,
-      businessType: (buyer?['business_type'] as String?) ?? json['business_type'] as String?,
-      address: (seller?['address'] as String?) ?? (buyer?['address'] as String?) ?? json['address'] as String?,
+      companyName:
+          (seller?['company_name'] as String?) ??
+          json['company_name'] as String?,
+      businessType:
+          (buyer?['business_type'] as String?) ??
+          json['business_type'] as String?,
+      address:
+          (seller?['address'] as String?) ??
+          (buyer?['address'] as String?) ??
+          json['address'] as String?,
       city: (seller?['city'] as String?) ?? json['city'] as String?,
-      baseLat: parseCoordinate(buyer?['base_lat'] ?? json['base_lat'] ?? json['lat']),
-      baseLng: parseCoordinate(buyer?['base_lng'] ?? json['base_lng'] ?? json['lng']),
-      warehouseLat: parseCoordinate(seller?['warehouse_lat'] ?? json['warehouse_lat']),
-      warehouseLng: parseCoordinate(seller?['warehouse_lng'] ?? json['warehouse_lng']),
+      baseLat: parseCoordinate(
+        buyer?['base_lat'] ?? json['base_lat'] ?? json['lat'],
+      ),
+      baseLng: parseCoordinate(
+        buyer?['base_lng'] ?? json['base_lng'] ?? json['lng'],
+      ),
+      warehouseLat: parseCoordinate(
+        seller?['warehouse_lat'] ?? json['warehouse_lat'],
+      ),
+      warehouseLng: parseCoordinate(
+        seller?['warehouse_lng'] ?? json['warehouse_lng'],
+      ),
+      prefCategories: List<String>.from(
+        buyer?['pref_categories'] as List? ?? const [],
+      ),
+      maxRadiusKm: (buyer?['max_radius_km'] as num?)?.toInt() ?? 15,
+      hasColdStorage: buyer?['has_cold_storage'] as bool? ?? false,
     );
   }
 
@@ -85,6 +111,9 @@ class UserProfile {
     double? baseLng,
     double? warehouseLat,
     double? warehouseLng,
+    List<String>? prefCategories,
+    int? maxRadiusKm,
+    bool? hasColdStorage,
   }) {
     return UserProfile(
       id: id ?? this.id,
@@ -101,6 +130,9 @@ class UserProfile {
       baseLng: baseLng ?? this.baseLng,
       warehouseLat: warehouseLat ?? this.warehouseLat,
       warehouseLng: warehouseLng ?? this.warehouseLng,
+      prefCategories: prefCategories ?? this.prefCategories,
+      maxRadiusKm: maxRadiusKm ?? this.maxRadiusKm,
+      hasColdStorage: hasColdStorage ?? this.hasColdStorage,
     );
   }
 
@@ -120,6 +152,9 @@ class UserProfile {
       if (baseLng != null) 'base_lng': baseLng,
       if (warehouseLat != null) 'warehouse_lat': warehouseLat,
       if (warehouseLng != null) 'warehouse_lng': warehouseLng,
+      if (prefCategories.isNotEmpty) 'pref_categories': prefCategories,
+      'max_radius_km': maxRadiusKm,
+      'has_cold_storage': hasColdStorage,
     };
   }
 }

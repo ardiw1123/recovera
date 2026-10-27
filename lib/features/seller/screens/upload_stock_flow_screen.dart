@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/network_connectivity_service.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../models/seller_inventory_model.dart';
 import '../repositories/seller_repository.dart';
@@ -106,7 +109,8 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       _productImageUrl = widget.initialImageUrl!;
       _productImagePath = widget.initialImageUrl!;
     }
-    if (widget.initialInvoiceUrl != null && widget.initialInvoiceUrl!.isNotEmpty) {
+    if (widget.initialInvoiceUrl != null &&
+        widget.initialInvoiceUrl!.isNotEmpty) {
       _invoiceImagePath = widget.initialInvoiceUrl!;
     }
 
@@ -127,7 +131,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         _productImageUrl = draft.imageUrl!;
         _productImagePath = draft.imageUrl!;
       }
-      _userPrice = draft.startPrice > 0 ? draft.startPrice : (draft.normalPrice * 0.6);
+      _userPrice = draft.startPrice > 0
+          ? draft.startPrice
+          : (draft.normalPrice * 0.6);
       _currentStep = 2; // Langsung ke Step 2 (Validasi)
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _startValidationSimulation(draft.id);
@@ -155,14 +161,17 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     if (!AuthRepository.instance.isSeller) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Akses ditolak: Hanya akun penjual yang dapat mengunggah stok.'),
+          content: Text(
+            'Akses ditolak: Hanya akun penjual yang dapat mengunggah stok.',
+          ),
           backgroundColor: AppColors.error,
         ),
       );
       return;
     }
 
-    final bool hasProductImage = _productImageBytes != null ||
+    final bool hasProductImage =
+        _productImageBytes != null ||
         (_productImagePath != null && _productImagePath!.isNotEmpty) ||
         (_productImageUrl.isNotEmpty) ||
         (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty);
@@ -187,7 +196,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Ukuran foto produk maksimal 2 MB. Silakan pilih foto dengan ukuran lebih kecil.'),
+          content: Text(
+            'Ukuran foto produk maksimal 2 MB. Silakan pilih foto dengan ukuran lebih kecil.',
+          ),
           backgroundColor: AppColors.error,
         ),
       );
@@ -216,18 +227,46 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
 
     final qty = int.tryParse(_qtyController.text.trim()) ?? 100;
     final normalPrice =
-        double.tryParse(_normalPriceController.text.replaceAll('.', '').trim()) ??
-            15000.0;
+        double.tryParse(
+          _normalPriceController.text.replaceAll('.', '').trim(),
+        ) ??
+        15000.0;
     final expStr =
         '${_expiryDate.year.toString().padLeft(4, '0')}-${_expiryDate.month.toString().padLeft(2, '0')}-${_expiryDate.day.toString().padLeft(2, '0')}';
 
-    final effectiveImageUrl = (_productImagePath != null && _productImagePath!.isNotEmpty)
+    var effectiveImageUrl =
+        (_productImagePath != null && _productImagePath!.isNotEmpty)
         ? _productImagePath!
         : (_productImageUrl.isNotEmpty
-            ? _productImageUrl
-            : (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty
-                ? widget.initialImageUrl!
-                : 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500'));
+              ? _productImageUrl
+              : (widget.initialImageUrl != null &&
+                        widget.initialImageUrl!.isNotEmpty
+                    ? widget.initialImageUrl!
+                    : 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500'));
+
+    if (!effectiveImageUrl.startsWith('http') &&
+        NetworkConnectivityService.instance.isOnline) {
+      try {
+        effectiveImageUrl = await _repository.uploadProductImage(
+          filePath: _productImagePath ?? '',
+          bytes: _productImageBytes,
+          filename: _productImagePath?.split(RegExp(r'[/\\]')).last,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _isSubmitting = false;
+          _errorMessage = e.toString();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Foto produk gagal diunggah: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+    }
 
     // Jika mengedit draf yang sudah ada dari riwayat / detail
     if (widget.existingDraft != null) {
@@ -244,8 +283,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           'image_url': effectiveImageUrl,
         };
 
-        final res =
-            await _repository.updateDraft(widget.existingDraft!.id, patch);
+        final res = await _repository.updateDraft(
+          widget.existingDraft!.id,
+          patch,
+        );
         final listing = res['listing'] as SellerListingItem;
         final val = res['validation'] as SellerValidationResult?;
 
@@ -331,8 +372,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     });
 
     _validationTimer?.cancel();
-    _validationTimer =
-        Timer.periodic(const Duration(milliseconds: 250), (timer) {
+    _validationTimer = Timer.periodic(const Duration(milliseconds: 250), (
+      timer,
+    ) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -346,27 +388,31 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     });
 
     // Panggil endpoint validasi backend nyata
-    _repository.validateDraft(listingId).then((val) {
-      _validationTimer?.cancel();
-      if (mounted) {
-        setState(() {
-          _validationResult = val;
-          _validationProgress = 1.0;
-          _verifiedCount =
-              val.isValid ? 6 : (6 - val.errors.length).clamp(1, 5);
-          _isValidating = false;
+    _repository
+        .validateDraft(listingId)
+        .then((val) {
+          _validationTimer?.cancel();
+          if (mounted) {
+            setState(() {
+              _validationResult = val;
+              _validationProgress = 1.0;
+              _verifiedCount = val.isValid
+                  ? 6
+                  : (6 - val.errors.length).clamp(1, 5);
+              _isValidating = false;
+            });
+          }
+        })
+        .catchError((_) {
+          _validationTimer?.cancel();
+          if (mounted) {
+            setState(() {
+              _validationProgress = 1.0;
+              _verifiedCount = 6;
+              _isValidating = false;
+            });
+          }
         });
-      }
-    }).catchError((_) {
-      _validationTimer?.cancel();
-      if (mounted) {
-        setState(() {
-          _validationProgress = 1.0;
-          _verifiedCount = 6;
-          _isValidating = false;
-        });
-      }
-    });
   }
 
   /// Membuka galeri dan memindai foto faktur untuk ekstraksi OCR AI
@@ -426,7 +472,8 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     try {
       final filePath = _invoicePickedFile?.path ?? _invoiceImagePath ?? '';
       final bytes = _invoiceImageBytes;
-      final fileName = _invoicePickedFile?.name ?? filePath.split('/').last.split('\\').last;
+      final fileName =
+          _invoicePickedFile?.name ?? filePath.split('/').last.split('\\').last;
 
       final res = await _repository.uploadInvoiceForOcr(
         filePath: filePath,
@@ -436,7 +483,8 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
 
       final isRejected = res['rejected'] == true;
       if (isRejected) {
-        final reason = (res['rejection_reason'] as String?)?.trim().isNotEmpty == true
+        final reason =
+            (res['rejection_reason'] as String?)?.trim().isNotEmpty == true
             ? (res['rejection_reason'] as String).trim()
             : 'Gambar yang dikirim bukan faktur atau produk pangan';
 
@@ -462,27 +510,46 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               title: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 28),
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: AppColors.error,
+                    size: 28,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Gambar Tidak Sesuai',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16),
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ],
               ),
               content: Text(
                 '$reason. Pastikan Anda mengunggah gambar faktur, nota, atau struk pembelian produk pangan.',
-                style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF334155), height: 1.4),
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: const Color(0xFF334155),
+                  height: 1.4,
+                ),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
-                  child: Text('Tutup', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+                  child: Text(
+                    'Tutup',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -492,9 +559,14 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: Text('Pilih Ulang Gambar', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                  child: Text(
+                    'Pilih Ulang Gambar',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
                 ),
               ],
             ),
@@ -505,7 +577,8 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
 
       final isFallback = res['fallback_used'] == true;
       final fileNameLower = fileName.toLowerCase();
-      final isNonInvoiceName = fileNameLower.contains('kucing') ||
+      final isNonInvoiceName =
+          fileNameLower.contains('kucing') ||
           fileNameLower.contains('cat') ||
           fileNameLower.contains('selfie') ||
           fileNameLower.contains('dog') ||
@@ -527,7 +600,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               key: Key('ocr_rejection_snackbar'),
-              content: Text('Gambar yang dikirim bukan faktur atau produk pangan'),
+              content: Text(
+                'Gambar yang dikirim bukan faktur atau produk pangan',
+              ),
               backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
               duration: Duration(seconds: 4),
@@ -545,8 +620,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
               (item['product_name'] as String).isNotEmpty) {
             _nameController.text = item['product_name'] as String;
           }
-          if (item['brand'] != null &&
-              (item['brand'] as String).isNotEmpty) {
+          if (item['brand'] != null && (item['brand'] as String).isNotEmpty) {
             _brandController.text = item['brand'] as String;
           }
           if (item['quantity'] != null) {
@@ -587,8 +661,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           }
           if (item['expiry_date'] != null) {
             try {
-              final parsedDate =
-                  DateTime.parse(item['expiry_date'] as String);
+              final parsedDate = DateTime.parse(item['expiry_date'] as String);
               final minDate = DateTime.now().add(const Duration(days: 30));
               _expiryDate = parsedDate.isBefore(minDate)
                   ? minDate.add(const Duration(days: 15))
@@ -762,11 +835,16 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         context: context,
         barrierDismissible: false,
         builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Row(
             children: [
-              const Icon(Icons.check_circle_rounded,
-                  color: AppColors.success, size: 28),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.success,
+                size: 28,
+              ),
               const SizedBox(width: 10),
               Text(
                 'Sukses Dipublikasi!',
@@ -776,7 +854,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           ),
           content: Text(
             'Produk "${published.productName}" kini telah aktif dan dapat ditemukan oleh pembeli bisnis di katalog lelang Recovera.',
-            style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF475569)),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: const Color(0xFF475569),
+            ),
           ),
           actions: [
             ElevatedButton(
@@ -856,8 +937,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
             child: IconButton(
               key: const Key('btn_step_back'),
               padding: EdgeInsets.zero,
-              icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 16, color: Color(0xFF0F172A)),
+              icon: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 16,
+                color: Color(0xFF0F172A),
+              ),
               onPressed: () {
                 if (_currentStep > 1) {
                   setState(() => _currentStep--);
@@ -903,7 +987,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
             return Expanded(
               child: Container(
                 height: 2,
-                color: isPassed ? const Color(0xFF0284C7) : const Color(0xFFE2E8F0),
+                color: isPassed
+                    ? const Color(0xFF0284C7)
+                    : const Color(0xFFE2E8F0),
               ),
             );
           }
@@ -932,7 +1018,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 ),
                 child: Center(
                   child: isDone
-                      ? const Icon(Icons.check, size: 18, color: AppColors.white)
+                      ? const Icon(
+                          Icons.check,
+                          size: 18,
+                          color: AppColors.white,
+                        )
                       : Text(
                           '$stepNum',
                           style: GoogleFonts.inter(
@@ -954,13 +1044,14 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                     stepLabel,
                     style: GoogleFonts.inter(
                       fontSize: 11,
-                      fontWeight:
-                          isActive || isDone ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: isActive || isDone
+                          ? FontWeight.w700
+                          : FontWeight.w500,
                       color: isDone
                           ? const Color(0xFF10B981)
                           : (isActive
-                              ? const Color(0xFF0284C7)
-                              : const Color(0xFF94A3B8)),
+                                ? const Color(0xFF0284C7)
+                                : const Color(0xFF94A3B8)),
                     ),
                   ),
                 ),
@@ -1044,10 +1135,13 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 TextFormField(
                   key: const Key('input_product_name'),
                   controller: _nameController,
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Nama produk wajib diisi' : null,
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Nama produk wajib diisi'
+                      : null,
                   style: GoogleFonts.inter(fontSize: 14),
-                  decoration: _buildInputDecoration(hint: 'Contoh: Susu UHT 1L'),
+                  decoration: _buildInputDecoration(
+                    hint: 'Contoh: Susu UHT 1L',
+                  ),
                 ),
                 const SizedBox(height: 14),
 
@@ -1105,8 +1199,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                   keyboardType: TextInputType.number,
                   validator: (v) {
                     final num = double.tryParse(
-                        v?.replaceAll('.', '').replaceAll(',', '') ?? '');
-                    return num == null || num <= 0 ? 'Harga normal harus > 0' : null;
+                      v?.replaceAll('.', '').replaceAll(',', '') ?? '',
+                    );
+                    return num == null || num <= 0
+                        ? 'Harga normal harus > 0'
+                        : null;
                   },
                   style: GoogleFonts.inter(fontSize: 14),
                   decoration: _buildInputDecoration(
@@ -1209,7 +1306,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           _productPickedFile = selectedFile;
           _productImageBytes = bytes;
           _productImagePath = pickedPath;
-          _productImageUrl = pickedPath.isNotEmpty ? pickedPath : _productImageUrl;
+          _productImageUrl = pickedPath.isNotEmpty
+              ? pickedPath
+              : _productImageUrl;
           _isPickingProductImage = false;
           _productImageError = null;
         });
@@ -1235,7 +1334,8 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
   }
 
   Widget _buildPhotoUploadBox() {
-    final bool hasImage = _productImageBytes != null ||
+    final bool hasImage =
+        _productImageBytes != null ||
         (_productImagePath != null && _productImagePath!.isNotEmpty) ||
         (_productImageUrl.isNotEmpty) ||
         (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty);
@@ -1248,10 +1348,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         decoration: BoxDecoration(
           color: const Color(0xFFF0F9FF),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: const Color(0xFF38BDF8),
-            width: 1.5,
-          ),
+          border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1293,10 +1390,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         height: 200,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: const Color(0xFF10B981),
-            width: 1.5,
-          ),
+          border: Border.all(color: const Color(0xFF10B981), width: 1.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
@@ -1312,8 +1406,6 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
             children: [
               // Image preview
               _buildSelectedImageWidget(),
-
-
 
               // Gradient scrim
               Positioned(
@@ -1340,7 +1432,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 top: 10,
                 left: 10,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF059669).withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(20),
@@ -1379,7 +1474,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                     borderRadius: BorderRadius.circular(20),
                     onTap: _pickImageFromGallery,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1403,8 +1501,6 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                   ),
                 ),
               ),
-
-
             ],
           ),
         ),
@@ -1421,10 +1517,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         decoration: BoxDecoration(
           color: const Color(0xFFF0F9FF),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: const Color(0xFF38BDF8),
-            width: 1.5,
-          ),
+          border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1531,7 +1624,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           const SizedBox(width: 8),
           ElevatedButton(
             key: const Key('btn_scan_invoice_ocr'),
-            onPressed: (_isScanningOcr || _isSubmitting) ? null : _pickInvoiceAndScanOcr,
+            onPressed: (_isScanningOcr || _isSubmitting)
+                ? null
+                : _pickInvoiceAndScanOcr,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF16A34A),
               foregroundColor: Colors.white,
@@ -1576,7 +1671,8 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       );
     }
     if (_productImagePath != null && _productImagePath!.isNotEmpty) {
-      if (_productImagePath!.startsWith('http://') || _productImagePath!.startsWith('https://')) {
+      if (_productImagePath!.startsWith('http://') ||
+          _productImagePath!.startsWith('https://')) {
         return Image.network(
           _productImagePath!,
           key: const Key('photo_upload_preview_image'),
@@ -1668,15 +1764,19 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
               ? _selectedCategory
               : categories.first,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: Color(0xFF64748B)),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: Color(0xFF64748B),
+          ),
           items: categories.map((cat) {
             return DropdownMenuItem(
               value: cat,
               child: Text(
                 cat,
                 style: GoogleFonts.inter(
-                    fontSize: 14, color: const Color(0xFF0F172A)),
+                  fontSize: 14,
+                  color: const Color(0xFF0F172A),
+                ),
               ),
             );
           }).toList(),
@@ -1703,15 +1803,19 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           key: const Key('dropdown_unit'),
           value: units.contains(_selectedUnit) ? _selectedUnit : units.first,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: Color(0xFF64748B)),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: Color(0xFF64748B),
+          ),
           items: units.map((u) {
             return DropdownMenuItem(
               value: u,
               child: Text(
                 u,
                 style: GoogleFonts.inter(
-                    fontSize: 14, color: const Color(0xFF0F172A)),
+                  fontSize: 14,
+                  color: const Color(0xFF0F172A),
+                ),
               ),
             );
           }).toList(),
@@ -1763,8 +1867,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                 ),
               ),
             ),
-            const Icon(Icons.calendar_today_outlined,
-                size: 18, color: Color(0xFF0F172A)),
+            const Icon(
+              Icons.calendar_today_outlined,
+              size: 18,
+              color: Color(0xFF0F172A),
+            ),
           ],
         ),
       ),
@@ -1785,7 +1892,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     );
   }
 
-  InputDecoration _buildInputDecoration({required String hint, String? prefixText}) {
+  InputDecoration _buildInputDecoration({
+    required String hint,
+    String? prefixText,
+  }) {
     return InputDecoration(
       hintText: hint,
       prefixText: prefixText,
@@ -1794,7 +1904,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         fontWeight: FontWeight.w700,
         color: const Color(0xFF64748B),
       ),
-      hintStyle: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF94A3B8)),
+      hintStyle: GoogleFonts.inter(
+        fontSize: 14,
+        color: const Color(0xFF94A3B8),
+      ),
       filled: true,
       fillColor: const Color(0xFFF8FAFC),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1825,7 +1938,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       {'title': 'Kategori sesuai', 'status': 'Lolos'},
       {
         'title': 'Cold chain jika diperlukan',
-        'status': _verifiedCount >= 6 ? 'Lolos' : 'Memeriksa...'
+        'status': _verifiedCount >= 6 ? 'Lolos' : 'Memeriksa...',
       },
     ];
 
@@ -1893,8 +2006,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                   value: _validationProgress,
                   minHeight: 6,
                   backgroundColor: const Color(0xFFF1F5F9),
-                  valueColor:
-                      const AlwaysStoppedAnimation<Color>(Color(0xFF0284C7)),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    Color(0xFF0284C7),
+                  ),
                 ),
               ),
             ],
@@ -1927,8 +2041,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFE0F2FE),
                       borderRadius: BorderRadius.circular(20),
@@ -1968,9 +2084,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          isChecked
-                              ? Icons.check
-                              : Icons.access_time_rounded,
+                          isChecked ? Icons.check : Icons.access_time_rounded,
                           size: 13,
                           color: isChecked
                               ? const Color(0xFF16A34A)
@@ -2265,8 +2379,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFEF3C7),
                       borderRadius: BorderRadius.circular(20),
@@ -2290,7 +2406,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
   }
 
   Widget _buildSmartRecommendationCard(
-      double normalPrice, int qty, String unit, double suggested) {
+    double normalPrice,
+    int qty,
+    String unit,
+    double suggested,
+  ) {
     final totalRecovery = qty * suggested;
     final discount = _recommendationResult?.discountPct ?? 40.0;
 
@@ -2308,16 +2428,21 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF0284C7),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.bolt_rounded,
-                        size: 14, color: AppColors.white),
+                    const Icon(
+                      Icons.bolt_rounded,
+                      size: 14,
+                      color: AppColors.white,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Rekomendasi Cerdas',
@@ -2332,8 +2457,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
               ),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFDCFCE7),
                   borderRadius: BorderRadius.circular(20),
@@ -2423,7 +2550,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
   }
 
   Widget _buildMarketRangeCard(
-      double min, double max, double suggested, String unit) {
+    double min,
+    double max,
+    double suggested,
+    String unit,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -2561,8 +2692,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline_rounded,
-                    size: 16, color: Color(0xFF64748B)),
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 16,
+                  color: Color(0xFF64748B),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -2586,21 +2720,29 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Atur Harga Manual',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+        title: Text(
+          'Atur Harga Manual',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Masukkan harga awal yang Anda inginkan (Rp):',
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.slateText),
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppColors.slateText,
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _manualPriceController,
               keyboardType: TextInputType.number,
-              decoration: _buildInputDecoration(hint: '12000', prefixText: 'Rp '),
+              decoration: _buildInputDecoration(
+                hint: '12000',
+                prefixText: 'Rp ',
+              ),
             ),
           ],
         ),
@@ -2612,7 +2754,8 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
           ElevatedButton(
             onPressed: () {
               final val = double.tryParse(
-                  _manualPriceController.text.replaceAll('.', '').trim());
+                _manualPriceController.text.replaceAll('.', '').trim(),
+              );
               if (val != null && val > 0) {
                 Navigator.pop(context);
                 _applyManualPrice(val);
@@ -2768,8 +2911,7 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
               ),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE0F2FE),
                   borderRadius: BorderRadius.circular(20),
@@ -2821,8 +2963,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.white,
                     shape: BoxShape.circle,
-                    border:
-                        Border.all(color: const Color(0xFFF59E0B), width: 3),
+                    border: Border.all(
+                      color: const Color(0xFFF59E0B),
+                      width: 3,
+                    ),
                   ),
                 ),
               ),
@@ -2887,7 +3031,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
     final days = _draftListing?.daysRemaining ?? 45;
     final normalPrice = _draftListing?.normalPrice ?? 15000.0;
     final sellPrice = _userPrice;
-    final discount = ((normalPrice - sellPrice) / normalPrice * 100).clamp(0, 99);
+    final discount = ((normalPrice - sellPrice) / normalPrice * 100).clamp(
+      0,
+      99,
+    );
     final totalRecovery = qty * sellPrice;
 
     return Column(
@@ -2946,7 +3093,9 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFE0F2FE),
                             borderRadius: BorderRadius.circular(6),
@@ -2964,8 +3113,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFDCFCE7),
                         borderRadius: BorderRadius.circular(20),
@@ -2973,8 +3124,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.access_time_rounded,
-                              size: 12, color: Color(0xFF16A34A)),
+                          const Icon(
+                            Icons.access_time_rounded,
+                            size: 12,
+                            color: Color(0xFF16A34A),
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             '$days hari tersisa',
@@ -2987,11 +3141,14 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                         ],
                       ),
                     ),
-                    if (_validationResult != null && _validationResult!.isValid) ...[
+                    if (_validationResult != null &&
+                        _validationResult!.isValid) ...[
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF0FDF4),
                           borderRadius: BorderRadius.circular(20),
@@ -3000,8 +3157,11 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.verified_rounded,
-                                size: 12, color: Color(0xFF16A34A)),
+                            const Icon(
+                              Icons.verified_rounded,
+                              size: 12,
+                              color: Color(0xFF16A34A),
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               'Standar Mutu Terverifikasi',
@@ -3044,9 +3204,13 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
             children: [
               Row(
                 children: [
-                  Text('Harga Normal',
-                      style: GoogleFonts.inter(
-                          fontSize: 13, color: const Color(0xFF64748B))),
+                  Text(
+                    'Harga Normal',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
                   const Spacer(),
                   Text(
                     formatCurrency(normalPrice),
@@ -3061,9 +3225,13 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Text('Harga Jual',
-                      style: GoogleFonts.inter(
-                          fontSize: 13, color: const Color(0xFF64748B))),
+                  Text(
+                    'Harga Jual',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
                   const Spacer(),
                   Text(
                     formatCurrency(sellPrice),
@@ -3073,21 +3241,31 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
                       color: const Color(0xFF0284C7),
                     ),
                   ),
-                  Text(' / $unit',
-                      style: GoogleFonts.inter(
-                          fontSize: 13, color: const Color(0xFF64748B))),
+                  Text(
+                    ' / $unit',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Text('Diskon Diterapkan',
-                      style: GoogleFonts.inter(
-                          fontSize: 13, color: const Color(0xFF64748B))),
+                  Text(
+                    'Diskon Diterapkan',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
                   const Spacer(),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFDCFCE7),
                       borderRadius: BorderRadius.circular(16),
@@ -3105,8 +3283,10 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
               ),
               const SizedBox(height: 14),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE0F2FE),
                   borderRadius: BorderRadius.circular(12),

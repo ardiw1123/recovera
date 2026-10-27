@@ -18,6 +18,9 @@ import '../../../data/services/listing_api_service.dart';
 import '../../../data/services/order_api_service.dart';
 import '../../../core/services/biometric_service.dart';
 import '../models/product_model.dart';
+import '../../seller/repositories/seller_repository.dart';
+import '../../seller/models/esg_certificate_model.dart';
+import '../../seller/screens/esg_certificate_list_screen.dart';
 
 /// Screen detail lelang dan batch produk (US-09 Konversi Mata Uang, US-10 Konversi 4 Zona Waktu)
 class ProductDetailScreen extends StatefulWidget {
@@ -49,6 +52,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   late final TextEditingController _qtyController;
   late final FocusNode _qtyFocusNode;
   bool _isPurchasing = false;
+  final Map<int, Future<List<EsgCertificateListItem>>>
+  _sellerCertificateFutures = {};
 
   // ── State Konversi Mata Uang (PB-062 / US-09) ───────────────────────────────
   String _selectedCurrency = 'IDR'; // 'IDR', 'USD', 'EUR', 'GBP'
@@ -56,7 +61,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   double _rateEUR = 17200.0;
   double _rateGBP = 20000.0;
   bool _isLoadingRates = false;
-
 
   // ── State Konversi Zona Waktu (PB-063 / US-10) ──────────────────────────────
   String _selectedTimezone = 'WIB'; // 'WIB', 'WITA', 'WIT', 'London'
@@ -254,13 +258,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       }
 
       if (mounted) {
-        setState(() {
-        });
+        setState(() {});
       }
     } catch (_) {
       if (mounted) {
-        setState(() {
-        });
+        setState(() {});
       }
     } finally {
       if (mounted) {
@@ -796,7 +798,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final isAvailable = await BiometricService.instance.isBiometricAvailable();
     if (isAvailable) {
       final verified = await BiometricService.instance.authenticate(
-        reason: 'Konfirmasi sidik jari untuk menyelesaikan pembelian ${listing.productName}',
+        reason:
+            'Konfirmasi sidik jari untuk menyelesaikan pembelian ${listing.productName}',
       );
       if (!verified) {
         if (mounted) {
@@ -808,7 +811,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               ),
               backgroundColor: const Color(0xFFDC2626),
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           );
         }
@@ -1150,7 +1155,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: listing.imageUrl != null &&
+                  child:
+                      listing.imageUrl != null &&
                           listing.imageUrl!.startsWith('http')
                       ? Image.network(
                           listing.imageUrl!,
@@ -1525,7 +1531,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       _formatTimerString(_remainingSeconds),
                       style: GoogleFonts.robotoMono(
                         fontSize: 17,
-                        fontWeight: FontWeight.w400, // Tidak bold sesuai request
+                        fontWeight:
+                            FontWeight.w400, // Tidak bold sesuai request
                         color: Colors.white,
                         letterSpacing: 0.5,
                       ),
@@ -1680,7 +1687,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               text: TextSpan(
                                 style: GoogleFonts.robotoMono(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w500, // Tidak bold sesuai request
+                                  fontWeight: FontWeight
+                                      .w500, // Tidak bold sesuai request
                                   color: const Color(0xFF0F172A),
                                 ),
                                 children: [
@@ -1747,7 +1755,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               text: TextSpan(
                                 style: GoogleFonts.robotoMono(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w500, // Tidak bold sesuai request
+                                  fontWeight: FontWeight
+                                      .w500, // Tidak bold sesuai request
                                   color: const Color(0xFF0F172A),
                                 ),
                                 children: [
@@ -2013,18 +2022,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   // 5. ESG IMPACT VERIFICATION (STEMPEL / CAP RESMI)
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildEsgImpactSection(Listing listing) {
+    final certificates = _sellerCertificateFutures.putIfAbsent(
+      listing.sellerId,
+      () => SellerRepository.instance.fetchSellerCertificates(listing.sellerId),
+    );
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 1),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2038,109 +2044,68 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           ),
           const SizedBox(height: 8),
-
-          // Kartu Stempel / Cap Verifikasi ESG
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0FDF4),
+          Material(
+            color: const Color(0xFFF0FDF4),
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFBBF7D0), width: 1.0),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // ── Cap / Stempel Bulat Berornamen ──────────────────────────
-                Stack(
-                  clipBehavior: Clip.none,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      EsgCertificateListScreen(sellerId: listing.sellerId),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
                   children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDCFCE7),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFF16A34A),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFF86EFAC),
-                              width: 1.0,
-                            ),
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.eco_rounded,
-                              size: 18,
-                              color: Color(0xFF16A34A),
-                            ),
-                          ),
-                        ),
+                    const Icon(
+                      Icons.eco_rounded,
+                      color: Color(0xFF16A34A),
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FutureBuilder<List<EsgCertificateListItem>>(
+                        future: certificates,
+                        builder: (context, snapshot) {
+                          final count = snapshot.data?.length;
+                          final title = count == null
+                              ? 'Kredibilitas ESG penjual'
+                              : 'Penjual ini memiliki $count sertifikat ESG';
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF166534),
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Lihat riwayat sertifikat ESG penjual ini',
+                                style: GoogleFonts.inter(
+                                  fontSize: 10.5,
+                                  color: const Color(0xFF334155),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
-                    Positioned(
-                      right: -1,
-                      bottom: -1,
-                      child: Container(
-                        padding: const EdgeInsets.all(1.5),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.all(1.5),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF0284C7),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check_rounded,
-                            size: 8,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: Color(0xFF166534),
                     ),
                   ],
                 ),
-                const SizedBox(width: 10),
-
-                // ── Keterangan Dampak ───────────────────────────────────────
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'VERIFIKASI DAMPAK ESG',
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF166534),
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Penyelamatan 150 kg pangan (-375 kg CO₂e). Sertifikat audit otomatis usai transaksi.',
-                        style: GoogleFonts.inter(
-                          fontSize: 10.5,
-                          color: const Color(0xFF334155),
-                          height: 1.3,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -2148,9 +2113,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // 6. STICKY BOTTOM CHECKOUT BAR
-  // ───────────────────────────────────────────────────────────────────────────
   Widget _buildStickyBottomBar(Listing listing) {
     final unitPrice = _getActiveTierPrice(listing);
     final minQty = _getMinOrderQty(listing);
@@ -2388,7 +2350,10 @@ class _TierRibbonClipper extends CustomClipper<Path> {
     path.lineTo(size.width, 0); // Garis lurus ke kanan atas
     path.lineTo(size.width, size.height); // Garis lurus ke kanan bawah
     path.lineTo(7, size.height); // Garis bawah sebelum lekukan notch
-    path.lineTo(0, size.height / 2); // Titik tengah lekukan notch (menjorok ke kanan)
+    path.lineTo(
+      0,
+      size.height / 2,
+    ); // Titik tengah lekukan notch (menjorok ke kanan)
     path.close();
     return path;
   }

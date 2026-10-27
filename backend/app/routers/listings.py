@@ -36,6 +36,8 @@ from app.services.listing_service import (
     search_listings,
 )
 from app.services.order_service import execute_buy_now
+from app.services.push_service import send_to_user
+from app.models.user import Buyer
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
@@ -491,6 +493,11 @@ async def publish_seller_inventory_listing(
         except Exception as e:
             logger.error("AI matching on publish encountered an issue: %s", e)
 
+    for match in matching_summary.get("top_buyers", []):
+        buyer = db.query(Buyer).filter(Buyer.id == match.get("buyer_id")).first()
+        if buyer:
+            send_to_user(db, buyer.user_id, "Stok baru cocok untuk bisnis Anda", f"{listing.product.name if listing.product else 'Produk baru'} tersedia dari penjual yang cocok.", {"type": "new_listing", "listing_id": listing.id})
+
     return wrap_success(
         _format_listing_response(
             listing,
@@ -698,6 +705,11 @@ async def create_listing(
             )
         except Exception as e:
             logger.error("AI matching on create_listing encountered an issue: %s", e)
+
+    for match in matching_summary.get("top_buyers", []):
+        buyer = db.query(Buyer).filter(Buyer.id == match.get("buyer_id")).first()
+        if buyer:
+            send_to_user(db, buyer.user_id, "Stok baru cocok untuk bisnis Anda", f"{product.name} tersedia dari penjual yang cocok.", {"type": "new_listing", "listing_id": listing.id})
 
     cur_price, next_drop = calculate_current_dutch_price(listing)
     return wrap_success(

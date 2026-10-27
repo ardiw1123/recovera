@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
-import '../../core/network/api_client.dart';
+
 import '../../core/services/network_connectivity_service.dart';
 import '../models/cached_order_model.dart';
 import '../services/local_database_service.dart';
-import '../services/order_api_service.dart';
 
 /// Contract for remote order client.
 abstract class RemoteOrderClient {
@@ -14,6 +13,9 @@ abstract class RemoteOrderClient {
     int qty = 1,
     bool biometricVerified = true,
   }) => null;
+  Future<CachedOrderModel>? updateOrderStatus(int orderId, String status) =>
+      null;
+  Future<void>? remindSeller(int orderId) => null;
 }
 
 /// Repository for orders, providing offline caching and coordinates for compass navigation.
@@ -24,11 +26,8 @@ class OrderRepository {
   // In-memory persistent order storage so purchases are never lost across screens
   static final List<CachedOrderModel> _inMemoryOrders = [];
 
-  OrderRepository({
-    LocalDatabaseService? localDb,
-    RemoteOrderClient? remoteClient,
-  })  : _localDb = localDb ?? LocalDatabaseService(),
-        remoteClient = remoteClient ?? OrderApiService(client: ApiClient());
+  OrderRepository({LocalDatabaseService? localDb, this.remoteClient})
+    : _localDb = localDb ?? LocalDatabaseService();
 
   /// Buy a listing via backend API and cache the resulting order.
   Future<CachedOrderModel> buyListing(
@@ -96,7 +95,9 @@ class OrderRepository {
       result = result.where((o) => o.buyerId == buyerId).toList();
     }
     if (status != null && status.isNotEmpty && status != 'all') {
-      result = result.where((o) => o.status.toLowerCase() == status.toLowerCase()).toList();
+      result = result
+          .where((o) => o.status.toLowerCase() == status.toLowerCase())
+          .toList();
     }
 
     result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -113,6 +114,21 @@ class OrderRepository {
       } catch (_) {}
     }
     return null;
+  }
+
+  Future<CachedOrderModel> updateOrderStatus(int orderId, String status) async {
+    final client = remoteClient;
+    if (client == null) throw StateError('No remote order client configured.');
+    final order = await client.updateOrderStatus(orderId, status);
+    if (order == null) throw StateError('Failed to update order status.');
+    await _localDb.upsertOrder(order);
+    return order;
+  }
+
+  Future<void> remindSeller(int orderId) async {
+    final client = remoteClient;
+    if (client == null) throw StateError('No remote order client configured.');
+    await client.remindSeller(orderId);
   }
 
   /// Cache a single order into SQLite and in-memory storage.

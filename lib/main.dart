@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 // Impor konfigurasi UI dan rute lokal Anda
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
@@ -16,6 +17,9 @@ import 'features/home/screens/product_detail_screen.dart';
 import 'data/repositories/app_prefs_repository.dart';
 import 'features/auth/screens/location_management_screen.dart';
 import 'features/sky_balance/sky_balance_screen.dart';
+import 'features/transactions/screens/buyer_transaction_screen.dart';
+import 'features/transactions/screens/seller_order_screen.dart';
+import 'core/services/push_notification_service.dart';
 
 Future<void> main() async {
   // 1. Pastikan binding Flutter terinisialisasi
@@ -39,13 +43,13 @@ Future<void> main() async {
 
   // 5. Jalankan UI Aplikasi
   runApp(const RecoveraApp());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    PushNotificationService.instance.init();
+  });
 }
 
 class RecoveraApp extends StatelessWidget {
-  const RecoveraApp({
-    super.key,
-    this.initialRoute = '/splash',
-  });
+  const RecoveraApp({super.key, this.initialRoute = '/splash'});
 
   final String initialRoute;
 
@@ -68,7 +72,11 @@ class RecoveraApp extends StatelessWidget {
         '/home': (_) => const MainShell(),
         '/seller/dashboard': (_) => const SellerDashboardScreen(),
         '/seller/upload': (_) => const UploadStockFlowScreen(),
-        '/product/detail': (_) => const ProductDetailScreen(),
+        '/product/detail': (context) => ProductDetailScreen(
+          listingId: ModalRoute.of(context)?.settings.arguments as int?,
+        ),
+        '/seller/orders': (_) => const SellerOrderScreen(),
+        '/buyer/transactions': (_) => const BuyerTransactionScreen(),
         '/profile/location': (_) => const LocationManagementScreen(),
         '/sky-balance': (_) => const SkyBalanceScreen(),
       },

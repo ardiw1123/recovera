@@ -523,7 +523,8 @@ def match_and_create_offers_for_listing(
                     f"hanya berjarak {m['distance_km']} km dari lokasimu. "
                     f"Lihat detail lelang listing #{listing.id} sekarang sebelum penawaran berakhir!"
                 ),
-                type="deal_match",
+                type="new_listing",
+                data={"listing_id": listing.id},
             )
             db.add(notif)
 
