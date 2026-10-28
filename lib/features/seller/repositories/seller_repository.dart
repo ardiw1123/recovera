@@ -190,4 +190,9 @@ class SellerRepository extends ChangeNotifier {
   Future<BlockchainVerificationResult> verifyBlockchain(String txHash) async {
     return await apiService.verifyBlockchain(txHash);
   }
+
+  /// Menjalankan simulasi diversion & penerbitan sertifikat ESG uji (dev-only)
+  Future<EsgDiversionTestResult> runEsgDiversionTest() async {
+    return await apiService.simulateEsgDiversion();
+  }
 }
