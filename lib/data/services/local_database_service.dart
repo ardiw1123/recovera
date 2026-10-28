@@ -78,8 +78,19 @@ class LocalDatabaseService {
 
       // Category filter
       if (category != null && category.trim().isNotEmpty && category != 'All') {
-        whereClauses.add('${DatabaseConstants.colListingCategory} = ?');
-        whereArgs.add(category.trim());
+        final cats = category
+            .split(',')
+            .map((c) => c.trim())
+            .where((c) => c.isNotEmpty)
+            .toList();
+        if (cats.length == 1) {
+          whereClauses.add('${DatabaseConstants.colListingCategory} = ?');
+          whereArgs.add(cats.first);
+        } else if (cats.isNotEmpty) {
+          final placeholders = List.filled(cats.length, '?').join(', ');
+          whereClauses.add('${DatabaseConstants.colListingCategory} IN ($placeholders)');
+          whereArgs.addAll(cats);
+        }
       }
 
       // Max price filter

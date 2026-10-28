@@ -75,7 +75,14 @@ async def get_seller_inventory(db: DbSessionDep, seller_user: RequireSellerDep) 
     seller = db.query(Seller).filter(Seller.user_id == seller_user.id).first()
     if not seller:
         return wrap_success([])
+    today = date.today()
     items = db.query(Listing).filter(Listing.seller_id == seller.id).order_by(Listing.created_at.desc()).all()
+    for item in items:
+        if item.qty <= 0 and item.status == "active":
+            item.status = "sold"
+        elif item.expiry_date < today and item.status == "active":
+            item.status = "expired"
+    db.commit()
     return wrap_success([
         _format_listing_response(item, *calculate_current_dutch_price(item)) for item in items
     ])
@@ -513,6 +520,10 @@ def _format_listing_response(item: Listing, cur_price: float, next_drop: str | N
     prod_data = ProductResponse.model_validate(item.product, from_attributes=True).model_dump() if item.product else None
     seller_data = item.seller
 
+    orders = item.orders or []
+    sold_qty = sum(o.qty for o in orders if o.status != 'cancelled')
+    orders_count = len([o for o in orders if o.status != 'cancelled'])
+
     return ListingResponse(
         id=item.id,
         product_id=item.product_id,
@@ -530,6 +541,8 @@ def _format_listing_response(item: Listing, cur_price: float, next_drop: str | N
         status=item.status,
         created_at=item.created_at.isoformat(),
         current_price=cur_price,
+        sold_qty=sold_qty,
+        orders_count=orders_count,
         next_drop_at=next_drop,
         auction_end_timezones=format_multi_timezone(item.auction_end_at),
         product=prod_data,
@@ -831,19 +844,35 @@ async def buy_listing(
     )
 
     listing = order.listing
+    img_url = listing.product.image_url if (listing and listing.product) else None
+    buyer_name = order.buyer.user.name if (order.buyer and order.buyer.user) else None
+    buyer_business_type = order.buyer.business_type if order.buyer else None
+    seller_name = listing.seller.company_name if (listing and listing.seller) else None
+
     product_detail = {
         "product_name": listing.product.name if listing.product else "Food Item",
         "category": listing.product.category if listing.product else "General",
         "batch_number": listing.batch_number,
+        "image_url": img_url,
+        "buyer_name": buyer_name,
+        "buyer_business_type": buyer_business_type,
         "warehouse_lat": listing.seller.warehouse_lat if listing.seller else None,
         "warehouse_lng": listing.seller.warehouse_lng if listing.seller else None,
-        "warehouse_address": listing.seller.address if listing.seller else None,
+        "warehouse_address": (
+            f"{listing.seller.company_name}, {listing.seller.city or listing.seller.address}"
+            if (listing.seller and listing.seller.company_name)
+            else (listing.seller.address if listing.seller else None)
+        ),
     }
 
     resp = OrderResponse(
         id=order.id,
         listing_id=order.listing_id,
         buyer_id=order.buyer_id,
+        buyer_name=buyer_name,
+        buyer_business_type=buyer_business_type,
+        seller_name=seller_name,
+        image_url=img_url,
         qty=order.qty,
         final_unit_price=float(order.final_unit_price),
         total_price=float(order.total_price),

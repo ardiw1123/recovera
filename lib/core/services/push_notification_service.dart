@@ -23,7 +23,7 @@ class PushNotificationService {
       FlutterLocalNotificationsPlugin();
   final ApiClient _apiClient = ApiClient();
   bool _started = false;
-  String? _installationId;
+  String? _fcmToken;
 
   Future<void> init() async {
     if (_started) return;
@@ -31,6 +31,7 @@ class PushNotificationService {
       await Firebase.initializeApp();
       _messaging = FirebaseMessaging.instance;
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
       const android = AndroidInitializationSettings('@mipmap/ic_launcher');
       await _localNotifications.initialize(
         settings: const InitializationSettings(android: android),
@@ -43,19 +44,61 @@ class PushNotificationService {
           } catch (_) {}
         },
       );
-      await _messaging.requestPermission(alert: true, badge: true, sound: true);
+
+      // Create Android Notification Channel with HIGH importance for Heads-Up notification
+      const androidChannel = AndroidNotificationChannel(
+        'recovera_notifications',
+        'Notifikasi Recovera',
+        description: 'Pembaruan pesanan dan penawaran Recovera',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      );
+
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      if (androidPlugin != null) {
+        await androidPlugin.createNotificationChannel(androidChannel);
+        await androidPlugin.requestNotificationsPermission();
+      }
+
+      // Request runtime notification permission for Android 13+ & iOS
+      await _messaging.requestPermission(
+        alert: true,
+        announcement: false,
+        badge: true,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+        sound: true,
+      );
+
       FirebaseMessaging.onMessage.listen(_showForegroundNotification);
       FirebaseMessaging.onMessageOpenedApp.listen(
         (message) => handleTap(message.data),
       );
+
       final initialMessage = await _messaging.getInitialMessage();
       if (initialMessage != null) handleTap(initialMessage.data);
-      _messaging.onRegistered.listen((installationId) {
-        _installationId = installationId;
+
+      // Retrieve FCM device token
+      try {
+        final token = await _messaging.getToken();
+        if (token != null && token.isNotEmpty) {
+          _fcmToken = token;
+          _registerCurrentInstallation();
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('Error retrieving FCM token: $e');
+      }
+
+      _messaging.onTokenRefresh.listen((token) {
+        _fcmToken = token;
         _registerCurrentInstallation();
       });
+
       AuthRepository.instance.addListener(_registerCurrentInstallation);
-      await _messaging.register();
       _started = true;
     } catch (error) {
       if (kDebugMode) debugPrint('Push notifications unavailable: $error');
@@ -64,12 +107,12 @@ class PushNotificationService {
 
   Future<void> _registerCurrentInstallation() async {
     if (!AuthRepository.instance.isAuthenticated) return;
-    final installationId = _installationId;
-    if (installationId == null || installationId.isEmpty) return;
+    final token = _fcmToken;
+    if (token == null || token.isEmpty) return;
     try {
       await _apiClient.post<Map<String, dynamic>>(
         '/devices',
-        data: {'fid': installationId},
+        data: {'fcm_token': token},
       );
     } catch (error) {
       if (kDebugMode) debugPrint('Unable to register push token: $error');
@@ -84,8 +127,10 @@ class PushNotificationService {
         'recovera_notifications',
         'Notifikasi Recovera',
         channelDescription: 'Pembaruan pesanan dan penawaran Recovera',
-        importance: Importance.high,
+        importance: Importance.max,
         priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
       ),
     );
     await _localNotifications.show(
@@ -112,6 +157,7 @@ class PushNotificationService {
         navigator.pushNamed('/seller/orders');
         break;
       case 'order_ready':
+      case 'pickup_reminder':
         navigator.pushNamed('/buyer/transactions');
         break;
     }

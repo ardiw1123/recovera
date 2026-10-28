@@ -16,12 +16,32 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 
 def _format_order(order: Order) -> dict:
     listing = order.listing
+    img_url = None
+    if listing and listing.product and listing.product.image_url:
+        img_url = listing.product.image_url
+
+    buyer_name = None
+    buyer_business_type = None
+    if order.buyer:
+        if order.buyer.user and order.buyer.user.name:
+            buyer_name = order.buyer.user.name
+        elif order.buyer.business_type:
+            buyer_name = f"Mitra {order.buyer.business_type.capitalize()}"
+        else:
+            buyer_name = f"Pembeli #{order.buyer_id}"
+        buyer_business_type = order.buyer.business_type
+
+    seller_name = listing.seller.company_name if (listing and listing.seller) else None
+
     product_detail = None
     if listing:
         product_detail = OrderProductDetail(
             product_name=listing.product.name if listing.product else "Food Item",
             category=listing.product.category if listing.product else "General",
             batch_number=listing.batch_number,
+            image_url=img_url,
+            buyer_name=buyer_name,
+            buyer_business_type=buyer_business_type,
             warehouse_lat=listing.seller.warehouse_lat if listing.seller else None,
             warehouse_lng=listing.seller.warehouse_lng if listing.seller else None,
             warehouse_address=(
@@ -35,6 +55,10 @@ def _format_order(order: Order) -> dict:
         id=order.id,
         listing_id=order.listing_id,
         buyer_id=order.buyer_id,
+        buyer_name=buyer_name,
+        buyer_business_type=buyer_business_type,
+        seller_name=seller_name,
+        image_url=img_url,
         qty=order.qty,
         final_unit_price=float(order.final_unit_price),
         total_price=float(order.total_price),
@@ -141,21 +165,25 @@ async def update_order_status(
         raise AppException("INVALID_ORDER_TRANSITION", f"Cannot change order from {order.status} to {payload.status}", status.HTTP_409_CONFLICT)
 
     order.status = payload.status
-    should_notify = payload.status == "in_progress" and (
-        order.last_notification_sent_at is None
-        or datetime.now(timezone.utc) - order.last_notification_sent_at.replace(tzinfo=timezone.utc) >= timedelta(hours=3)
-    )
-    if should_notify:
-        order.last_notification_sent_at = datetime.now(timezone.utc)
+    order.last_notification_sent_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(order)
 
-    if should_notify:
+    # Always notify buyer immediately when seller marks order ready for pickup
+    if payload.status == "in_progress":
         try:
             buyer_user_id = order.buyer.user_id if order.buyer else None
             if buyer_user_id:
-                notify_user(db, buyer_user_id, "Pesanan Anda Sudah Siap Diambil!", "Produk yang Anda pesan sudah disiapkan penjual.", "order_ready", {"order_id": order.id})
-        except Exception:
+                product_name = order.listing.product.name if (order.listing and order.listing.product) else "produk pesanan Anda"
+                notify_user(
+                    db,
+                    buyer_user_id,
+                    "Pesanan Anda Siap Diambil!",
+                    f"Pesanan {product_name} telah selesai disiapkan oleh penjual. Silakan datangi gudang dan lakukan pick-up.",
+                    "order_ready",
+                    {"order_id": order.id, "type": "order_ready"},
+                )
+        except Exception as e:
             pass
 
     return wrap_success(_format_order(order))
@@ -185,4 +213,43 @@ async def remind_seller(
     order.last_notification_sent_at = now
     db.commit()
     notify_user(db, seller_user_id, "Pembeli menunggu pesanan Anda", "Pembeli mengingatkan Anda untuk menyiapkan pesanannya.", "reminder", {"order_id": order.id})
+    return wrap_success({"sent": True, "retry_after_seconds": 10800})
+
+
+
+@router.post("/{order_id}/remind-buyer", status_code=status.HTTP_200_OK)
+async def remind_buyer(
+    db: DbSessionDep,
+    current_user: CurrentUserDep,
+    order_id: Annotated[int, Path(ge=1, description="Order ID")],
+) -> dict:
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise AppException("ORDER_NOT_FOUND", f"Order with ID {order_id} not found", status.HTTP_404_NOT_FOUND)
+    seller = db.query(Seller).filter(Seller.user_id == current_user.id).first()
+    if not seller or not order.listing or order.listing.seller_id != seller.id:
+        raise AppException("FORBIDDEN", "Anda tidak memiliki akses untuk mengingatkan pembeli pesanan ini", status.HTTP_403_FORBIDDEN)
+    if order.status != "in_progress":
+        raise AppException("ORDER_NOT_READY", "Pengingat hanya dapat dikirim untuk pesanan yang sudah berstatus siap diambil", status.HTTP_409_CONFLICT)
+    now = datetime.now(timezone.utc)
+    sent_at = order.last_notification_sent_at
+    if sent_at and now - sent_at.replace(tzinfo=timezone.utc) < timedelta(hours=3):
+        raise AppException("REMINDER_RATE_LIMITED", "Pengingat sudah dikirim ke pembeli. Silakan tunggu jeda 3 jam.", status.HTTP_429_TOO_MANY_REQUESTS)
+    order.last_notification_sent_at = now
+    db.commit()
+
+    buyer_user_id = order.buyer.user_id if order.buyer else None
+    if not buyer_user_id:
+        raise AppException("BUYER_NOT_FOUND", "Data pembeli tidak ditemukan", status.HTTP_404_NOT_FOUND)
+
+    product_name = order.listing.product.name if (order.listing and order.listing.product) else "produk pesanan Anda"
+    seller_name = seller.company_name or "Gudang Penjual"
+    notify_user(
+        db,
+        buyer_user_id,
+        "Gudang Menunggu Anda!",
+        f"Pesanan {product_name} siap diambil di {seller_name}. Mohon segera lakukan penjemputan sebelum batas waktu berakhir.",
+        "pickup_reminder",
+        {"order_id": order.id, "type": "pickup_reminder"},
+    )
     return wrap_success({"sent": True, "retry_after_seconds": 10800})

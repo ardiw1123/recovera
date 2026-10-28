@@ -119,7 +119,29 @@ class TransactionOrder {
   }
 
   /// Konversi dari CachedOrderModel SQLite
-  factory TransactionOrder.fromCachedOrder(CachedOrderModel cached) {
+  factory TransactionOrder.fromCachedOrder(
+    CachedOrderModel cached, {
+    bool isSeller = false,
+  }) {
+    String resolvedPartnerName;
+    String? resolvedPartnerSubtitle;
+
+    if (isSeller) {
+      resolvedPartnerName = (cached.buyerName != null && cached.buyerName!.isNotEmpty)
+          ? cached.buyerName!
+          : 'Mitra Pembeli #${cached.buyerId}';
+      resolvedPartnerSubtitle = (cached.buyerBusinessType != null && cached.buyerBusinessType!.isNotEmpty)
+          ? 'Tipe: ${cached.buyerBusinessType}'
+          : 'Pembeli B2B Terverifikasi';
+    } else {
+      resolvedPartnerName = (cached.sellerName != null && cached.sellerName!.isNotEmpty)
+          ? cached.sellerName!
+          : _resolveSellerName(cached);
+      resolvedPartnerSubtitle = 'Gudang Mitra Terverifikasi';
+    }
+
+    final img = cached.imageUrl ?? '';
+
     return TransactionOrder(
       id: cached.id,
       orderCode: '#ORD-RCV-${cached.id}',
@@ -127,7 +149,7 @@ class TransactionOrder {
       productName: cached.productName.isNotEmpty ? cached.productName : 'Lot Pangan B2B',
       category: cached.category,
       batchNumber: cached.batchNumber.isNotEmpty ? cached.batchNumber : 'RCV-LOT-${cached.id}',
-      imageUrl: '',
+      imageUrl: img,
       qty: cached.qty,
       unit: 'Box',
       unitPrice: cached.finalUnitPrice,
@@ -135,7 +157,8 @@ class TransactionOrder {
       status: cached.status,
       createdAt: DateTime.tryParse(cached.createdAt) ?? DateTime.now(),
       pickupDeadline: DateTime.now().add(const Duration(hours: 24)),
-      partnerName: _resolveSellerName(cached),
+      partnerName: resolvedPartnerName,
+      partnerSubtitle: resolvedPartnerSubtitle,
       warehouseAddress: cached.warehouseAddress,
       warehouseLat: cached.warehouseLat,
       warehouseLng: cached.warehouseLng,

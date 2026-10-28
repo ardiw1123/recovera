@@ -36,8 +36,19 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"),
     )
     supabase_storage_bucket: str = "product-images"
-    firebase_credentials_path: str = ""
-    firebase_credentials_json: str = ""
+    firebase_credentials_path: str = Field(
+        default="",
+        validation_alias=AliasChoices("FIREBASE_CREDENTIALS_PATH", "FIREBASE_ADMIN_PATH"),
+    )
+    firebase_credentials_json: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "FIREBASE_CREDENTIALS_JSON",
+            "FIREBASE_ADMIN_JSON",
+            "FIREBASE_SERVICE_ACCOUNT_JSON",
+            "FIREBASE_CONFIG",
+        ),
+    )
     bot_chain_rpc_url: str = "https://rpc.bohr.life"
     bot_chain_chain_id: int = 968
     bot_chain_private_key: str = ""
@@ -46,6 +57,9 @@ class Settings(BaseSettings):
 
     # Feature flag: aktifkan ML (default True: load AI models on boot with rule-based fallback)
     use_ml_model: bool = True
+
+    # Feature flag: izinkan endpoint pengujian (simulasi diversion ESG) di environment non-dev
+    enable_test_features: bool = False
 
     @model_validator(mode="after")
     def require_postgres_outside_local_development(self):

@@ -120,4 +120,16 @@ class OrderApiService implements RemoteOrderClient {
       );
     }
   }
+
+  @override
+  Future<void> remindBuyer(int orderId) async {
+    try {
+      await client.post<Map<String, dynamic>>('/orders/$orderId/remind-buyer');
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(
+        e,
+        'Gagal mengirim pengingat ke pembeli',
+      );
+    }
+  }
 }

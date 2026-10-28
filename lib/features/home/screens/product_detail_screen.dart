@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -1155,16 +1156,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child:
-                      listing.imageUrl != null &&
-                          listing.imageUrl!.startsWith('http')
-                      ? Image.network(
-                          listing.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) =>
-                              _buildDefaultHeroPlaceholder(),
-                        )
-                      : _buildDefaultHeroPlaceholder(),
+                  child: _buildHeroImage(listing.imageUrl),
                 ),
                 Positioned.fill(
                   child: Container(
@@ -1297,6 +1289,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildHeroImage(String? img) {
+    if (img != null && img.isNotEmpty) {
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        return Image.network(
+          img,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _buildDefaultHeroPlaceholder(),
+        );
+      } else if (img.startsWith('/') || img.startsWith('file://') || img.contains(':\\')) {
+        final cleanPath = img.replaceFirst('file://', '');
+        return Image.file(
+          File(cleanPath),
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _buildDefaultHeroPlaceholder(),
+        );
+      }
+    }
+    return _buildDefaultHeroPlaceholder();
   }
 
   Widget _buildDefaultHeroPlaceholder() {
@@ -2144,27 +2156,35 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      'Jumlah Pembelian',
-                      style: GoogleFonts.inter(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0F172A),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Jumlah Pembelian',
+                        style: GoogleFonts.inter(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF0F172A),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '(Min: $minQty $unit | Stok: $maxQty)',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w400,
+                      Text(
+                        '(Min: $minQty $unit | Stok: $maxQty)',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w400,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 // Stepper Counter [-] [ Qty ] [+]
                 Container(
                   decoration: BoxDecoration(

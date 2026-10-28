@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -189,37 +190,41 @@ class ProductCard extends StatelessWidget {
                             .formatPrice(listing.currentPrice);
                         final norPrice = AppPrefsRepository.instance
                             .formatPrice(listing.normalPrice);
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              curPrice,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primary,
+                        return FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                curPrice,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.primary,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              '/ ${listing.defaultUnit}',
-                              style: GoogleFonts.inter(
-                                fontSize: 9.5,
-                                color: const Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
+                              const SizedBox(width: 3),
+                              Text(
+                                '/ ${listing.defaultUnit}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 9.5,
+                                  color: const Color(0xFF64748B),
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              norPrice,
-                              style: GoogleFonts.inter(
-                                fontSize: 9.5,
-                                color: const Color(0xFF94A3B8),
-                                decoration: TextDecoration.lineThrough,
+                              const SizedBox(width: 5),
+                              Text(
+                                norPrice,
+                                style: GoogleFonts.inter(
+                                  fontSize: 9.5,
+                                  color: const Color(0xFF94A3B8),
+                                  decoration: TextDecoration.lineThrough,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         );
                       },
                     ),
@@ -283,16 +288,7 @@ class _ListingImage extends StatelessWidget {
           // Gambar atau ikon fallback
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: listing.imageUrl != null
-                ? Image.network(
-                    listing.imageUrl!,
-                    width: 88,
-                    height: 88,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _iconFallback(),
-                  )
-                : _iconFallback(),
+            child: _buildListingImage(listing.imageUrl),
           ),
 
           // Badge diskon berbentuk potongan pita (tidak bold)
@@ -342,6 +338,30 @@ class _ListingImage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildListingImage(String? img) {
+    if (img != null && img.isNotEmpty) {
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        return Image.network(
+          img,
+          width: 88,
+          height: 88,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _iconFallback(),
+        );
+      } else if (img.startsWith('/') || img.startsWith('file://') || img.contains(':\\')) {
+        final cleanPath = img.replaceFirst('file://', '');
+        return Image.file(
+          File(cleanPath),
+          width: 88,
+          height: 88,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _iconFallback(),
+        );
+      }
+    }
+    return _iconFallback();
   }
 
   Widget _iconFallback() {
