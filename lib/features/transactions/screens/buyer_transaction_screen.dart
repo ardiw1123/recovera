@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../core/services/network_connectivity_service.dart';
@@ -60,15 +61,12 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
     try {
       final cachedList = await _orderRepository.getOrders(forceRefresh: true);
       final mappedList = cachedList
-          .map((item) => TransactionOrder.fromCachedOrder(item))
+          .map((item) => TransactionOrder.fromCachedOrder(item, isSeller: false))
           .toList();
 
-      // Tambahkan dummyBuyerOrders jika belum ada, agar riwayat tetap kaya
-      final existingIds = mappedList.map((e) => e.id).toSet();
-      for (final dummy in dummyBuyerOrders) {
-        if (!existingIds.contains(dummy.id)) {
-          mappedList.add(dummy);
-        }
+      // Jika belum ada pesanan sama sekali, tampilkan sampel data untuk demonstrasi
+      if (mappedList.isEmpty) {
+        mappedList.addAll(dummyBuyerOrders);
       }
 
       if (mounted) {
@@ -449,21 +447,7 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    order.imageUrl,
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      width: 64,
-                      height: 64,
-                      color: const Color(0xFFF1F5F9),
-                      child: const Icon(
-                        Icons.inventory_2_outlined,
-                        color: Color(0xFF94A3B8),
-                      ),
-                    ),
-                  ),
+                  child: _buildProductThumbnail(order.imageUrl, size: 64),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -959,6 +943,43 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
     final hh = local.hour.toString().padLeft(2, '0');
     final mm = local.minute.toString().padLeft(2, '0');
     return '${local.day} $m ${local.year}, $hh:$mm WIB';
+  }
+
+  Widget _buildProductThumbnail(String img, {double size = 64}) {
+    if (img.isNotEmpty) {
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        return Image.network(
+          img,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _fallbackThumbnail(size),
+        );
+      } else if (img.startsWith('/') || img.startsWith('file://') || img.contains(':\\')) {
+        final cleanPath = img.replaceFirst('file://', '');
+        return Image.file(
+          File(cleanPath),
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _fallbackThumbnail(size),
+        );
+      }
+    }
+    return _fallbackThumbnail(size);
+  }
+
+  Widget _fallbackThumbnail(double size) {
+    return Container(
+      width: size,
+      height: size,
+      color: const Color(0xFFF1F5F9),
+      child: const Icon(
+        Icons.inventory_2_outlined,
+        color: Color(0xFF94A3B8),
+        size: 28,
+      ),
+    );
   }
 
   Widget _buildInvoiceLine(String title, String value) {

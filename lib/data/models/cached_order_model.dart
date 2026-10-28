@@ -20,6 +20,10 @@ class CachedOrderModel {
   final double? warehouseLng;
   final String? warehouseAddress;
   final String cachedAt;
+  final String? imageUrl;
+  final String? buyerName;
+  final String? buyerBusinessType;
+  final String? sellerName;
 
   const CachedOrderModel({
     required this.id,
@@ -37,6 +41,10 @@ class CachedOrderModel {
     this.warehouseLng,
     this.warehouseAddress,
     required this.cachedAt,
+    this.imageUrl,
+    this.buyerName,
+    this.buyerBusinessType,
+    this.sellerName,
   });
 
   Map<String, dynamic> toMap() {
@@ -98,6 +106,10 @@ class CachedOrderModel {
       warehouseLng: (detail?['warehouse_lng'] as num?)?.toDouble(),
       warehouseAddress: detail?['warehouse_address'] as String?,
       cachedAt: DateTime.now().toIso8601String(),
+      imageUrl: (detail?['image_url'] as String?) ?? (json['image_url'] as String?),
+      buyerName: (json['buyer_name'] as String?) ?? (detail?['buyer_name'] as String?),
+      buyerBusinessType: (json['buyer_business_type'] as String?) ?? (detail?['buyer_business_type'] as String?),
+      sellerName: (json['seller_name'] as String?) ?? (detail?['seller_name'] as String?),
     );
   }
 
@@ -117,6 +129,10 @@ class CachedOrderModel {
     double? warehouseLng,
     String? warehouseAddress,
     String? cachedAt,
+    String? imageUrl,
+    String? buyerName,
+    String? buyerBusinessType,
+    String? sellerName,
   }) {
     return CachedOrderModel(
       id: id ?? this.id,
@@ -134,6 +150,10 @@ class CachedOrderModel {
       warehouseLng: warehouseLng ?? this.warehouseLng,
       warehouseAddress: warehouseAddress ?? this.warehouseAddress,
       cachedAt: cachedAt ?? this.cachedAt,
+      imageUrl: imageUrl ?? this.imageUrl,
+      buyerName: buyerName ?? this.buyerName,
+      buyerBusinessType: buyerBusinessType ?? this.buyerBusinessType,
+      sellerName: sellerName ?? this.sellerName,
     );
   }
 }

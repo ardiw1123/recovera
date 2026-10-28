@@ -1,3 +1,7 @@
+import '../../../core/network/api_client.dart';
+import '../../../data/models/cached_order_model.dart';
+import '../../../data/repositories/order_repository.dart';
+import '../../../data/services/order_api_service.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -39,6 +43,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   List<SellerListingItem> _items = [];
+  List<CachedOrderModel> _sellerOrders = [];
 
   @override
   void initState() {
@@ -70,6 +75,12 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
 
     try {
       final data = await _repository.loadInventory(forceRefresh: true);
+      try {
+        final ords = await OrderRepository(remoteClient: OrderApiService(client: ApiClient())).getOrders(forceRefresh: true);
+        if (mounted) {
+          _sellerOrders = ords;
+        }
+      } catch (_) {}
       if (mounted) {
         setState(() {
           _items = data;
@@ -89,13 +100,30 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
   List<SellerListingItem> get _filteredItems {
     var list = _items;
 
+    final soldListingIds = _sellerOrders
+        .where((o) => o.status != 'cancelled')
+        .map((o) => o.listingId)
+        .toSet();
+
     // Filter by tab
     if (_selectedTab == 'Aktif') {
-      list = list.where((item) => item.status.toLowerCase() == 'active' || item.status.toLowerCase() == 'draft' || item.status.toLowerCase() == 'review').toList();
+      list = list.where((item) =>
+        (item.status.toLowerCase() == 'active' || item.status.toLowerCase() == 'draft' || item.status.toLowerCase() == 'review') &&
+        item.qty > 0 &&
+        item.daysRemaining > 0
+      ).toList();
     } else if (_selectedTab == 'Terjual') {
-      list = list.where((item) => item.status.toLowerCase() == 'sold').toList();
+      list = list.where((item) =>
+        item.status.toLowerCase() == 'sold' ||
+        item.qty <= 0 ||
+        item.soldQty > 0 ||
+        item.ordersCount > 0 ||
+        soldListingIds.contains(item.id)
+      ).toList();
     } else if (_selectedTab == 'Expired') {
-      list = list.where((item) => item.status.toLowerCase() == 'expired' || item.daysRemaining <= 0).toList();
+      list = list.where((item) =>
+        item.status.toLowerCase() == 'expired' || item.daysRemaining <= 0
+      ).toList();
     }
 
     // Filter by search query
@@ -667,6 +695,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
     final img = item.imageUrl;
 
     if (img != null && img.isNotEmpty) {
+      final cleanPath = img.replaceFirst('file://', '');
       if (img.startsWith('http://') || img.startsWith('https://')) {
         imageWidget = Image.network(
           img,
@@ -690,7 +719,7 @@ class _SellerInventoryScreenState extends State<SellerInventoryScreen> {
         );
       } else {
         imageWidget = Image.file(
-          File(img),
+          File(cleanPath),
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) => Center(
             child: Icon(iconData, size: 36, color: bgColor),
