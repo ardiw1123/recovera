@@ -399,6 +399,31 @@ class SellerApiService {
     }
   }
 
+  /// Menjalankan simulasi diversion & penerbitan sertifikat ESG uji (dev-only).
+  /// Menghubungi endpoint POST /donations/test/simulate-diversion
+  Future<EsgDiversionTestResult> simulateEsgDiversion() async {
+    try {
+      final response = await client.post<Map<String, dynamic>>(
+        '/donations/test/simulate-diversion',
+      );
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error =
+            body?['error']?['message'] ??
+            'Gagal menjalankan simulasi diversion';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+      final data = body['data'] as Map<String, dynamic>;
+      return EsgDiversionTestResult.fromJson(data);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(
+        e,
+        'Gagal menjalankan simulasi diversion',
+      );
+    }
+  }
+
   /// Memverifikasi hash transaksi sertifikat secara on-chain ke BOT Chain Testnet.
   Future<BlockchainVerificationResult> verifyBlockchain(String txHash) async {
     try {

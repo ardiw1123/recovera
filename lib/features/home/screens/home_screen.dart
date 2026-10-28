@@ -611,7 +611,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           // ── Logo Recovera & Teks Brand ──
-                          Row(
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(
                             children: [
                               Image.asset(
                                 'lib/assets/recovera-logo-mark.png',
@@ -691,6 +694,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                             ],
                           ),
+                          ),
                           const SizedBox(height: 6),
 
                           // ── Greeting Pembeli: "Halo, [nama/Govina]!" ──
@@ -733,7 +737,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   width: 1,
                                 ),
                               ),
-                              child: Row(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(),
+                                child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const Icon(
@@ -841,6 +848,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     },
                                   ),
                                 ],
+                              ),
                               ),
                             ),
                           ),

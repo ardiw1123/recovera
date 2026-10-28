@@ -664,26 +664,29 @@ class _BusinessInfoEditScreenState extends State<BusinessInfoEditScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Radius Penjemputan / Pengantaran',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.darkNavy,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Radius Penjemputan / Pengantaran',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.darkNavy,
+                      ),
                     ),
-                  ),
-                  Text(
-                    'Batas jarak pencarian lot seller dari lokasi Anda',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: AppColors.slateText,
+                    Text(
+                      'Batas jarak pencarian lot seller dari lokasi Anda',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: AppColors.slateText,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

@@ -362,15 +362,20 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'TOTAL PENDAPATAN',
-                      style: GoogleFonts.inter(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF64748B),
-                        letterSpacing: 0.4,
+                    Expanded(
+                      child: Text(
+                        'TOTAL PENDAPATAN',
+                        style: GoogleFonts.inter(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF64748B),
+                          letterSpacing: 0.4,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
@@ -433,15 +438,20 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'TOTAL PENJUALAN',
-                      style: GoogleFonts.inter(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF64748B),
-                        letterSpacing: 0.4,
+                    Expanded(
+                      child: Text(
+                        'TOTAL PENJUALAN',
+                        style: GoogleFonts.inter(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF64748B),
+                          letterSpacing: 0.4,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
@@ -583,7 +593,9 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
 
             // Date & ID
             Text(
-              '24 Okt 2026, 15:10 WIB • ID: ${order.orderCode}',
+              '${_formatDateTime(order.createdAt)} • ID: ${order.orderCode}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
                 fontSize: 11,
                 color: const Color(0xFF94A3B8),
@@ -980,6 +992,18 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
         );
       },
     );
+  }
+
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    final m = months[(local.month - 1).clamp(0, 11)];
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '${local.day} $m ${local.year}, $hh:$mm WIB';
   }
 
   Widget _buildInvoiceLine(String title, String value) {

@@ -21,11 +21,11 @@ class EsgMonetaryValue {
   }
 
   Map<String, dynamic> toJson() => {
-        'idr': idr,
-        'usd': usd,
-        'eur': eur,
-        'gbp': gbp,
-      };
+    'idr': idr,
+    'usd': usd,
+    'eur': eur,
+    'gbp': gbp,
+  };
 }
 
 class EsgCertificateListItem {
@@ -132,6 +132,44 @@ class EsgCertificateDetail {
       certificateTxHash: json['certificate_tx_hash'] as String?,
       blockNumber: json['block_number'] as int?,
       explorerUrl: json['explorer_url'] as String?,
+    );
+  }
+}
+
+/// Hasil simulasi diversion & penerbitan sertifikat ESG uji (endpoint dev-only).
+class EsgDiversionTestResult {
+  final int listingId;
+  final int donationId;
+  final String certificateNo;
+  final String grade;
+  final int qtyDiverted;
+  final double carbonSavedKg;
+  final String? certificateTxHash;
+  final String blockchainStatus;
+
+  const EsgDiversionTestResult({
+    required this.listingId,
+    required this.donationId,
+    required this.certificateNo,
+    required this.grade,
+    required this.qtyDiverted,
+    required this.carbonSavedKg,
+    required this.blockchainStatus,
+    this.certificateTxHash,
+  });
+
+  bool get isRecorded => blockchainStatus.toLowerCase() == 'tercatat';
+
+  factory EsgDiversionTestResult.fromJson(Map<String, dynamic> json) {
+    return EsgDiversionTestResult(
+      listingId: json['listing_id'] as int? ?? 0,
+      donationId: json['donation_id'] as int? ?? 0,
+      certificateNo: json['certificate_no'] as String? ?? '-',
+      grade: json['grade'] as String? ?? '-',
+      qtyDiverted: json['qty_diverted'] as int? ?? 0,
+      carbonSavedKg: (json['carbon_saved_kg'] as num?)?.toDouble() ?? 0.0,
+      certificateTxHash: json['certificate_tx_hash'] as String?,
+      blockchainStatus: json['blockchain_status'] as String? ?? 'Menunggu',
     );
   }
 }

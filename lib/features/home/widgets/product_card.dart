@@ -189,37 +189,41 @@ class ProductCard extends StatelessWidget {
                             .formatPrice(listing.currentPrice);
                         final norPrice = AppPrefsRepository.instance
                             .formatPrice(listing.normalPrice);
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              curPrice,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primary,
+                        return FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                curPrice,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.primary,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              '/ ${listing.defaultUnit}',
-                              style: GoogleFonts.inter(
-                                fontSize: 9.5,
-                                color: const Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
+                              const SizedBox(width: 3),
+                              Text(
+                                '/ ${listing.defaultUnit}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 9.5,
+                                  color: const Color(0xFF64748B),
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              norPrice,
-                              style: GoogleFonts.inter(
-                                fontSize: 9.5,
-                                color: const Color(0xFF94A3B8),
-                                decoration: TextDecoration.lineThrough,
+                              const SizedBox(width: 5),
+                              Text(
+                                norPrice,
+                                style: GoogleFonts.inter(
+                                  fontSize: 9.5,
+                                  color: const Color(0xFF94A3B8),
+                                  decoration: TextDecoration.lineThrough,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         );
                       },
                     ),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/esg_certificate_model.dart';
@@ -56,6 +57,83 @@ class _EsgCertificateListScreenState extends State<EsgCertificateListScreen> {
     }
   }
 
+  /// Simulasi pengujian (dev-only): membuat listing uji near-expiry lalu
+  /// menjalankan alur diversion & penerbitan sertifikat ESG yang asli.
+  Future<void> _runDiversionTest() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Jalankan Pengujian?'),
+        content: const Text(
+          'Sistem akan membuat produk uji "[UJI] Susu UHT 1L" (kedaluwarsa 5 hari), '
+          'mengalihkannya ke jalur donasi (diversion), dan menerbitkan sertifikat ESG '
+          'yang tercatat di BOT Chain Testnet.\n\n'
+          'Klik berulang tidak membuat duplikat sertifikat.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Jalankan'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => const Dialog(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Memproses diversion & mencatat ke BOT Chain...',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final result = await _repository.runEsgDiversionTest();
+      if (!mounted) return;
+      Navigator.of(context).pop(); // tutup dialog loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.isRecorded
+                ? 'Sertifikat ${result.certificateNo} diterbitkan & tercatat di blockchain ✅'
+                : 'Sertifikat ${result.certificateNo} diterbitkan, menunggu pencatatan blockchain ⏳',
+          ),
+          backgroundColor: result.isRecorded
+              ? Colors.green.shade700
+              : Colors.amber.shade800,
+        ),
+      );
+      _loadCertificates();
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // tutup dialog loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Pengujian gagal: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,6 +143,12 @@ class _EsgCertificateListScreenState extends State<EsgCertificateListScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          if (kDebugMode)
+            IconButton(
+              icon: const Icon(Icons.science_outlined),
+              onPressed: _runDiversionTest,
+              tooltip: 'Simulasi Pengujian Diversion',
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadCertificates,
@@ -149,6 +233,14 @@ class _EsgCertificateListScreenState extends State<EsgCertificateListScreen> {
                           height: 1.4,
                         ),
                       ),
+                      if (kDebugMode) ...[
+                        const SizedBox(height: 20),
+                        OutlinedButton.icon(
+                          onPressed: _runDiversionTest,
+                          icon: const Icon(Icons.science_outlined, size: 18),
+                          label: const Text('Jalankan Pengujian (Simulasi)'),
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -433,7 +433,9 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
 
             // Waktu Transaksi & Kode Order
             Text(
-              '24 Okt 2026, 14:30 WIB • ID: ${order.orderCode}',
+              '${_formatDateTime(order.createdAt)} • ID: ${order.orderCode}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
                 fontSize: 11,
                 color: const Color(0xFF94A3B8),
@@ -568,7 +570,7 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '⏱️ Batas Ambil: 25 Okt 2026, 21:00 WIB',
+                            '⏱️ Batas Ambil: ${_formatDateTime(order.pickupDeadline ?? order.createdAt.add(const Duration(hours: 24)))}',
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -706,15 +708,19 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
                       size: 16,
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      'Selesai via Verifikasi QR Gudang',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF15803D),
+                    Expanded(
+                      child: Text(
+                        'Selesai via Verifikasi QR Gudang',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF15803D),
+                        ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     TextButton(
                       onPressed: () => _showInvoiceDialog(order),
                       style: TextButton.styleFrom(
@@ -941,6 +947,18 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
         );
       },
     );
+  }
+
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    final m = months[(local.month - 1).clamp(0, 11)];
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '${local.day} $m ${local.year}, $hh:$mm WIB';
   }
 
   Widget _buildInvoiceLine(String title, String value) {
