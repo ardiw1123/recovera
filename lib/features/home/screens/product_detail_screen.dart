@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -1155,16 +1156,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child:
-                      listing.imageUrl != null &&
-                          listing.imageUrl!.startsWith('http')
-                      ? Image.network(
-                          listing.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) =>
-                              _buildDefaultHeroPlaceholder(),
-                        )
-                      : _buildDefaultHeroPlaceholder(),
+                  child: _buildHeroImage(listing.imageUrl),
                 ),
                 Positioned.fill(
                   child: Container(
@@ -1297,6 +1289,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildHeroImage(String? img) {
+    if (img != null && img.isNotEmpty) {
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        return Image.network(
+          img,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _buildDefaultHeroPlaceholder(),
+        );
+      } else if (img.startsWith('/') || img.startsWith('file://') || img.contains(':\\')) {
+        final cleanPath = img.replaceFirst('file://', '');
+        return Image.file(
+          File(cleanPath),
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _buildDefaultHeroPlaceholder(),
+        );
+      }
+    }
+    return _buildDefaultHeroPlaceholder();
   }
 
   Widget _buildDefaultHeroPlaceholder() {

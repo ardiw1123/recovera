@@ -16,6 +16,7 @@ abstract class RemoteOrderClient {
   Future<CachedOrderModel>? updateOrderStatus(int orderId, String status) =>
       null;
   Future<void>? remindSeller(int orderId) => null;
+  Future<void>? remindBuyer(int orderId) => null;
 }
 
 /// Repository for orders, providing offline caching and coordinates for compass navigation.
@@ -131,6 +132,12 @@ class OrderRepository {
     await client.remindSeller(orderId);
   }
 
+  Future<void> remindBuyer(int orderId) async {
+    final client = remoteClient;
+    if (client == null) throw StateError('No remote order client configured.');
+    await client.remindBuyer(orderId);
+  }
+
   /// Cache a single order into SQLite and in-memory storage.
   Future<void> cacheOrder(CachedOrderModel order) async {
     _upsertInMemory(order);
@@ -166,7 +173,21 @@ class OrderRepository {
   static void _upsertInMemory(CachedOrderModel order) {
     final idx = _inMemoryOrders.indexWhere((o) => o.id == order.id);
     if (idx != -1) {
-      _inMemoryOrders[idx] = order;
+      final existing = _inMemoryOrders[idx];
+      _inMemoryOrders[idx] = order.copyWith(
+        imageUrl: (order.imageUrl != null && order.imageUrl!.isNotEmpty)
+            ? order.imageUrl
+            : existing.imageUrl,
+        buyerName: (order.buyerName != null && order.buyerName!.isNotEmpty)
+            ? order.buyerName
+            : existing.buyerName,
+        buyerBusinessType: (order.buyerBusinessType != null && order.buyerBusinessType!.isNotEmpty)
+            ? order.buyerBusinessType
+            : existing.buyerBusinessType,
+        sellerName: (order.sellerName != null && order.sellerName!.isNotEmpty)
+            ? order.sellerName
+            : existing.sellerName,
+      );
     } else {
       _inMemoryOrders.insert(0, order);
     }

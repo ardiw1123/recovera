@@ -116,7 +116,11 @@ def search_listings(
         query = query.filter(or_(Product.name.ilike(search_filter), Product.brand.ilike(search_filter)))
 
     if category:
-        query = query.filter(Product.category.ilike(category.strip()))
+        cat_list = [c.strip() for c in category.split(",") if c.strip()]
+        if len(cat_list) == 1:
+            query = query.filter(Product.category.ilike(cat_list[0]))
+        elif len(cat_list) > 1:
+            query = query.filter(or_(*[Product.category.ilike(c) for c in cat_list]))
 
     today = date.today()
     # Invariant: Jangan tampilkan produk yang sudah kedaluwarsa di etalase pembeli

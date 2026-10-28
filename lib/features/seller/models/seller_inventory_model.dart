@@ -26,6 +26,8 @@ class SellerListingItem {
   final double? warehouseLng;
   final String? warehouseCity;
   final double? distanceKm;
+  final int soldQty;
+  final int ordersCount;
 
   const SellerListingItem({
     required this.id,
@@ -51,6 +53,8 @@ class SellerListingItem {
     this.warehouseLng,
     this.warehouseCity,
     this.distanceKm,
+    this.soldQty = 0,
+    this.ordersCount = 0,
   });
 
   factory SellerListingItem.fromJson(Map<String, dynamic> json) {
@@ -96,6 +100,12 @@ class SellerListingItem {
       warehouseLng: (json['warehouse_lng'] as num?)?.toDouble(),
       warehouseCity: json['warehouse_city'] as String?,
       distanceKm: (json['distance_km'] as num?)?.toDouble(),
+      soldQty: json['sold_qty'] is int
+          ? json['sold_qty'] as int
+          : int.tryParse(json['sold_qty']?.toString() ?? '0') ?? 0,
+      ordersCount: json['orders_count'] is int
+          ? json['orders_count'] as int
+          : int.tryParse(json['orders_count']?.toString() ?? '0') ?? 0,
     );
   }
 
@@ -157,9 +167,8 @@ class SellerListingItem {
   String get statusBadgeLabel {
     switch (status.toLowerCase()) {
       case 'active':
-        if (id % 3 == 0) return 'Status: Matching';
-        if (id % 3 == 1) return 'Status: Auction';
-        return 'Status: Terverifikasi';
+        if (soldQty > 0 || ordersCount > 0) return 'Terjual ($soldQty $defaultUnit)';
+        return 'Status: Aktif';
       case 'draft':
         return 'Status: Draft';
       case 'review':
@@ -176,15 +185,14 @@ class SellerListingItem {
   String get currentProcessLabel {
     switch (status.toLowerCase()) {
       case 'active':
-        if (id % 3 == 0) return 'Pencocokan Pembeli Bisnis';
-        if (id % 3 == 1) return 'Dutch Auction Berlangsung';
-        return 'Siap Serap Pasar';
+        if (soldQty > 0 || ordersCount > 0) return '$ordersCount Pesanan Diterima';
+        return 'Dutch Auction Berlangsung';
       case 'draft':
         return 'Pemeriksaan Draft Produk';
       case 'review':
         return 'Menunggu Konfirmasi Publikasi';
       case 'sold':
-        return 'Pesanan Diselesaikan';
+        return 'Pesanan Selesai / Terjual';
       case 'expired':
         return 'Masa Simpan Selesai';
       default:

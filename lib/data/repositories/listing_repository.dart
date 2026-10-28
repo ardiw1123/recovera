@@ -403,7 +403,8 @@ class ListingRepository {
 
     var filtered = items;
     if (category != null && category.isNotEmpty && category != 'Semua' && category != 'All') {
-      filtered = filtered.where((l) => l.category.toLowerCase() == category.toLowerCase()).toList();
+      final catSet = category.split(',').map((c) => c.trim().toLowerCase()).toSet();
+      filtered = filtered.where((l) => catSet.contains(l.category.toLowerCase())).toList();
     }
     if (search != null && search.isNotEmpty) {
       final q = search.toLowerCase();

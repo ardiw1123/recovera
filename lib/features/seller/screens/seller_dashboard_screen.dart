@@ -1,3 +1,4 @@
+import '../../../data/repositories/app_prefs_repository.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -133,55 +134,380 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final companyName = _dashboardData?.companyName ?? '';
     return Scaffold(
-      appBar: _buildAppBar(),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        color: AppColors.primary,
-        child: _buildBody(),
+      backgroundColor: const Color(0xFFF8FAFC),
+      floatingActionButton: _buildChatbotFab(),
+      body: Column(
+        children: [
+          // ── Fixed Wave Header (Desain disamakan dengan Buyer Header) ──
+          _buildFixedWaveHeader(companyName),
+
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _loadData,
+              color: AppColors.primary,
+              child: _buildBody(),
+            ),
+          ),
+        ],
       ),
-      floatingActionButton: _buildFab(),
     );
   }
 
-  AppBar _buildAppBar() {
-    return AppBar(
-      backgroundColor: AppColors.primary,
-      foregroundColor: AppColors.white,
-      elevation: 0,
-      centerTitle: true,
-      title: Text(
-        'Beranda',
-        style: GoogleFonts.inter(
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          color: AppColors.white,
-        ),
-      ),
-      actions: [
-        // Ikon notifikasi di kanan atas appbar
-        IconButton(
-          icon: Stack(
-            children: [
-              const Icon(
-                Icons.notifications_none_rounded,
-                color: AppColors.white,
-              ),
-              if (_unreadNotificationCount > 0)
-                const Positioned(
-                  right: 0,
-                  top: 0,
-                  child: CircleAvatar(radius: 4, backgroundColor: Colors.red),
+  /// Header Beranda Penjual dengan desain gelombang ombak (identik dengan Buyer)
+  Widget _buildFixedWaveHeader(String companyName) {
+    return Stack(
+      children: [
+        // Layer gelombang latar belakang (soft contrast)
+        Positioned.fill(
+          child: ClipPath(
+            clipper: _HeaderWaveBackdropClipper(),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryLight.withValues(alpha: 0.5),
+                    AppColors.secondary.withValues(alpha: 0.6),
+                  ],
                 ),
-            ],
+              ),
+            ),
           ),
-          onPressed: () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const NotificationListScreen()),
-            );
-            _loadUnreadNotificationCount();
-          },
-          tooltip: 'Notifikasi',
+        ),
+
+        // Layer gelombang utama dengan konten header tetap (fixed)
+        ClipPath(
+          clipper: _HeaderWaveClipper(),
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primaryDark,
+                  AppColors.primary,
+                  AppColors.primaryLight,
+                ],
+              ),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sisi Kiri: Logo Brand Recovera, Greeting Seller, dan Lokasi/Chips
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // ── Logo Recovera & Teks Brand ──
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              children: [
+                                Image.asset(
+                                  'lib/assets/recovera-logo-mark.png',
+                                  width: 24,
+                                  height: 24,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, _, _) => const Icon(
+                                    Icons.eco_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Recovera',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    letterSpacing: -0.6,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'RECOVERA B2B',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981)
+                                        .withValues(alpha: 0.25),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: const Color(0xFF6EE7B7)
+                                          .withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.verified_rounded,
+                                        size: 9,
+                                        color: Color(0xFF6EE7B7),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        'Verified',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF6EE7B7),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          // ── Greeting Seller: "Halo, [companyName]!" ──
+                          Text(
+                            'Halo, ${companyName.isNotEmpty ? companyName : "Mitra Bisnis"}',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: -0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+
+                          // ── Bar Lokasi Gudang & Chips Info ──
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_rounded,
+                                    color: Color(0xFF90E0EF),
+                                    size: 15,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Gudang Utama',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    size: 15,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.22,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.radar_rounded,
+                                          size: 10,
+                                          color: Color(0xFF90E0EF),
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          'Radius < 15 km',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ListenableBuilder(
+                                    listenable: AppPrefsRepository.instance,
+                                    builder: (context, _) {
+                                      final cur = AppPrefsRepository
+                                          .instance
+                                          .selectedCurrency;
+                                      final tz = AppPrefsRepository
+                                          .instance
+                                          .selectedTimezone;
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.22,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '$cur • $tz',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // ── Tombol Pesanan / Transaksi Masuk (Kanan Atas) ──
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SellerOrderScreen(),
+                          ),
+                        );
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.receipt_long_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // ── Tombol Notifikasi (Kanan Atas) ──
+                    GestureDetector(
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationListScreen(),
+                          ),
+                        );
+                        _loadUnreadNotificationCount();
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.notifications_none_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                          if (_unreadNotificationCount > 0)
+                            Positioned(
+                              right: 2,
+                              top: 2,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -213,10 +539,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 5a. Header Section
-          _buildHeader(data.companyName),
-
-          const SizedBox(height: 24),
+          // 5a. Header telah dipindahkan ke top sticky wave header
 
           // 5b. Bento Summary Cards
           _buildBentoCards(data),
@@ -689,20 +1012,33 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
     );
   }
 
-  Widget _buildFab() {
-    return FloatingActionButton.extended(
-      onPressed: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const UploadStockFlowScreen()),
-        );
-      },
-      backgroundColor: AppColors.primary,
-      icon: const Icon(Icons.add, color: AppColors.white),
-      label: Text(
-        'Upload Stok',
-        style: GoogleFonts.inter(
-          fontWeight: FontWeight.w600,
+  Widget _buildChatbotFab() {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.38),
+            blurRadius: 14,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: FloatingActionButton(
+        key: const Key('fab_chatbot_seller'),
+        tooltip: 'Rera',
+        onPressed: () {
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const ChatbotScreen()));
+        },
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        shape: const CircleBorder(),
+        child: const Icon(
+          Icons.smart_toy_rounded,
           color: AppColors.white,
+          size: 26,
         ),
       ),
     );
@@ -874,4 +1210,51 @@ class _NearExpiryItemCard extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// Custom Clipper untuk gelombang header bawah (disamakan dengan Buyer HomeScreen)
+class _HeaderWaveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 24);
+    path.cubicTo(
+      size.width * 0.30,
+      size.height + 6,
+      size.width * 0.65,
+      size.height - 32,
+      size.width,
+      size.height - 12,
+    );
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+/// Custom Clipper untuk aksen gelombang sekunder di latar belakang header
+class _HeaderWaveBackdropClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 14);
+    path.cubicTo(
+      size.width * 0.35,
+      size.height + 14,
+      size.width * 0.70,
+      size.height - 20,
+      size.width,
+      size.height - 6,
+    );
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

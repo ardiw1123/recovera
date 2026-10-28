@@ -243,8 +243,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         lat: _effectiveLat,
         lng: _effectiveLng,
         sort: _selectedSort,
-        category: _selectedCategories.length == 1
-            ? _selectedCategories.first.label
+        category: _selectedCategories.isNotEmpty
+            ? _selectedCategories.map((c) => c.label).join(',')
             : null,
         radiusKm: _selectedRadiusKm,
         minDays: _selectedMaxExpiryDays != null ? 1 : null,
@@ -270,8 +270,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (mounted) {
         setState(() {
           final demo = ListingRepository.getDemoListings(
-            category: _selectedCategories.length == 1
-                ? _selectedCategories.first.label
+            category: _selectedCategories.isNotEmpty
+                ? _selectedCategories.map((c) => c.label).join(',')
                 : null,
             search: _searchCtrl.text.trim().isNotEmpty
                 ? _searchCtrl.text.trim()
