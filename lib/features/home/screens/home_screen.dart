@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+
 import '../../../core/sensors/shake_detector.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/services/network_connectivity_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/listing_repository.dart';
+import '../../../data/repositories/notification_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../models/product_model.dart';
-import '../widgets/product_card.dart';
 import '../widgets/filter_bottom_sheet.dart';
+import '../widgets/product_card.dart';
 import '../../auth/screens/location_management_screen.dart';
+import '../../transactions/screens/buyer_transaction_screen.dart';
+import '../../chat/screens/chatbot_screen.dart';
+import 'notification_list_screen.dart';
 
 /// Dashboard utama bagi pengguna Buyer (Pembeli).
 ///
@@ -25,15 +32,15 @@ class HomeScreen extends StatefulWidget {
     this.repository,
     this.userLat = -6.2088,
     this.userLng = 106.8456,
-    this.initialRadiusKm = 15.0,
     this.sensorStream,
+    this.initialRadiusKm = 15.0,
   });
 
   final ListingRepository? repository;
   final double userLat;
   final double userLng;
-  final double initialRadiusKm;
   final Stream<AccelerometerEvent>? sensorStream;
+  final double initialRadiusKm;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -41,6 +48,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final ListingRepository _listingRepository;
+  final NotificationRepository _notificationRepository =
+      NotificationRepository();
+  int _unreadNotificationCount = 0;
   late final ShakeDetector _shakeDetector;
   final TextEditingController _searchCtrl = TextEditingController();
 
@@ -57,7 +67,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   double? _selectedRadiusKm = 15.0; // Default radius 15 km per specifications
   int? _selectedMaxExpiryDays; // null = Semua, 14 = <= 14 hari, 30, 60
-  String _selectedSort = 'nearest'; // 'nearest', 'cheapest', 'expiring_soon', 'highest_match'
+  String _selectedSort =
+      'nearest'; // 'nearest', 'cheapest', 'expiring_soon', 'highest_match'
 
   int get _activeFilterCount {
     int count = 0;
@@ -99,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _selectedRadius = widget.initialRadiusKm;
+    _selectedRadiusKm = widget.initialRadiusKm;
     WidgetsBinding.instance.addObserver(this);
     _shakeDetector = ShakeDetector(
       onShake: _onShakeToRefresh,
@@ -108,10 +119,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _shakeDetector.startListening();
     _allListings = List<Listing>.from(dummyListings);
     AuthRepository.instance.addListener(_onAuthProfileChanged);
+    NetworkConnectivityService.instance.addListener(_onConnectivityChanged);
     final client = ApiClient();
-    _listingRepository = widget.repository ??
+    _listingRepository =
+        widget.repository ??
         ListingRepository(remoteClient: ListingApiService(client: client));
     _fetchListings();
+    _loadUnreadNotificationCount();
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final items = await _notificationRepository.fetchNotifications();
+      if (mounted) {
+        setState(
+          () => _unreadNotificationCount = items
+              .where((item) => !item.isRead)
+              .length,
+        );
+      }
+    } catch (_) {}
   }
 
   void _onAuthProfileChanged() {
@@ -124,7 +151,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(covariant HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.userLat != widget.userLat || oldWidget.userLng != widget.userLng) {
+    if (oldWidget.userLat != widget.userLat ||
+        oldWidget.userLng != widget.userLng) {
       _fetchListings();
     }
   }
@@ -160,8 +188,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _shakeDetector.dispose();
     AuthRepository.instance.removeListener(_onAuthProfileChanged);
+    NetworkConnectivityService.instance.removeListener(_onConnectivityChanged);
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _onConnectivityChanged() {
+    if (!mounted) return;
+    final isOnline = NetworkConnectivityService.instance.isOnline;
+    if (isOnline) {
+      _fetchListings(forceRefresh: true);
+      _listingRepository.syncPendingDrafts().catchError(
+        (_) => const DraftSyncResult(
+          totalCount: 0,
+          syncedCount: 0,
+          failedCount: 0,
+          errors: [],
+        ),
+      );
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Terhubung ke Internet: Memuat layanan lelang live...'),
+          backgroundColor: AppColors.success,
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      _fetchListings(forceRefresh: false);
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mode Offline: Menampilkan data cache SQLite lokal.'),
+          backgroundColor: AppColors.secondary,
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   /// Mengambil daftar listing terdekat dari backend REST API via FastAPI.
@@ -181,12 +246,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         category: _selectedCategories.length == 1
             ? _selectedCategories.first.label
             : null,
-        radiusKm: (_selectedRadiusKm != null && _selectedRadiusKm != 15.0)
-            ? _selectedRadiusKm
-            : null,
+        radiusKm: _selectedRadiusKm,
         minDays: _selectedMaxExpiryDays != null ? 1 : null,
-        search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
-        radiusKm: _selectedRadius,
+        search: _searchCtrl.text.trim().isNotEmpty
+            ? _searchCtrl.text.trim()
+            : null,
       );
 
       if (mounted) {
@@ -209,14 +273,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             category: _selectedCategories.length == 1
                 ? _selectedCategories.first.label
                 : null,
-            search: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
-            radiusKm: (_selectedRadiusKm != null && _selectedRadiusKm != 15.0)
-                ? _selectedRadiusKm
+            search: _searchCtrl.text.trim().isNotEmpty
+                ? _searchCtrl.text.trim()
                 : null,
+            radiusKm: _selectedRadiusKm,
             minDays: _selectedMaxExpiryDays,
             sort: _selectedSort,
           ).map((m) => Listing.fromCachedModel(m)).toList();
-          _allListings = demo.isNotEmpty ? demo : List<Listing>.from(dummyListings);
+          _allListings = demo.isNotEmpty
+              ? demo
+              : List<Listing>.from(dummyListings);
           _isFromCache = true;
           _errorMessage = null;
         });
@@ -237,11 +303,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final query = _searchCtrl.text.trim().toLowerCase();
     if (query.isNotEmpty) {
       items = items
-          .where((item) =>
-              item.productName.toLowerCase().contains(query) ||
-              item.companyName.toLowerCase().contains(query) ||
-              (item.brand?.toLowerCase().contains(query) ?? false) ||
-              item.city.toLowerCase().contains(query))
+          .where(
+            (item) =>
+                item.productName.toLowerCase().contains(query) ||
+                item.companyName.toLowerCase().contains(query) ||
+                (item.brand?.toLowerCase().contains(query) ?? false) ||
+                item.city.toLowerCase().contains(query),
+          )
           .toList();
     }
 
@@ -251,30 +319,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .toList();
     }
 
+    // Invariant: Produk yang sudah melewati tanggal kedaluwarsa (<= 0) tidak ditampilkan di etalase pembeli
+    items = items.where((item) => item.effectiveDaysToExpiry > 0).toList();
+
     if (_selectedMaxExpiryDays != null) {
       items = items
-          .where((item) => item.effectiveDaysToExpiry <= _selectedMaxExpiryDays!)
+          .where(
+            (item) =>
+                item.effectiveDaysToExpiry > 0 &&
+                item.effectiveDaysToExpiry <= _selectedMaxExpiryDays!,
+          )
           .toList();
     }
 
     if (_selectedRadiusKm != null && _selectedRadiusKm != 15.0) {
       items = items
-          .where((item) => item.distanceKm == null || item.distanceKm! <= _selectedRadiusKm!)
+          .where(
+            (item) =>
+                item.distanceKm == null ||
+                item.distanceKm! <= _selectedRadiusKm!,
+          )
           .toList();
     }
 
-    if (_selectedExpiryPreset == '1-7') {
-      items = items.where((p) => p.daysUntilExpiry <= 7).toList();
-    } else if (_selectedExpiryPreset == '8-14') {
-      items = items.where((p) => p.daysUntilExpiry <= 14).toList();
-    } else if (_selectedExpiryPreset == '15-30') {
-      items = items.where((p) => p.daysUntilExpiry <= 30).toList();
-    }
-
-    if (_selectedRadius > 0) {
-      items = items
-          .where((item) => item.distanceKm == null || item.distanceKm! <= _selectedRadius)
-          .toList();
     switch (_selectedSort) {
       case 'cheapest':
         items.sort((a, b) => a.startPrice.compareTo(b.startPrice));
@@ -286,7 +353,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         break;
       case 'highest_match':
       case 'discount':
-        items.sort((a, b) => b.effectiveDiscountPercent.compareTo(a.effectiveDiscountPercent));
+        items.sort(
+          (a, b) =>
+              b.effectiveDiscountPercent.compareTo(a.effectiveDiscountPercent),
+        );
         break;
       case 'nearest':
       default:
@@ -299,153 +369,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     return items;
-  }
-
-
-  void _openFilterSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => FilterBottomSheet(
-        selectedCategories: _selectedCategory != null
-            ? {_selectedCategory!}
-            : _selectedCategories,
-        selectedExpiryPreset: _selectedExpiryPreset,
-        selectedSort: _selectedSort,
-        selectedRadiusKm: _selectedRadius,
-        onApply: (cats, expiry, sort, radius) {
-          setState(() {
-            _selectedCategories = cats;
-            _selectedCategory = cats.isNotEmpty ? cats.first : null;
-            _selectedExpiryPreset = expiry;
-            _selectedSort = sort;
-            _selectedRadius = radius;
-          });
-          _fetchListings();
-        },
-      ),
-    );
-  }
-
-  Widget _buildActiveFilterBanner() {
-    return Container(
-      key: const Key('home_active_filter_banner'),
-      margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F9FF),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFBAE6FD)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.filter_alt_rounded, size: 14, color: AppColors.primary),
-          const SizedBox(width: 6),
-          Text(
-            'Filter: ',
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  if (_selectedRadius != 15.0)
-                    Container(
-                      key: const Key('chip_active_radius'),
-                      margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF93C5FD)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Jarak: ${_selectedRadius.toInt()} km',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF1E40AF),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          GestureDetector(
-                            key: const Key('btn_clear_radius_filter'),
-                            onTap: () {
-                              setState(() => _selectedRadius = 15.0);
-                              _fetchListings();
-                            },
-                            child: const Icon(Icons.close_rounded, size: 12, color: Color(0xFF64748B)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (_selectedExpiryPreset != 'all')
-                    Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF93C5FD)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Exp: $_selectedExpiryPreset Hari',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF1E40AF),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          GestureDetector(
-                            onTap: () {
-                              setState(() => _selectedExpiryPreset = 'all');
-                              _fetchListings();
-                            },
-                            child: const Icon(Icons.close_rounded, size: 12, color: Color(0xFF64748B)),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          GestureDetector(
-            key: const Key('btn_reset_active_filters_banner'),
-            onTap: () {
-              setState(() {
-                _selectedRadius = 15.0;
-                _selectedExpiryPreset = 'all';
-                _selectedCategory = null;
-                _selectedCategories.clear();
-              });
-              _fetchListings();
-            },
-            child: Text(
-              'Reset',
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFFDC2626),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   String _getBuyerGreeting() {
@@ -476,6 +399,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return '$city, Indonesia';
     }
     return 'Jakarta Pusat, Indonesia';
+  }
+
+  Widget _buildChatbotFab() {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.38),
+            blurRadius: 14,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: FloatingActionButton(
+        key: const Key('fab_chatbot_buyer'),
+        tooltip: 'Rera',
+        onPressed: () {
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const ChatbotScreen()));
+        },
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        shape: const CircleBorder(),
+        child: const Icon(
+          Icons.smart_toy_rounded,
+          color: AppColors.white,
+          size: 26,
+        ),
+      ),
+    );
   }
 
   @override
@@ -534,59 +489,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
+      floatingActionButton: _buildChatbotFab(),
       body: Column(
         children: [
           // ── Fixed Wave Header (Sticky, tidak ikut ter-scroll) ───────────
           _buildFixedWaveHeader(),
 
-              // ── Search & Filter Bar ───────────────────────────────────────
-              SliverToBoxAdapter(
-                child: _buildSearchBar(),
-              ),
-
-              // ── Category Filter Chips ─────────────────────────────────────
-              SliverToBoxAdapter(
-                child: _buildCategoryChips(),
-              ),
-
-              // ── Active Filter Banner Indicator ────────────────────────────
-              if (_selectedRadius != 15.0 || _selectedExpiryPreset != 'all')
-                SliverToBoxAdapter(
-                  child: _buildActiveFilterBanner(),
-                ),
-
-              // ── Proximity Recommendation Header ───────────────────────────
-              SliverToBoxAdapter(
-                child: _buildRecommendationHeader(listings.length),
-              ),
-
-              // ── Content Area: Loading / Error / Empty / Feed ──────────────
-              if (_isLoading && _allListings.isEmpty)
-                SliverToBoxAdapter(
-                  child: _buildLoadingSkeleton(),
-                )
-              else if (_errorMessage != null && _allListings.isEmpty)
-                SliverToBoxAdapter(
-                  child: _buildErrorState(),
-                )
-              else if (listings.isEmpty)
-                SliverToBoxAdapter(
-                  child: _buildEmptyState(),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final item = listings[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: ProductCard(listing: item),
-                        );
-                      },
-                      childCount: listings.length,
-                    ),
           // ── Offline Cache Banner Indicator ──────────────────────────────
           if (_isFromCache) _buildOfflineCacheBanner(),
 
@@ -600,97 +508,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   // ── Search & Filter Bar ─────────────────────────────────
-                  SliverToBoxAdapter(
-                    child: _buildSearchBar(),
-                  ),
+                  SliverToBoxAdapter(child: _buildSearchBar()),
 
                   // ── Category Filter Chips ───────────────────────────────
-                  SliverToBoxAdapter(
-                    child: _buildCategoryChips(),
-                  ),
+                  SliverToBoxAdapter(child: _buildCategoryChips()),
 
                   // ── Active Filters Bar ──────────────────────────────────
                   if (_hasActiveFilters)
-                    SliverToBoxAdapter(
-                      child: _buildActiveFiltersBar(),
-                    ),
+                    SliverToBoxAdapter(child: _buildActiveFiltersBar()),
 
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'RECOVERA B2B',
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.primary,
-                            letterSpacing: 0.6,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFECFDF5),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFA7F3D0)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.verified_rounded, size: 10, color: Color(0xFF10B981)),
-                            const SizedBox(width: 2),
-                            Text(
-                              'Verified',
-                              style: GoogleFonts.inter(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF047857),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Halo, $buyerGreeting',
-                  key: const Key('buyer_greeting_title'),
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0F172A),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Temukan likuidasi stok pangan terdekat dengan harga terbaik.',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    color: const Color(0xFF64748B),
                   // ── Proximity Recommendation Header ─────────────────────
                   SliverToBoxAdapter(
                     child: _buildRecommendationHeader(listings.length),
@@ -698,37 +524,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                   // ── Content Area: Loading / Error / Empty / Feed ────────
                   if (_isLoading && _allListings.isEmpty)
-                    SliverToBoxAdapter(
-                      child: _buildLoadingSkeleton(),
-                    )
+                    SliverToBoxAdapter(child: _buildLoadingSkeleton())
                   else if (_errorMessage != null && _allListings.isEmpty)
-                    SliverToBoxAdapter(
-                      child: _buildErrorState(),
-                    )
+                    SliverToBoxAdapter(child: _buildErrorState())
                   else if (listings.isEmpty)
-                    SliverToBoxAdapter(
-                      child: _buildEmptyState(),
-                    )
+                    SliverToBoxAdapter(child: _buildEmptyState())
                   else
                     SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final item = listings[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: ProductCard(listing: item),
-                            );
-                          },
-                          childCount: listings.length,
-                        ),
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          final item = listings[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: ProductCard(listing: item),
+                          );
+                        }, childCount: listings.length),
                       ),
                     ),
 
-                  const SliverToBoxAdapter(
-                    child: SizedBox(height: 32),
-                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
                 ],
               ),
             ),
@@ -818,7 +636,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(6),
@@ -835,12 +656,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                               const SizedBox(width: 4),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                                  color: const Color(0xFF10B981)
+                                      .withValues(alpha: 0.25),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color: const Color(0xFF6EE7B7).withValues(alpha: 0.4),
+                                    color: const Color(0xFF6EE7B7)
+                                        .withValues(alpha: 0.4),
                                   ),
                                 ),
                                 child: Row(
@@ -888,13 +714,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             onTap: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => const LocationManagementScreen(),
+                                  builder: (_) =>
+                                      const LocationManagementScreen(),
                                 ),
                               );
                             },
                             behavior: HitTestBehavior.opaque,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(20),
@@ -933,27 +763,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ),
                                   const SizedBox(width: 6),
                                   GestureDetector(
-                                    key: const Key('proximity_radius_badge_tap'),
-                                    onTap: () => _showFilterBottomSheet(context),
+                                    key: const Key('btn_proximity_filter'),
+                                    onTap: () =>
+                                        _showFilterBottomSheet(context),
                                     behavior: HitTestBehavior.opaque,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.22),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.22,
+                                        ),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Icon(Icons.radar_rounded, size: 10, color: Color(0xFF90E0EF)),
+                                          const Icon(
+                                            Icons.radar_rounded,
+                                            size: 10,
+                                            color: Color(0xFF90E0EF),
+                                          ),
                                           const SizedBox(width: 3),
                                           Text(
                                             _selectedRadiusKm == 15.0
                                                 ? 'Radius < 15 km'
                                                 : (_selectedRadiusKm != null
-                                                    ? 'Radius < ${_selectedRadiusKm!.toInt()} km'
-                                                    : 'Semua Radius'),
-                                            key: const Key('proximity_radius_badge'),
+                                                      ? 'Radius < ${_selectedRadiusKm!.toInt()} km'
+                                                      : 'Semua Radius'),
+                                            key: const Key(
+                                              'proximity_radius_badge',
+                                            ),
                                             style: GoogleFonts.inter(
                                               fontSize: 9,
                                               fontWeight: FontWeight.w700,
@@ -968,13 +810,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ListenableBuilder(
                                     listenable: AppPrefsRepository.instance,
                                     builder: (context, _) {
-                                      final cur = AppPrefsRepository.instance.selectedCurrency;
-                                      final tz = AppPrefsRepository.instance.selectedTimezone;
+                                      final cur = AppPrefsRepository
+                                          .instance
+                                          .selectedCurrency;
+                                      final tz = AppPrefsRepository
+                                          .instance
+                                          .selectedTimezone;
                                       return Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
                                         decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.22),
-                                          borderRadius: BorderRadius.circular(10),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.22,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                         ),
                                         child: Text(
                                           '$cur • $tz',
@@ -996,21 +849,47 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                     const SizedBox(width: 12),
 
+                    // ── Tombol Riwayat Transaksi (Kanan Atas) ──
+                    GestureDetector(
+                      key: const Key('btn_home_transactions'),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const BuyerTransactionScreen(),
+                          ),
+                        );
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.receipt_long_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
                     // ── Tombol Notifikasi (Kanan Atas) ──
                     GestureDetector(
                       key: const Key('btn_home_notification'),
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Belum ada notifikasi baru untuk Anda.',
-                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
-                            behavior: SnackBarBehavior.floating,
-                            duration: const Duration(seconds: 2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationListScreen(),
                           ),
                         );
+                        _loadUnreadNotificationCount();
                       },
                       behavior: HitTestBehavior.opaque,
                       child: Container(
@@ -1032,23 +911,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               color: Colors.white,
                               size: 22,
                             ),
-                            Positioned(
-                              top: 9,
-                              right: 10,
-                              child: Container(
-                                width: 7,
-                                height: 7,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFF59E0B),
-                                  shape: BoxShape.circle,
+                            if (_unreadNotificationCount > 0)
+                              Positioned(
+                                top: 9,
+                                right: 10,
+                                child: Container(
+                                  width: 7,
+                                  height: 7,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF59E0B),
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                               ),
-                            ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1071,7 +951,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       child: Row(
         children: [
-          const Icon(Icons.cloud_off_rounded, size: 18, color: Color(0xFFD97706)),
+          const Icon(
+            Icons.cloud_off_rounded,
+            size: 18,
+            color: Color(0xFFD97706),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -1140,17 +1024,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            key: const Key('btn_home_filter_sheet'),
+            key: const Key('btn_home_filter'),
             onTap: () => _showFilterBottomSheet(context),
             behavior: HitTestBehavior.opaque,
             child: Container(
               height: 44,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                color: _activeFilterCount > 0 ? AppColors.primary : Colors.white,
+                color: _activeFilterCount > 0
+                    ? AppColors.primary
+                    : Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: _activeFilterCount > 0 ? AppColors.primary : const Color(0xFFCBD5E1),
+                  color: _activeFilterCount > 0
+                      ? AppColors.primary
+                      : const Color(0xFFCBD5E1),
                 ),
                 boxShadow: _activeFilterCount > 0
                     ? [
@@ -1168,13 +1056,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   Icon(
                     Icons.tune_rounded,
                     key: const Key('btn_home_sort_menu'),
-                    color: _activeFilterCount > 0 ? Colors.white : AppColors.primary,
+                    color: _activeFilterCount > 0
+                        ? Colors.white
+                        : AppColors.primary,
                     size: 19,
                   ),
                   if (_activeFilterCount > 0) ...[
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(10),
@@ -1221,7 +1114,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             if (_selectedRadiusKm != null && _selectedRadiusKm != 15.0) ...[
               _buildActiveFilterPill(
-                label: 'Radius < ${_selectedRadiusKm!.toInt()} km',
+                key: const Key('chip_active_radius'),
+                closeKey: const Key('btn_clear_radius_filter'),
+                label: 'Jarak: ${_selectedRadiusKm!.toInt()} km',
                 icon: Icons.radar_rounded,
                 onRemove: () {
                   setState(() => _selectedRadiusKm = 15.0);
@@ -1283,11 +1178,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildActiveFilterPill({
+    Key? key,
+    Key? closeKey,
     required String label,
     required IconData icon,
     required VoidCallback onRemove,
   }) {
     return Container(
+      key: key,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
@@ -1309,6 +1207,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(width: 4),
           GestureDetector(
+            key: closeKey,
             onTap: onRemove,
             behavior: HitTestBehavior.opaque,
             child: const Icon(
@@ -1324,8 +1223,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // ── Filter Bottom Sheet (PBI-09) ──────────────────────────────────────────
   void _showFilterBottomSheet(BuildContext context) {
-    final Set<FoodCategory> tempCategories =
-        Set<FoodCategory>.from(_selectedCategories);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FilterBottomSheet(
+        selectedCategories: _selectedCategories,
+        selectedExpiryPreset: _selectedMaxExpiryDays != null
+            ? (_selectedMaxExpiryDays! <= 7
+                  ? '1-7'
+                  : (_selectedMaxExpiryDays! <= 14 ? '8-14' : '15-30'))
+            : 'all',
+        selectedSort: _selectedSort,
+        selectedRadiusKm: _selectedRadiusKm ?? 15.0,
+        onApply: (cats, expiry, sort, radius) {
+          setState(() {
+            _selectedCategories.clear();
+            _selectedCategories.addAll(cats);
+            _selectedSort = sort;
+            _selectedRadiusKm = radius;
+            if (expiry == '1-7') {
+              _selectedMaxExpiryDays = 7;
+            } else if (expiry == '8-14') {
+              _selectedMaxExpiryDays = 14;
+            } else if (expiry == '15-30') {
+              _selectedMaxExpiryDays = 30;
+            } else {
+              _selectedMaxExpiryDays = null;
+            }
+          });
+          _fetchListings();
+        },
+      ),
+    );
+    return;
+    // ignore: dead_code
+    final Set<FoodCategory> tempCategories = Set<FoodCategory>.from(
+      _selectedCategories,
+    );
     double? tempRadiusKm = _selectedRadiusKm;
     int? tempMaxExpiryDays = _selectedMaxExpiryDays;
     String tempSort = _selectedSort;
@@ -1363,7 +1298,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                     // Sheet Header
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
+                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1416,12 +1354,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     // Scrollable Filter Sections
                     Expanded(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // ── Section 1: Kategori Produk ─────────────────────
-                            _buildFilterSectionTitle('Kategori Bahan Baku (Bisa Pilih Beberapa)', Icons.category_outlined),
+                            _buildFilterSectionTitle(
+                              'Kategori Bahan Baku (Bisa Pilih Beberapa)',
+                              Icons.category_outlined,
+                            ),
                             const SizedBox(height: 10),
                             Wrap(
                               spacing: 8,
@@ -1430,7 +1374,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 _buildSheetChoiceChip(
                                   label: 'Semua Kategori',
                                   isSelected: tempCategories.isEmpty,
-                                  onTap: () => setModalState(() => tempCategories.clear()),
+                                  onTap: () => setModalState(
+                                    () => tempCategories.clear(),
+                                  ),
                                 ),
                                 ...FoodCategory.values.map(
                                   (cat) => _buildSheetChoiceChip(
@@ -1452,7 +1398,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             const SizedBox(height: 20),
 
                             // ── Section 2: Radius Gudang Penjual (LBS) ─────────
-                            _buildFilterSectionTitle('Radius Jarak Gudang (LBS)', Icons.radar_rounded),
+                            _buildFilterSectionTitle(
+                              'Radius Jarak Gudang (LBS)',
+                              Icons.radar_rounded,
+                            ),
                             const SizedBox(height: 10),
                             Wrap(
                               spacing: 8,
@@ -1461,27 +1410,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 _buildSheetChoiceChip(
                                   label: 'Semua Jarak',
                                   isSelected: tempRadiusKm == null,
-                                  onTap: () => setModalState(() => tempRadiusKm = null),
+                                  onTap: () =>
+                                      setModalState(() => tempRadiusKm = null),
                                 ),
                                 _buildSheetChoiceChip(
                                   label: '≤ 5 km (Sangat Dekat)',
                                   isSelected: tempRadiusKm == 5.0,
-                                  onTap: () => setModalState(() => tempRadiusKm = 5.0),
+                                  onTap: () =>
+                                      setModalState(() => tempRadiusKm = 5.0),
                                 ),
                                 _buildSheetChoiceChip(
                                   label: '< 15 km (Standar)',
                                   isSelected: tempRadiusKm == 15.0,
-                                  onTap: () => setModalState(() => tempRadiusKm = 15.0),
+                                  onTap: () =>
+                                      setModalState(() => tempRadiusKm = 15.0),
                                 ),
                                 _buildSheetChoiceChip(
                                   label: '≤ 30 km',
                                   isSelected: tempRadiusKm == 30.0,
-                                  onTap: () => setModalState(() => tempRadiusKm = 30.0),
+                                  onTap: () =>
+                                      setModalState(() => tempRadiusKm = 30.0),
                                 ),
                                 _buildSheetChoiceChip(
                                   label: '≤ 50 km',
                                   isSelected: tempRadiusKm == 50.0,
-                                  onTap: () => setModalState(() => tempRadiusKm = 50.0),
+                                  onTap: () =>
+                                      setModalState(() => tempRadiusKm = 50.0),
                                 ),
                               ],
                             ),
@@ -1489,7 +1443,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             const SizedBox(height: 20),
 
                             // ── Section 3: Sisa Hari Kedaluwarsa ───────────────
-                            _buildFilterSectionTitle('Sisa Umur Simpan (Kedaluwarsa)', Icons.hourglass_bottom_rounded),
+                            _buildFilterSectionTitle(
+                              'Sisa Umur Simpan (Kedaluwarsa)',
+                              Icons.hourglass_bottom_rounded,
+                            ),
                             const SizedBox(height: 10),
                             Wrap(
                               spacing: 8,
@@ -1498,24 +1455,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 _buildSheetChoiceChip(
                                   label: 'Semua Waktu',
                                   isSelected: tempMaxExpiryDays == null,
-                                  onTap: () => setModalState(() => tempMaxExpiryDays = null),
+                                  onTap: () => setModalState(
+                                    () => tempMaxExpiryDays = null,
+                                  ),
                                 ),
                                 _buildSheetChoiceChip(
                                   label: '≤ 14 Hari (Prioritas/Mendesak)',
                                   icon: Icons.warning_amber_rounded,
                                   activeColor: const Color(0xFFD97706),
                                   isSelected: tempMaxExpiryDays == 14,
-                                  onTap: () => setModalState(() => tempMaxExpiryDays = 14),
+                                  onTap: () => setModalState(
+                                    () => tempMaxExpiryDays = 14,
+                                  ),
                                 ),
                                 _buildSheetChoiceChip(
                                   label: '≤ 30 Hari (Bulan Ini)',
                                   isSelected: tempMaxExpiryDays == 30,
-                                  onTap: () => setModalState(() => tempMaxExpiryDays = 30),
+                                  onTap: () => setModalState(
+                                    () => tempMaxExpiryDays = 30,
+                                  ),
                                 ),
                                 _buildSheetChoiceChip(
                                   label: '≤ 60 Hari',
                                   isSelected: tempMaxExpiryDays == 60,
-                                  onTap: () => setModalState(() => tempMaxExpiryDays = 60),
+                                  onTap: () => setModalState(
+                                    () => tempMaxExpiryDays = 60,
+                                  ),
                                 ),
                               ],
                             ),
@@ -1523,7 +1488,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             const SizedBox(height: 20),
 
                             // ── Section 4: Urutan (Sort) ───────────────────────
-                            _buildFilterSectionTitle('Urutkan Hasil', Icons.swap_vert_rounded),
+                            _buildFilterSectionTitle(
+                              'Urutkan Hasil',
+                              Icons.swap_vert_rounded,
+                            ),
                             const SizedBox(height: 10),
                             Column(
                               children: [
@@ -1532,7 +1500,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   subtitle: 'Prioritaskan gudang seller terdekat dari lokasi Anda',
                                   icon: Icons.near_me_rounded,
                                   isSelected: tempSort == 'nearest',
-                                  onTap: () => setModalState(() => tempSort = 'nearest'),
+                                  onTap: () =>
+                                      setModalState(() => tempSort = 'nearest'),
                                 ),
                                 const SizedBox(height: 8),
                                 _buildSortOptionTile(
@@ -1540,15 +1509,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   subtitle: 'Urutkan dari harga penawaran saat ini terendah',
                                   icon: Icons.payments_outlined,
                                   isSelected: tempSort == 'cheapest',
-                                  onTap: () => setModalState(() => tempSort = 'cheapest'),
+                                  onTap: () => setModalState(
+                                    () => tempSort = 'cheapest',
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 _buildSortOptionTile(
                                   title: 'Segera Kedaluwarsa',
                                   subtitle: 'Bahan baku yang paling cepat mencapai batas kedaluwarsa',
                                   icon: Icons.timer_outlined,
-                                  isSelected: tempSort == 'expiring_soon' || tempSort == 'expiring',
-                                  onTap: () => setModalState(() => tempSort = 'expiring_soon'),
+                                  isSelected:
+                                      tempSort == 'expiring_soon' ||
+                                      tempSort == 'expiring',
+                                  onTap: () => setModalState(
+                                    () => tempSort = 'expiring_soon',
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 _buildSortOptionTile(
@@ -1556,7 +1531,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   subtitle: 'Potongan harga terbesar dari harga normal seller',
                                   icon: Icons.percent_rounded,
                                   isSelected: tempSort == 'highest_match',
-                                  onTap: () => setModalState(() => tempSort = 'highest_match'),
+                                  onTap: () => setModalState(
+                                    () => tempSort = 'highest_match',
+                                  ),
                                 ),
                               ],
                             ),
@@ -1653,7 +1630,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? effectiveColor.withValues(alpha: 0.1) : const Color(0xFFF8FAFC),
+          color: isSelected
+              ? effectiveColor.withValues(alpha: 0.1)
+              : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected ? effectiveColor : const Color(0xFFE2E8F0),
@@ -1701,7 +1680,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           color: isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE2E8F0),
+            color: isSelected
+                ? const Color(0xFF16A34A)
+                : const Color(0xFFE2E8F0),
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -1716,7 +1697,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: Icon(
                 icon,
                 size: 18,
-                color: isSelected ? const Color(0xFF15803D) : const Color(0xFF64748B),
+                color: isSelected
+                    ? const Color(0xFF15803D)
+                    : const Color(0xFF64748B),
               ),
             ),
             const SizedBox(width: 12),
@@ -1729,7 +1712,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: isSelected ? const Color(0xFF15803D) : const Color(0xFF0F172A),
+                      color: isSelected
+                          ? const Color(0xFF15803D)
+                          : const Color(0xFF0F172A),
                     ),
                   ),
                   Text(
@@ -1842,31 +1827,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.radar_rounded,
-                  size: 18,
-                  color: Color(0xFF059669),
+          Row(
+            children: [
+              const Icon(
+                Icons.radar_rounded,
+                size: 18,
+                color: Color(0xFF059669),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Rekomendasi Terdekat',
+                key: const Key('section_recommendations_title'),
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
                 ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Rekomendasi Terdekat',
-                    key: const Key('section_recommendations_title'),
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0F172A),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
@@ -1912,7 +1891,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   height: 100,
                   decoration: const BoxDecoration(
                     color: Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.horizontal(left: Radius.circular(16)),
+                    borderRadius: BorderRadius.horizontal(
+                      left: Radius.circular(16),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1922,11 +1903,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(width: 80, height: 10, color: const Color(0xFFF1F5F9)),
+                        Container(
+                          width: 80,
+                          height: 10,
+                          color: const Color(0xFFF1F5F9),
+                        ),
                         const SizedBox(height: 8),
-                        Container(width: 140, height: 14, color: const Color(0xFFF1F5F9)),
+                        Container(
+                          width: 140,
+                          height: 14,
+                          color: const Color(0xFFF1F5F9),
+                        ),
                         const SizedBox(height: 8),
-                        Container(width: 100, height: 12, color: const Color(0xFFF1F5F9)),
+                        Container(
+                          width: 100,
+                          height: 12,
+                          color: const Color(0xFFF1F5F9),
+                        ),
                       ],
                     ),
                   ),
@@ -1990,8 +1983,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   _selectedRadiusKm = 15.0;
                   _selectedMaxExpiryDays = null;
                   _selectedSort = 'nearest';
-                  _selectedRadius = 15.0;
-                  _selectedExpiryPreset = 'all';
                 });
                 _fetchListings();
               },
@@ -2032,7 +2023,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 6),
             Text(
-              _errorMessage ?? 'Terjadi kendala jaringan saat menghubungi server Recovera.',
+              _errorMessage ??
+                  'Terjadi kendala jaringan saat menghubungi server Recovera.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 11,
@@ -2050,7 +2042,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],

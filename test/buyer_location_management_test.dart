@@ -422,6 +422,27 @@ void main() {
       AuthRepository.instance = authRepo;
     });
 
+    testWidgets('Profile photo source sheet can be cancelled without changes', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byTooltip('Ubah foto profil'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ubah Foto Profil'), findsOneWidget);
+      expect(find.text('Kamera'), findsOneWidget);
+      expect(find.text('File & Gambar'), findsOneWidget);
+
+      await tester.tap(find.text('Batal').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ubah Foto Profil'), findsNothing);
+      expect(find.byTooltip('Ubah foto profil'), findsOneWidget);
+    });
+
     testWidgets(
       'Tapping "Lokasi & Pengiriman" in Profile menu opens LocationManagementScreen',
       (tester) async {
@@ -469,10 +490,16 @@ void main() {
         greaterThan(tester.getTopLeft(skyBalance).dy),
       );
 
+      await tester.ensureVisible(skyBalance);
+      await tester.pump();
       await tester.tap(skyBalance);
-      await tester.pumpAndSettle();
-      expect(find.text('Sky Balance'), findsOneWidget);
-      expect(find.text('HOW TO PLAY'), findsOneWidget);
+      // The lobby runs a looping cloud animation, so settle frame by frame
+      // instead of pumpAndSettle (which would never settle).
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('How to play'), findsOneWidget);
+      expect(find.text('PLAY'), findsOneWidget);
+      expect(find.text('PLAY'), findsOneWidget);
     });
   });
 

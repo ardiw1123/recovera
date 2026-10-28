@@ -7,7 +7,6 @@ import '../../../core/navigation/app_navigator.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/auth_widgets.dart';
-import '../../shell/main_shell.dart';
 import 'register_screen.dart';
 
 /// PBI-03 — Layar Login B2B Recovera
@@ -59,7 +58,9 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             backgroundColor: const Color(0xFF64748B),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -74,7 +75,8 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = true);
       try {
         if (refreshToken != null && refreshToken != 'demo_refresh_token') {
-          final newTokens = await AuthRepository.instance.authApiService.refreshToken(refreshToken);
+          final newTokens = await AuthRepository.instance.authApiService
+              .refreshToken(refreshToken);
           await AuthRepository.instance.tokenStorage.saveTokens(newTokens);
           await AuthRepository.instance.init();
         } else {
@@ -84,20 +86,14 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
         if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainShell()),
-        );
+        Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
       } catch (_) {
         if (!mounted) return;
         AuthRepository.instance.loginAsDemo(
           role: 'buyer',
           name: 'Gevinta (Biometrik)',
         );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainShell()),
-        );
+        Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
@@ -111,7 +107,8 @@ class _LoginScreenState extends State<LoginScreen> {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is Map && args['session_expired'] == true) {
         _sessionExpiredNoticeShown = true;
-        final msg = args['message'] as String? ??
+        final msg =
+            args['message'] as String? ??
             'Sesi Anda telah berakhir. Silakan login kembali.';
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -138,11 +135,8 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passCtrl.text,
       );
       if (!mounted) return;
-      // Navigasi ke MainShell (replace agar tidak bisa back ke login)
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainShell()),
-      );
+      // Navigasi ke MainShell dan bersihkan seluruh stack auth sebelumnya
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -153,8 +147,9 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     } finally {
@@ -193,10 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.primaryLight,
-                    AppColors.primaryLight,
-                  ],
+                  colors: [AppColors.primaryLight, AppColors.primaryLight],
                 ),
               ),
               child: SingleChildScrollView(
@@ -273,9 +265,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             textInputAction: TextInputAction.next,
                             suffixIcon:
                                 _emailCtrl.text.isNotEmpty &&
-                                        _emailCtrl.text.contains('@')
-                                    ? const _ValidCheckIcon()
-                                    : null,
+                                    _emailCtrl.text.contains('@')
+                                ? const _ValidCheckIcon()
+                                : null,
                             validator: (v) {
                               if (v == null || v.isEmpty) {
                                 return 'Email wajib diisi';
@@ -297,9 +289,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             textInputAction: TextInputAction.done,
                             onFieldSubmitted: (_) => _handleLogin(),
                             suffixIcon: IconButton(
-                              onPressed: () => setState(
-                                () => _obscurePass = !_obscurePass,
-                              ),
+                              onPressed: () =>
+                                  setState(() => _obscurePass = !_obscurePass),
                               icon: Icon(
                                 _obscurePass
                                     ? Icons.visibility_outlined
@@ -391,7 +382,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               minimumSize: const Size(double.infinity, 48),
-                              side: const BorderSide(color: AppColors.primary, width: 1.5),
+                              side: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.5,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(50),
                               ),
@@ -416,12 +410,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ? _emailCtrl.text.trim().split('@').first
                                     : 'Gevinta (Demo)',
                               );
-                              Navigator.pushReplacement(
+                              Navigator.of(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) => const MainShell(),
-                                ),
-                              );
+                              ).pushNamedAndRemoveUntil('/home', (_) => false);
                             },
                           ),
                           const SizedBox(height: 20),
@@ -435,9 +426,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   color: AppColors.slateText,
                                 ),
                                 children: [
-                                  const TextSpan(
-                                    text: 'Belum punya akun? ',
-                                  ),
+                                  const TextSpan(text: 'Belum punya akun? '),
                                   WidgetSpan(
                                     alignment: PlaceholderAlignment.middle,
                                     child: GestureDetector(
@@ -531,17 +520,23 @@ class _WaveCardClipper extends CustomClipper<Path> {
     // ── Wave Bézier pertama: kiri → tengah ─────────────────────────────
     // Naik tajam lalu melengkung organik ke tengah
     path.cubicTo(
-      0, 12,          // cp1: naik tajam dari y=48
-      w * 0.30, 0,    // cp2: puncak di ~30% lebar
-      w * 0.50, 22,   // end: sedikit turun di tengah
+      0,
+      12, // cp1: naik tajam dari y=48
+      w * 0.30,
+      0, // cp2: puncak di ~30% lebar
+      w * 0.50,
+      22, // end: sedikit turun di tengah
     );
 
     // ── Wave Bézier kedua: tengah → kanan ──────────────────────────────
     // Dip lembut lalu naik menuju tepi kanan
     path.cubicTo(
-      w * 0.70, 44,   // cp1: dip ke bawah di ~70%
-      w * 0.90, 4,    // cp2: naik tajam menuju kanan
-      w, 24,          // end: tepi kanan (lebih tinggi dari kiri)
+      w * 0.70,
+      44, // cp1: dip ke bawah di ~70%
+      w * 0.90,
+      4, // cp2: naik tajam menuju kanan
+      w,
+      24, // end: tepi kanan (lebih tinggi dari kiri)
     );
 
     // Sisi kanan turun ke bawah

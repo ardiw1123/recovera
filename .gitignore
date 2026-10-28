@@ -54,3 +54,10 @@ app.*.map.json
 /attachments
 
 .claude/
+
+# Firebase Admin credentials are server-only secrets.
+/backend/.env
+/backend/secrets/
+
+
+.kombai/

@@ -19,9 +19,9 @@ class ApiClient {
             Dio(
               BaseOptions(
                 baseUrl: baseUrl ?? ApiConstants.baseUrl,
-                connectTimeout: const Duration(seconds: 3),
-                receiveTimeout: const Duration(seconds: 3),
-                sendTimeout: const Duration(seconds: 3),
+                connectTimeout: const Duration(seconds: 30),
+                receiveTimeout: const Duration(seconds: 30),
+                sendTimeout: const Duration(seconds: 30),
                 headers: {
                   'Accept': 'application/json',
                   'Content-Type': 'application/json',
@@ -35,9 +35,9 @@ class ApiClient {
     final refreshDio = Dio(
       BaseOptions(
         baseUrl: _dio.options.baseUrl,
-        connectTimeout: const Duration(seconds: 3),
-        receiveTimeout: const Duration(seconds: 3),
-        sendTimeout: const Duration(seconds: 3),
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(seconds: 30),
       ),
     );
     if (adapter != null) {

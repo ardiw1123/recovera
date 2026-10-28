@@ -1,14 +1,26 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/services/biometric_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/recovera_wave_header.dart';
 import '../../../data/repositories/app_prefs_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
+import 'profile_camera_screen.dart';
+import '../services/profile_photo_service.dart';
 import '../widgets/auth_widgets.dart';
+import '../../feedback/screens/saran_kesan_screen.dart';
 import 'location_management_screen.dart';
+import 'business_info_edit_screen.dart';
 import 'login_screen.dart';
 import '../../sky_balance/sky_balance_screen.dart';
+import '../../transactions/screens/transaction_history_screen.dart';
 
 /// PBI-03 — Layar Profil & Keamanan Akun Recovera
 ///
@@ -27,10 +39,256 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const _defaultRole = 'UMKM Kuliner';
   static const _defaultCity = 'Depok';
 
+  final _profilePhotoService = ProfilePhotoService();
+  String? _profilePhotoPath;
+
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadSavedProfilePhoto();
+  }
+
+  Future<void> _loadSavedProfilePhoto() async {
+    try {
+      final savedPath = await _profilePhotoService.loadSavedPhotoPath();
+      if (mounted) setState(() => _profilePhotoPath = savedPath);
+    } on StateError catch (error, stackTrace) {
+      debugPrint('Unable to load saved profile photo: $error\n$stackTrace');
+      if (mounted) {
+        _showPhotoMessage(
+          'Foto profil tersimpan tidak dapat dimuat. Foto default tetap digunakan.',
+        );
+      }
+    } on Exception catch (error, stackTrace) {
+      debugPrint('Unable to load saved profile photo: $error\n$stackTrace');
+      if (mounted) {
+        _showPhotoMessage(
+          'Foto profil tersimpan tidak dapat dimuat. Foto default tetap digunakan.',
+        );
+      }
+    }
+  }
+
+  Future<void> _showPhotoSourceSheet() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.canvasBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Ubah Foto Profil',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.darkNavy,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                minLeadingWidth: 32,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppColors.primary,
+                ),
+                title: Text(
+                  'Kamera',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.darkNavy,
+                  ),
+                ),
+                onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+              ),
+              ListTile(
+                minLeadingWidth: 32,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(
+                  Icons.image_outlined,
+                  color: AppColors.primary,
+                ),
+                title: Text(
+                  'File & Gambar',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.darkNavy,
+                  ),
+                ),
+                onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+              ),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  child: Text(
+                    'Batal',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.slateText,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source != null && mounted) {
+      await _pickAndUpdateProfilePhoto(source);
+    }
+  }
+
+  Future<void> _pickAndUpdateProfilePhoto(ImageSource source) async {
+    var savingPhoto = false;
+    try {
+      if (source == ImageSource.camera) {
+        final permission = await Permission.camera.request();
+        if (!permission.isGranted) {
+          await _showCameraPermissionDialog(
+            permanentlyDenied:
+                permission.isPermanentlyDenied || permission.isRestricted,
+          );
+          return;
+        }
+      }
+
+      final CroppedFile? croppedPhoto;
+      if (source == ImageSource.camera) {
+        final capturedPhoto = await _captureProfilePhoto();
+        if (capturedPhoto == null) return;
+        croppedPhoto = await _profilePhotoService.cropImage(capturedPhoto.path);
+      } else {
+        croppedPhoto = await _profilePhotoService.pickAndCrop(source);
+      }
+      if (croppedPhoto == null) return;
+
+      savingPhoto = true;
+      final savedPath = await _profilePhotoService.saveCroppedPhoto(
+        croppedPhoto,
+      );
+      if (!mounted) return;
+
+      setState(() => _profilePhotoPath = savedPath);
+      _showPhotoMessage('Foto profil berhasil diperbarui.');
+    } on PlatformException catch (error, stackTrace) {
+      debugPrint('Profile photo platform error: $error\n$stackTrace');
+      _showPhotoMessage(
+        savingPhoto
+            ? 'Foto profil gagal disimpan. Foto sebelumnya tetap digunakan.'
+            : source == ImageSource.camera
+            ? 'Kamera tidak tersedia atau tidak dapat dibuka. Coba File & Gambar.'
+            : 'Gambar tidak dapat dibuka atau dipotong. Pilih gambar lain.',
+      );
+    } on StateError catch (error, stackTrace) {
+      debugPrint('Profile photo update failed: $error\n$stackTrace');
+      _showPhotoMessage(
+        savingPhoto
+            ? 'Foto profil gagal disimpan. Foto sebelumnya tetap digunakan.'
+            : source == ImageSource.camera
+            ? 'Kamera tidak tersedia atau tidak dapat dibuka. Coba File & Gambar.'
+            : 'Gambar tidak dapat dibuka atau dipotong. Pilih gambar lain.',
+      );
+    } on Exception catch (error, stackTrace) {
+      debugPrint('Profile photo update failed: $error\n$stackTrace');
+      _showPhotoMessage(
+        savingPhoto
+            ? 'Foto profil gagal disimpan. Foto sebelumnya tetap digunakan.'
+            : source == ImageSource.camera
+            ? 'Kamera tidak tersedia atau tidak dapat dibuka. Coba File & Gambar.'
+            : 'Gambar tidak dapat dibuka atau dipotong. Pilih gambar lain.',
+      );
+    }
+  }
+
+  Future<XFile?> _captureProfilePhoto() async {
+    try {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+      if (!mounted) return null;
+      final navigator = Navigator.of(context);
+      return await navigator.push<XFile>(
+        MaterialPageRoute(builder: (_) => const ProfileCameraScreen()),
+      );
+    } finally {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          statusBarColor: AppColors.primary,
+          statusBarIconBrightness: Brightness.light,
+          systemNavigationBarColor: AppColors.white,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showCameraPermissionDialog({required bool permanentlyDenied}) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'Akses kamera diperlukan',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Izinkan akses kamera untuk mengambil foto profil. Foto lama tetap digunakan.',
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              if (permanentlyDenied) {
+                final opened = await openAppSettings();
+                if (!opened && mounted) {
+                  _showPhotoMessage('Pengaturan aplikasi tidak dapat dibuka.');
+                }
+              } else {
+                await _pickAndUpdateProfilePhoto(ImageSource.camera);
+              }
+            },
+            child: Text(permanentlyDenied ? 'Pengaturan' : 'Coba lagi'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPhotoMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
   }
 
   Future<void> _loadProfile() async {
@@ -50,120 +308,114 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final profile = AuthRepository.instance.currentUserProfile;
         final tokens = AuthRepository.instance.currentTokens;
 
-        final company = (profile?.companyName != null && profile!.companyName!.isNotEmpty ? profile.companyName : null) ??
-            (profile?.name != null && profile!.name.isNotEmpty ? profile.name : null) ??
-            (tokens?.name != null && tokens!.name!.isNotEmpty ? tokens.name : null) ??
+        final company =
+            (profile?.companyName != null && profile!.companyName!.isNotEmpty
+                ? profile.companyName
+                : null) ??
+            (profile?.name != null && profile!.name.isNotEmpty
+                ? profile.name
+                : null) ??
+            (tokens?.name != null && tokens!.name!.isNotEmpty
+                ? tokens.name
+                : null) ??
             _defaultCompany;
         final role = profile?.role != null
             ? (profile!.role == 'seller'
                   ? 'Distributor (Seller)'
                   : 'UMKM Kuliner (Buyer)')
             : (tokens?.role == 'seller'
-                ? 'Distributor (Seller)'
-                : _defaultRole);
-        final email = profile?.email != null && profile!.email.isNotEmpty
-            ? profile.email
-            : (tokens?.name != null && tokens!.name!.contains('@') ? tokens.name : null);
+                  ? 'Distributor (Seller)'
+                  : _defaultRole);
         final city = profile?.city ?? _defaultCity;
+        final headerHeight = (MediaQuery.sizeOf(context).height * 0.18)
+            .clamp(132.0, 156.0)
+            .toDouble();
 
         return Scaffold(
-          backgroundColor: AppColors.canvasBg,
+          backgroundColor: AppColors.white,
           body: Stack(
             children: [
               Column(
                 children: [
                   // ── Header Biru ────────────────────────────────────────
-                  _ProfileHeader(context: context),
+                  _ProfileHeader(
+                    height: headerHeight,
+                    onBack: () => Navigator.maybePop(context),
+                  ),
 
                   // ── Scrollable Content ─────────────────────────────────
                   Expanded(
                     child: SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
-                      child: Transform.translate(
-                        offset: const Offset(0, -44), // avatar overlap
-                        child: Column(
-                          children: [
-                            // White Card mulai dari sini
-                            Container(
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: AppColors.white,
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(32),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.1,
-                                    ),
-                                    blurRadius: 30,
-                                    offset: const Offset(0, -12),
-                                  ),
-                                ],
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  left: 24,
-                                  right: 24,
-                                  top: 60, // ruang untuk avatar yang melayang
-                                  bottom: 32,
-                                ),
-                                child: Column(
-                                  children: [
-                                    // ── Identitas Perusahaan ───────────────
-                                    Text(
-                                      company,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.darkNavy,
-                                        letterSpacing: -0.3,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '$role • $city',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        color: AppColors.slateText,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-
-                                    // ── Badge Terverifikasi ────────────────
-                                    _VerifiedBadge(),
-                                    const SizedBox(height: 28),
-
-                                    // ── Menu List ─────────────────────────
-                                    _ProfileMenuList(),
-                                    const SizedBox(height: 24),
-
-                                    // ── Divider ────────────────────────────
-                                    const Divider(
-                                      color: Color(0xFFF1F5F9),
-                                      thickness: 1.5,
-                                    ),
-                                    const SizedBox(height: 16),
-
-                                    // ── Logout Button ──────────────────────
-                                    PillButton(
-                                      label: 'Logout',
-                                      outlined: true,
-                                      backgroundColor: AppColors.error,
-                                      foregroundColor: AppColors.error,
-                                      icon: const Icon(
-                                        Icons.logout_rounded,
-                                        size: 16,
-                                        color: AppColors.error,
-                                      ),
-                                      onPressed: () =>
-                                          _showLogoutDialog(context),
-                                    ),
-                                  ],
+                      child: Container(
+                        width: double.infinity,
+                        decoration: const BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(32),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            left: 24,
+                            right: 24,
+                            top: 60,
+                            bottom: 32,
+                          ),
+                          child: Column(
+                            children: [
+                              // ── Identitas Perusahaan ───────────────
+                              Text(
+                                company,
+                                key: const Key('profile_company_name'),
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.darkNavy,
+                                  letterSpacing: -0.3,
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              Text(
+                                '$role • $city',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: AppColors.slateText,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+
+                              // ── Badge Terverifikasi ────────────────
+                              _VerifiedBadge(),
+                              const SizedBox(height: 28),
+
+                              // ── Menu List ─────────────────────────
+                              _ProfileMenuList(),
+                              const SizedBox(height: 24),
+
+                              // ── Divider ────────────────────────────
+                              const Divider(
+                                color: Color(0xFFF1F5F9),
+                                thickness: 1.5,
+                              ),
+                              const SizedBox(height: 16),
+
+                              // ── Logout Button ──────────────────────
+                              PillButton(
+                                label: 'Logout',
+                                outlined: true,
+                                backgroundColor: AppColors.error,
+                                foregroundColor: AppColors.error,
+                                icon: const Icon(
+                                  Icons.logout_rounded,
+                                  size: 16,
+                                  color: AppColors.error,
+                                ),
+                                onPressed: () => _showLogoutDialog(context),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -172,7 +424,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
 
               // ── Avatar Melayang (Overlapping) ──────────────────────────────
-              _FloatingAvatar(context: context),
+              _FloatingAvatar(
+                headerHeight: headerHeight,
+                photoPath: _profilePhotoPath,
+                onEdit: _showPhotoSourceSheet,
+              ),
             ],
           ),
         );
@@ -244,64 +500,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.context});
-  final BuildContext context;
+  const _ProfileHeader({required this.height, required this.onBack});
+
+  final double height;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.24,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [AppColors.primary, AppColors.primaryLight],
-        ),
-      ),
+    return RecoveraWaveHeader(
+      height: height,
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Tombol kembali
-              GestureDetector(
-                onTap: () => Navigator.maybePop(context),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_ios_new_rounded,
+              IconButton(
+                tooltip: 'Kembali',
+                onPressed: onBack,
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.12),
+                  foregroundColor: AppColors.white,
+                  minimumSize: const Size(44, 44),
+                ),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
+              ),
+              Expanded(
+                child: Text(
+                  'Profil Saya',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.white,
-                    size: 16,
+                    letterSpacing: 0.2,
                   ),
                 ),
               ),
-              // Judul header
-              Text(
-                'Profil Saya',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.white,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              // Dot status online (kanan)
-              Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF34D399),
-                  shape: BoxShape.circle,
-                ),
-              ),
+              const SizedBox(width: 44),
             ],
           ),
         ),
@@ -311,12 +547,18 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 class _FloatingAvatar extends StatelessWidget {
-  const _FloatingAvatar({required this.context});
-  final BuildContext context;
+  const _FloatingAvatar({
+    required this.headerHeight,
+    required this.photoPath,
+    required this.onEdit,
+  });
+
+  final double headerHeight;
+  final String? photoPath;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
-    final headerHeight = MediaQuery.of(context).size.height * 0.24;
     return Positioned(
       top: headerHeight - 44, // melayang melewati batas header
       left: 0,
@@ -327,6 +569,7 @@ class _FloatingAvatar extends StatelessWidget {
           children: [
             // Avatar utama
             Container(
+              key: const Key('profile_avatar_image'),
               width: 88,
               height: 88,
               decoration: BoxDecoration(
@@ -346,54 +589,83 @@ class _FloatingAvatar extends StatelessWidget {
                 ),
               ),
               child: ClipOval(
-                child: Image.asset(
-                  'lib/assets/recovera-logo-mark.png',
-                  width: 56,
-                  height: 56,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stack) => Center(
-                    child: Text(
-                      'MS',
-                      style: GoogleFonts.inter(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.white,
-                        letterSpacing: -0.5,
+                child: photoPath == null
+                    ? _defaultProfileImage()
+                    : Image.file(
+                        File(photoPath!),
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                        errorBuilder: (context, error, stack) =>
+                            _defaultProfileImage(),
+                      ),
+              ),
+            ),
+            // Badge kamera edit (pojok kanan bawah)
+            Positioned(
+              bottom: -4,
+              right: -4,
+              child: Tooltip(
+                message: 'Ubah foto profil',
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: onEdit,
+                    customBorder: const CircleBorder(),
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFE2E8F0),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt_rounded,
+                            size: 14,
+                            color: AppColors.primary,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-            // Badge kamera edit (pojok kanan bawah)
-            Positioned(
-              bottom: 0,
-              right: 0,
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFFE2E8F0),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 4,
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.camera_alt_rounded,
-                  size: 14,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _defaultProfileImage() {
+    return Image.asset(
+      'lib/assets/recovera-logo-mark.png',
+      width: 56,
+      height: 56,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stack) => Center(
+        child: Text(
+          'MS',
+          style: GoogleFonts.inter(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            color: AppColors.white,
+            letterSpacing: -0.5,
+          ),
         ),
       ),
     );
@@ -512,9 +784,13 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                 : 'Login & pembayaran biometrik dinonaktifkan',
             style: GoogleFonts.inter(),
           ),
-          backgroundColor: newValue ? const Color(0xFF059669) : const Color(0xFF64748B),
+          backgroundColor: newValue
+              ? const Color(0xFF059669)
+              : const Color(0xFF64748B),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
     }
@@ -614,10 +890,34 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                _buildCurrencyOption(ctx, 'IDR', 'Rupiah Indonesia (IDR)', 'Mata uang acuan domestik', 'Rp'),
-                _buildCurrencyOption(ctx, 'USD', 'US Dollar (USD)', 'Acuan komoditas & impor global', '\$'),
-                _buildCurrencyOption(ctx, 'EUR', 'Euro Uni Eropa (EUR)', 'Acuan prinsipal impor Eropa', '€'),
-                _buildCurrencyOption(ctx, 'GBP', 'British Pound (GBP)', 'Acuan kantor pusat prinsipal London', '£'),
+                _buildCurrencyOption(
+                  ctx,
+                  'IDR',
+                  'Rupiah Indonesia (IDR)',
+                  'Mata uang acuan domestik',
+                  'Rp',
+                ),
+                _buildCurrencyOption(
+                  ctx,
+                  'USD',
+                  'US Dollar (USD)',
+                  'Acuan komoditas & impor global',
+                  '\$',
+                ),
+                _buildCurrencyOption(
+                  ctx,
+                  'EUR',
+                  'Euro Uni Eropa (EUR)',
+                  'Acuan prinsipal impor Eropa',
+                  '€',
+                ),
+                _buildCurrencyOption(
+                  ctx,
+                  'GBP',
+                  'British Pound (GBP)',
+                  'Acuan kantor pusat prinsipal London',
+                  '£',
+                ),
                 const SizedBox(height: 12),
               ],
             ),
@@ -673,7 +973,9 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                 color: isSelected ? AppColors.primary : Colors.white,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? AppColors.primary : const Color(0xFFCBD5E1),
+                  color: isSelected
+                      ? AppColors.primary
+                      : const Color(0xFFCBD5E1),
                 ),
               ),
               child: Center(
@@ -697,7 +999,9 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: isSelected ? AppColors.primary : const Color(0xFF0F172A),
+                      color: isSelected
+                          ? AppColors.primary
+                          : const Color(0xFF0F172A),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -789,10 +1093,30 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                _buildTimezoneOption(ctx, 'WIB', 'WIB (UTC+7)', 'Jawa, Sumatera, Kalimantan Barat & Tengah'),
-                _buildTimezoneOption(ctx, 'WITA', 'WITA (UTC+8)', 'Sulawesi, Bali, NTT, NTB, Kalimantan Timur/Selatan'),
-                _buildTimezoneOption(ctx, 'WIT', 'WIT (UTC+9)', 'Maluku dan Papua'),
-                _buildTimezoneOption(ctx, 'London', 'London (BST/UTC+1)', 'Standar Prinsipal Internasional & Audit ESG'),
+                _buildTimezoneOption(
+                  ctx,
+                  'WIB',
+                  'WIB (UTC+7)',
+                  'Jawa, Sumatera, Kalimantan Barat & Tengah',
+                ),
+                _buildTimezoneOption(
+                  ctx,
+                  'WITA',
+                  'WITA (UTC+8)',
+                  'Sulawesi, Bali, NTT, NTB, Kalimantan Timur/Selatan',
+                ),
+                _buildTimezoneOption(
+                  ctx,
+                  'WIT',
+                  'WIT (UTC+9)',
+                  'Maluku dan Papua',
+                ),
+                _buildTimezoneOption(
+                  ctx,
+                  'London',
+                  'London (BST/UTC+1)',
+                  'Standar Prinsipal Internasional & Audit ESG',
+                ),
                 const SizedBox(height: 12),
               ],
             ),
@@ -834,7 +1158,9 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
           color: isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE2E8F0),
+            color: isSelected
+                ? const Color(0xFF16A34A)
+                : const Color(0xFFE2E8F0),
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -847,7 +1173,9 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                 color: isSelected ? const Color(0xFF16A34A) : Colors.white,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFCBD5E1),
+                  color: isSelected
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFFCBD5E1),
                 ),
               ),
               child: Center(
@@ -868,7 +1196,9 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: isSelected ? const Color(0xFF15803D) : const Color(0xFF0F172A),
+                      color: isSelected
+                          ? const Color(0xFF15803D)
+                          : const Color(0xFF0F172A),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -912,7 +1242,32 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         iconBg: const Color(0xFFEFF6FF),
         iconColor: AppColors.primary,
         label: 'Informasi Bisnis',
-        onTap: () {},
+        onTap: () async {
+          final updated = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(builder: (_) => const BusinessInfoEditScreen()),
+          );
+          if (updated == true && mounted) {
+            setState(() {});
+          }
+        },
+      ),
+      _ProfileMenuItem(
+        key: const Key('menu_transaction_history'),
+        icon: Icons.receipt_long_rounded,
+        iconBg: const Color(0xFFEFF6FF),
+        iconColor: AppColors.primary,
+        label: AuthRepository.instance.isSeller
+            ? 'Kelola Pesanan Masuk'
+            : 'Riwayat Transaksi',
+        subtitle: AuthRepository.instance.isSeller
+            ? 'Pantau penjualan lot & serah terima batch'
+            : 'Pantau status pesanan & pelacakan mandiri',
+        subtitleColor: AppColors.primary,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const TransactionHistoryScreen()),
+          );
+        },
       ),
       _ProfileMenuItem(
         key: const Key('menu_location_and_delivery'),
@@ -954,19 +1309,25 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         _ProfileMenuItem(
           key: const Key('menu_security_biometrics'),
           icon: Icons.fingerprint_rounded,
-          iconBg: _isBiometricEnabled ? AppColors.successBg : const Color(0xFFF1F5F9),
-          iconColor: _isBiometricEnabled ? const Color(0xFF059669) : const Color(0xFF64748B),
+          iconBg: _isBiometricEnabled
+              ? AppColors.successBg
+              : const Color(0xFFF1F5F9),
+          iconColor: _isBiometricEnabled
+              ? const Color(0xFF059669)
+              : const Color(0xFF64748B),
           label: 'Pengaturan Keamanan & Biometrik',
           subtitle: _isBiometricEnabled
               ? 'Sidik Jari Aktif untuk Login & Pembayaran'
               : 'Aktifkan untuk Login Cepat & Pembayaran',
-          subtitleColor: _isBiometricEnabled ? const Color(0xFF059669) : const Color(0xFF64748B),
+          subtitleColor: _isBiometricEnabled
+              ? const Color(0xFF059669)
+              : const Color(0xFF64748B),
           onTap: () => _onToggleBiometric(!_isBiometricEnabled),
           trailing: SizedBox(
             height: 28,
             child: Switch.adaptive(
               value: _isBiometricEnabled,
-              activeColor: const Color(0xFF059669),
+              activeTrackColor: const Color(0xFF059669),
               onChanged: _onToggleBiometric,
             ),
           ),
@@ -992,7 +1353,9 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         iconColor: const Color(0xFF6366F1),
         label: 'Saran & Kesan',
         onTap: () {
-          // TODO: navigasi ke PBI-08 Saran & Kesan screen
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const SaranKesanScreen()),
+          );
         },
       ),
     ];

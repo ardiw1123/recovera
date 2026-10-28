@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "790872920618",
+    "project_id": "recovera-c5646",
+    "storage_bucket": "recovera-c5646.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:790872920618:android:f09a40c003c678f2f7a953",
+        "android_client_info": {
+          "package_name": "com.example.recovera"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZXWaBFikTO80in-DFuNg28H3SqLmCsQ8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

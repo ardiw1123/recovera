@@ -1,7 +1,10 @@
 import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
+
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
+import '../models/esg_certificate_model.dart';
 import '../models/seller_dashboard_model.dart';
 import '../models/seller_inventory_model.dart';
 
@@ -10,6 +13,34 @@ class SellerApiService {
   SellerApiService({required this.client});
 
   final ApiClient client;
+
+  Future<String> uploadProductImage({
+    required String filePath,
+    Uint8List? bytes,
+    String? filename,
+  }) async {
+    try {
+      final multipart = bytes != null && bytes.isNotEmpty
+          ? MultipartFile.fromBytes(bytes, filename: filename ?? 'product.jpg')
+          : await MultipartFile.fromFile(
+              filePath,
+              filename: filename ?? filePath.split(RegExp(r'[/\\]')).last,
+            );
+      final response = await client.post<Map<String, dynamic>>(
+        '/products/upload-image',
+        data: FormData.fromMap({'file': multipart}),
+      );
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        throw ApiException(
+          body?['error']?['message'] ?? 'Foto produk gagal diunggah',
+        );
+      }
+      return (body['data'] as Map<String, dynamic>)['image_url'] as String;
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Foto produk gagal diunggah');
+    }
+  }
 
   /// Mengambil data dashboard lengkap untuk halaman beranda seller.
   /// Menghubungi endpoint GET /listings/seller/dashboard
@@ -52,8 +83,9 @@ class SellerApiService {
 
       final items = body['data'] as List<dynamic>? ?? [];
       return items
-          .map((item) =>
-              SellerListingItem.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => SellerListingItem.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
     } on DioException catch (e) {
       throw ApiException.fromDioException(e, 'Gagal memuat inventaris penjual');
@@ -63,7 +95,8 @@ class SellerApiService {
   /// Membuat draf produk dan listing baru dengan validasi otomatis & saran harga awal.
   /// Menghubungi endpoint POST /listings/seller/inventory/drafts
   Future<Map<String, dynamic>> createDraft(
-      SellerDraftCreatePayload payload) async {
+    SellerDraftCreatePayload payload,
+  ) async {
     try {
       final response = await client.post<Map<String, dynamic>>(
         '/listings/seller/inventory/drafts',
@@ -81,9 +114,11 @@ class SellerApiService {
       final listingMap = data['listing'] as Map<String, dynamic>;
       final listing = SellerListingItem.fromJson(listingMap);
       final validation = SellerValidationResult.fromJson(
-          data['validation'] as Map<String, dynamic>? ?? {});
+        data['validation'] as Map<String, dynamic>? ?? {},
+      );
       final recommendation = SellerRecommendationResult.fromJson(
-          data['price_recommendation'] as Map<String, dynamic>? ?? {});
+        data['price_recommendation'] as Map<String, dynamic>? ?? {},
+      );
 
       return {
         'listing': listing,
@@ -119,12 +154,10 @@ class SellerApiService {
       final listingMap = data['listing'] as Map<String, dynamic>;
       final listing = SellerListingItem.fromJson(listingMap);
       final validation = SellerValidationResult.fromJson(
-          data['validation'] as Map<String, dynamic>? ?? {});
+        data['validation'] as Map<String, dynamic>? ?? {},
+      );
 
-      return {
-        'listing': listing,
-        'validation': validation,
-      };
+      return {'listing': listing, 'validation': validation};
     } on DioException catch (e) {
       throw ApiException.fromDioException(e, 'Gagal memperbarui draf produk');
     }
@@ -156,7 +189,8 @@ class SellerApiService {
   /// Meminta rekomendasi harga AI dan batas rentang yang diperbolehkan.
   /// Menghubungi endpoint POST /listings/seller/inventory/{listing_id}/recommendation
   Future<SellerRecommendationResult> getPriceRecommendation(
-      int listingId) async {
+    int listingId,
+  ) async {
     try {
       final response = await client.post<Map<String, dynamic>>(
         '/listings/seller/inventory/$listingId/recommendation',
@@ -201,12 +235,15 @@ class SellerApiService {
       return SellerListingItem.fromJson(data);
     } on DioException catch (e) {
       if (e.response?.statusCode == 409) {
-        final error = e.response?.data?['error']?['message'] ??
+        final error =
+            e.response?.data?['error']?['message'] ??
             'Peringatan deviasi harga memerlukan konfirmasi untuk melanjutkan.';
         throw ApiException(error, code: 'PRICE_WARNING_ACK_REQUIRED');
       }
       throw ApiException.fromDioException(
-          e, 'Gagal mempublikasikan produk lelang');
+        e,
+        'Gagal mempublikasikan produk lelang',
+      );
     }
   }
 
@@ -248,9 +285,7 @@ class SellerApiService {
         );
       }
 
-      final formData = FormData.fromMap({
-        'file': multipartFile,
-      });
+      final formData = FormData.fromMap({'file': multipartFile});
 
       final response = await client.post<Map<String, dynamic>>(
         '/ai/invoice',
@@ -268,7 +303,9 @@ class SellerApiService {
       return body['data'] as Map<String, dynamic>;
     } on DioException catch (e) {
       throw ApiException.fromDioException(
-          e, 'Gagal memindai faktur dengan OCR AI');
+        e,
+        'Gagal memindai faktur dengan OCR AI',
+      );
     }
   }
 
@@ -289,6 +326,100 @@ class SellerApiService {
       }
     } on DioException catch (e) {
       throw ApiException.fromDioException(e, 'Gagal menghapus draf produk');
+    }
+  }
+
+  /// Mengambil daftar sertifikat donasi / ESG milik seller.
+  Future<List<EsgCertificateListItem>> fetchMyCertificates() async {
+    try {
+      final response = await client.get<Map<String, dynamic>>('/donations/my');
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error =
+            body?['error']?['message'] ?? 'Gagal memuat sertifikat ESG';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+      final data = body['data'] as Map<String, dynamic>? ?? {};
+      final items = data['items'] as List<dynamic>? ?? [];
+      return items
+          .map(
+            (item) =>
+                EsgCertificateListItem.fromJson(item as Map<String, dynamic>),
+          )
+          .toList();
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memuat sertifikat ESG');
+    }
+  }
+
+  Future<List<EsgCertificateListItem>> fetchSellerCertificates(
+    int sellerId,
+  ) async {
+    try {
+      final response = await client.get<Map<String, dynamic>>(
+        '/donations/sellers/$sellerId/certificates',
+      );
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        throw ApiException(
+          body?['error']?['message'] ?? 'Gagal memuat sertifikat penjual',
+        );
+      }
+      final data = body['data'] as Map<String, dynamic>? ?? {};
+      final items = data['items'] as List<dynamic>? ?? [];
+      return items
+          .map(
+            (item) =>
+                EsgCertificateListItem.fromJson(item as Map<String, dynamic>),
+          )
+          .toList(growable: false);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memuat sertifikat penjual');
+    }
+  }
+
+  /// Mengambil detail satu sertifikat donasi / ESG.
+  Future<EsgCertificateDetail> fetchCertificateDetail(int donationId) async {
+    try {
+      final response = await client.get<Map<String, dynamic>>(
+        '/donations/$donationId/certificate',
+      );
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error =
+            body?['error']?['message'] ?? 'Gagal memuat detail sertifikat';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+      final data = body['data'] as Map<String, dynamic>;
+      return EsgCertificateDetail.fromJson(data);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'Gagal memuat detail sertifikat');
+    }
+  }
+
+  /// Memverifikasi hash transaksi sertifikat secara on-chain ke BOT Chain Testnet.
+  Future<BlockchainVerificationResult> verifyBlockchain(String txHash) async {
+    try {
+      final response = await client.get<Map<String, dynamic>>(
+        '/blockchain/verify/$txHash',
+      );
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final error =
+            body?['error']?['message'] ??
+            'Gagal memverifikasi transaksi blockchain';
+        final code = body?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+      final data = body['data'] as Map<String, dynamic>;
+      return BlockchainVerificationResult.fromJson(data);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(
+        e,
+        'Gagal memverifikasi transaksi blockchain',
+      );
     }
   }
 }

@@ -23,6 +23,7 @@ class Order(Base):
     total_price = Column(Numeric(12, 2), nullable=False)
     status = Column(String(20), default="paid", nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    last_notification_sent_at = Column(DateTime(timezone=True), nullable=True)
 
     listing = relationship("Listing", back_populates="orders")
     buyer = relationship("Buyer", back_populates="orders")

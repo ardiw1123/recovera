@@ -1,8 +1,13 @@
+import '../../../core/services/network_connectivity_service.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+
 import '../../../core/sensors/shake_detector.dart';
+
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -23,11 +28,9 @@ import '../../home/widgets/empty_state_view.dart';
 ///  • Result count + sort pill
 ///  • Product card list / empty state
 class StokScreen extends StatefulWidget {
-  const StokScreen({super.key, this.listingRepository});
+  const StokScreen({super.key, this.listingRepository, this.sensorStream});
 
   final ListingRepository? listingRepository;
-  const StokScreen({super.key, this.sensorStream});
-
   final Stream<AccelerometerEvent>? sensorStream;
 
   @override
@@ -53,21 +56,59 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _listingRepository = widget.listingRepository ??
-        ListingRepository(
-          remoteClient: ListingApiService(client: ApiClient()),
-        );
+    _listingRepository =
+        widget.listingRepository ??
+        ListingRepository(remoteClient: ListingApiService(client: ApiClient()));
     WidgetsBinding.instance.addObserver(this);
     _shakeDetector = ShakeDetector(
       onShake: _onShakeToRefresh,
       sensorStream: widget.sensorStream,
     );
-    _shakeDetector.startListening();
-    final client = ApiClient();
-    _listingRepository = ListingRepository(
-      remoteClient: ListingApiService(client: client),
-    );
-    _fetchListings();
+    try {
+      _shakeDetector.startListening();
+      NetworkConnectivityService.instance.addListener(_onConnectivityChanged);
+    } catch (_) {}
+    if (AuthRepository.instance.isSeller) {
+      _fetchListings();
+    }
+  }
+
+  void _onConnectivityChanged() {
+    if (!mounted) return;
+    final isOnline = NetworkConnectivityService.instance.isOnline;
+    if (isOnline) {
+      _fetchListings(forceRefresh: true);
+      _listingRepository.syncPendingDrafts().catchError(
+        (_) => const DraftSyncResult(
+          totalCount: 0,
+          syncedCount: 0,
+          failedCount: 0,
+          errors: [],
+        ),
+      );
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Terhubung ke Internet: Memperbarui inventaris lelang...',
+          ),
+          backgroundColor: AppColors.success,
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      _fetchListings(forceRefresh: false);
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mode Offline: Menampilkan data cache SQLite lokal.'),
+          backgroundColor: AppColors.secondary,
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _fetchListings({bool forceRefresh = true}) async {
@@ -110,26 +151,29 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
     final query = _searchCtrl.text.trim().toLowerCase();
     if (query.isNotEmpty) {
       list = list
-          .where((p) =>
-              p.productName.toLowerCase().contains(query) ||
-              (p.brand?.toLowerCase().contains(query) ?? false) ||
-              p.companyName.toLowerCase().contains(query))
+          .where(
+            (p) =>
+                p.productName.toLowerCase().contains(query) ||
+                (p.brand?.toLowerCase().contains(query) ?? false) ||
+                p.companyName.toLowerCase().contains(query),
+          )
           .toList();
     }
 
     // Filter by categories
     if (_selectedCategories.isNotEmpty) {
-      list =
-          list.where((p) => _selectedCategories.contains(p.category)).toList();
+      list = list
+          .where((p) => _selectedCategories.contains(p.category))
+          .toList();
     }
 
     // Filter by expiry preset (listings.expiry_date derived → daysUntilExpiry)
     if (_expiryPreset == '1-7') {
-      list = list.where((p) => p.daysUntilExpiry <= 7).toList();
+      list = list.where((p) => p.daysUntilExpiry > 0 && p.daysUntilExpiry <= 7).toList();
     } else if (_expiryPreset == '8-14') {
-      list = list.where((p) => p.daysUntilExpiry <= 14).toList();
+      list = list.where((p) => p.daysUntilExpiry > 0 && p.daysUntilExpiry <= 14).toList();
     } else if (_expiryPreset == '15-30') {
-      list = list.where((p) => p.daysUntilExpiry <= 30).toList();
+      list = list.where((p) => p.daysUntilExpiry > 0 && p.daysUntilExpiry <= 30).toList();
     }
 
     // Sort (pakai field DB: start_price, expiry_date, discount_percent)
@@ -216,6 +260,7 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _shakeDetector.dispose();
+    NetworkConnectivityService.instance.removeListener(_onConnectivityChanged);
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -324,8 +369,11 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.cloud_off_rounded,
-              size: 14, color: Color(0xFF92400E)),
+          const Icon(
+            Icons.cloud_off_rounded,
+            size: 14,
+            color: Color(0xFF92400E),
+          ),
           const SizedBox(width: 6),
           Text(
             'Mode Offline — Menampilkan data cache SQLite',
@@ -510,10 +558,7 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
                         decoration: BoxDecoration(
                           color: const Color(0xFF10B981),
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.white,
-                            width: 2,
-                          ),
+                          border: Border.all(color: AppColors.white, width: 2),
                         ),
                         child: const Center(
                           child: Icon(
@@ -625,8 +670,9 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
                           boxShadow: isSelected
                               ? [
                                   BoxShadow(
-                                    color: AppColors.primary
-                                        .withValues(alpha: 0.25),
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.25,
+                                    ),
                                     blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
@@ -644,8 +690,9 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
                         cat.label,
                         style: GoogleFonts.inter(
                           fontSize: 11,
-                          fontWeight:
-                              isSelected ? FontWeight.w700 : FontWeight.w500,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
                           color: isSelected
                               ? AppColors.primary
                               : const Color(0xFF475569),
@@ -673,8 +720,11 @@ class _StokScreenState extends State<StokScreen> with WidgetsBindingObserver {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.filter_alt_rounded,
-                  size: 11, color: AppColors.primary),
+              const Icon(
+                Icons.filter_alt_rounded,
+                size: 11,
+                color: AppColors.primary,
+              ),
               const SizedBox(width: 4),
               Text(
                 'Aktif:',

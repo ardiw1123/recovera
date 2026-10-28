@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exception.dart';
 import '../models/cached_order_model.dart';
@@ -24,8 +25,10 @@ class OrderApiService implements RemoteOrderClient {
 
       final items = body['data'] as List<dynamic>? ?? [];
       return items
-          .map((item) =>
-              CachedOrderModel.fromApiResponse(item as Map<String, dynamic>))
+          .map(
+            (item) =>
+                CachedOrderModel.fromApiResponse(item as Map<String, dynamic>),
+          )
           .toList();
     } on DioException catch (e) {
       throw ApiException.fromDioException(e, 'Gagal memuat riwayat pesanan');
@@ -35,8 +38,9 @@ class OrderApiService implements RemoteOrderClient {
   @override
   Future<CachedOrderModel> fetchRemoteOrderDetail(int orderId) async {
     try {
-      final response =
-          await client.get<Map<String, dynamic>>('/orders/$orderId');
+      final response = await client.get<Map<String, dynamic>>(
+        '/orders/$orderId',
+      );
 
       final body = response.data;
       if (body == null || body['success'] != true) {
@@ -47,7 +51,8 @@ class OrderApiService implements RemoteOrderClient {
       }
 
       return CachedOrderModel.fromApiResponse(
-          body['data'] as Map<String, dynamic>);
+        body['data'] as Map<String, dynamic>,
+      );
     } on DioException catch (e) {
       throw ApiException.fromDioException(e, 'Gagal memuat detail pesanan');
     }
@@ -62,10 +67,7 @@ class OrderApiService implements RemoteOrderClient {
     try {
       final response = await client.post<Map<String, dynamic>>(
         '/listings/$listingId/buy',
-        data: {
-          'qty': qty,
-          'biometric_verified': biometricVerified,
-        },
+        data: {'qty': qty, 'biometric_verified': biometricVerified},
       );
 
       final body = response.data;
@@ -76,9 +78,46 @@ class OrderApiService implements RemoteOrderClient {
       }
 
       return CachedOrderModel.fromApiResponse(
-          body['data'] as Map<String, dynamic>);
+        body['data'] as Map<String, dynamic>,
+      );
     } on DioException catch (e) {
       throw ApiException.fromDioException(e, 'Gagal memproses pembelian');
+    }
+  }
+
+  @override
+  Future<CachedOrderModel> updateOrderStatus(int orderId, String status) async {
+    try {
+      final response = await client.patch<Map<String, dynamic>>(
+        '/orders/$orderId/status',
+        data: {'status': status},
+      );
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        throw ApiException(
+          body?['error']?['message'] ?? 'Gagal memperbarui status pesanan',
+        );
+      }
+      return CachedOrderModel.fromApiResponse(
+        body['data'] as Map<String, dynamic>,
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(
+        e,
+        'Gagal memperbarui status pesanan',
+      );
+    }
+  }
+
+  @override
+  Future<void> remindSeller(int orderId) async {
+    try {
+      await client.post<Map<String, dynamic>>('/orders/$orderId/remind-seller');
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(
+        e,
+        'Gagal mengirim pengingat kepada penjual',
+      );
     }
   }
 }

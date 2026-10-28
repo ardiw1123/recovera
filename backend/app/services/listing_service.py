@@ -1,7 +1,7 @@
 import math
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 from app.models.listing import Listing
@@ -103,7 +103,13 @@ def search_listings(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[dict], int]:
-    query = db.query(Listing).join(Product).join(Seller).filter(Listing.status == "active")
+    query = (
+        db.query(Listing)
+        .options(joinedload(Listing.product), joinedload(Listing.seller))
+        .join(Product)
+        .join(Seller)
+        .filter(Listing.status == "active")
+    )
 
     if search:
         search_filter = f"%{search.strip()}%"
@@ -113,6 +119,9 @@ def search_listings(
         query = query.filter(Product.category.ilike(category.strip()))
 
     today = date.today()
+    # Invariant: Jangan tampilkan produk yang sudah kedaluwarsa di etalase pembeli
+    query = query.filter(Listing.expiry_date > today)
+
     if min_days is not None:
         min_expiry_date = today + timedelta(days=min_days)
         query = query.filter(Listing.expiry_date >= min_expiry_date)

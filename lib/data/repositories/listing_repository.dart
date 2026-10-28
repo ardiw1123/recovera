@@ -1,3 +1,4 @@
+import '../../core/services/network_connectivity_service.dart';
 import '../database/database_constants.dart';
 import '../models/cached_listing_model.dart';
 import '../models/draft_listing_model.dart';
@@ -87,8 +88,10 @@ class ListingRepository {
     double? radiusKm,
   }) async {
     final client = remoteClient;
-    // If remote client is configured and refresh requested, try fetching from network
-    if (client != null && forceRefresh) {
+    final isOnline = NetworkConnectivityService.instance.isOnline;
+
+    // Jika forceRefresh true atau perangkat online, utamakan panggilan remote ke API
+    if (client != null && (forceRefresh || isOnline)) {
       try {
         final remoteItems = await client.fetchRemoteListings(
           search: search,

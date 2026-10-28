@@ -7,6 +7,7 @@ from app.ai.engine import AIEngine
 from app.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.database import init_db
+from app.scheduler import shutdown_scheduler, start_scheduler
 from app.schemas.envelope import ResponseEnvelope, wrap_success
 
 # Routers
@@ -35,7 +36,11 @@ async def lifespan(app: FastAPI):
     app.state.ai = await run_in_threadpool(
         AIEngine, use_ml=settings.use_ml_model
     )
-    yield
+    start_scheduler()
+    try:
+        yield
+    finally:
+        shutdown_scheduler()
 
 
 app = FastAPI(

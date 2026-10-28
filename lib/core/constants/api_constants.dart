@@ -5,7 +5,7 @@ class ApiConstants {
   /// Default Base URL backend Recovera (dapat dioverride via konfigurasi lingkungan)
   static String baseUrl = const String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000',
+    defaultValue: 'https://recovera-production-88f9.up.railway.app',
   );
 
   // ── Auth Endpoints ──────────────────────────────────────────────────────────

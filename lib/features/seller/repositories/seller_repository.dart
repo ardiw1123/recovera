@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+
 import '../../../core/network/api_client.dart';
+import '../models/esg_certificate_model.dart';
 import '../models/seller_dashboard_model.dart';
 import '../models/seller_inventory_model.dart';
 import '../services/seller_api_service.dart';
@@ -37,7 +39,9 @@ class SellerRepository extends ChangeNotifier {
   static set instance(SellerRepository? repo) => _instance = repo;
 
   /// Memuat data inventaris riil dari backend endpoint GET /listings/seller/inventory
-  Future<List<SellerListingItem>> loadInventory({bool forceRefresh = true}) async {
+  Future<List<SellerListingItem>> loadInventory({
+    bool forceRefresh = true,
+  }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -75,7 +79,8 @@ class SellerRepository extends ChangeNotifier {
 
   /// Membuat draf produk baru
   Future<Map<String, dynamic>> createDraft(
-      SellerDraftCreatePayload payload) async {
+    SellerDraftCreatePayload payload,
+  ) async {
     final result = await apiService.createDraft(payload);
     // Tambahkan atau perbarui item di inventaris lokal
     final listing = result['listing'] as SellerListingItem;
@@ -109,7 +114,8 @@ class SellerRepository extends ChangeNotifier {
 
   /// Mengambil rekomendasi harga AI
   Future<SellerRecommendationResult> getPriceRecommendation(
-      int listingId) async {
+    int listingId,
+  ) async {
     return await apiService.getPriceRecommendation(listingId);
   }
 
@@ -150,5 +156,38 @@ class SellerRepository extends ChangeNotifier {
     await apiService.deleteDraft(listingId);
     _inventory.removeWhere((item) => item.id == listingId);
     notifyListeners();
+  }
+
+  /// Mengambil daftar sertifikat donasi / ESG milik seller
+  Future<List<EsgCertificateListItem>> fetchMyCertificates() async {
+    return await apiService.fetchMyCertificates();
+  }
+
+  Future<List<EsgCertificateListItem>> fetchSellerCertificates(
+    int sellerId,
+  ) async {
+    return await apiService.fetchSellerCertificates(sellerId);
+  }
+
+  Future<String> uploadProductImage({
+    required String filePath,
+    Uint8List? bytes,
+    String? filename,
+  }) async {
+    return apiService.uploadProductImage(
+      filePath: filePath,
+      bytes: bytes,
+      filename: filename,
+    );
+  }
+
+  /// Mengambil detail satu sertifikat donasi / ESG
+  Future<EsgCertificateDetail> fetchCertificateDetail(int donationId) async {
+    return await apiService.fetchCertificateDetail(donationId);
+  }
+
+  /// Memverifikasi hash transaksi secara on-chain
+  Future<BlockchainVerificationResult> verifyBlockchain(String txHash) async {
+    return await apiService.verifyBlockchain(txHash);
   }
 }

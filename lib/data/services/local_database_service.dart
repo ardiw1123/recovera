@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+
 import '../database/app_database.dart';
 import '../database/database_constants.dart';
 import '../models/app_pref_model.dart';
@@ -13,7 +14,7 @@ class LocalDatabaseService {
   final AppDatabase _appDatabase;
 
   LocalDatabaseService({AppDatabase? appDatabase})
-      : _appDatabase = appDatabase ?? AppDatabase.instance;
+    : _appDatabase = appDatabase ?? AppDatabase.instance;
 
   Future<Database> get _db => _appDatabase.database;
 
@@ -90,9 +91,20 @@ class LocalDatabaseService {
       // Min days until expiry filter
       if (minDays != null && minDays > 0) {
         // Calculate target date: expiry_date >= today + minDays
-        final minDate = DateTime.now().add(Duration(days: minDays)).toIso8601String().substring(0, 10);
+        final minDate = DateTime.now()
+            .add(Duration(days: minDays))
+            .toIso8601String()
+            .substring(0, 10);
         whereClauses.add('${DatabaseConstants.colListingExpiryDate} >= ?');
         whereArgs.add(minDate);
+      }
+
+      // Radius filter
+      if (radiusKm != null && radiusKm > 0) {
+        whereClauses.add(
+          '(${DatabaseConstants.colListingDistanceKm} IS NULL OR ${DatabaseConstants.colListingDistanceKm} <= ?)',
+        );
+        whereArgs.add(radiusKm);
       }
 
       // Sorting
@@ -105,7 +117,8 @@ class LocalDatabaseService {
           orderBy = '${DatabaseConstants.colListingExpiryDate} ASC';
           break;
         case 'nearest':
-          orderBy = '${DatabaseConstants.colListingDistanceKm} ASC, ${DatabaseConstants.colListingId} DESC';
+          orderBy =
+              '${DatabaseConstants.colListingDistanceKm} ASC, ${DatabaseConstants.colListingId} DESC';
           break;
         default:
           orderBy = '${DatabaseConstants.colListingCreatedAt} DESC';
@@ -123,44 +136,6 @@ class LocalDatabaseService {
     } catch (_) {
       return [];
     }
-
-    // Min days until expiry filter
-    if (minDays != null && minDays > 0) {
-      // Calculate target date: expiry_date >= today + minDays
-      final minDate = DateTime.now().add(Duration(days: minDays)).toIso8601String().substring(0, 10);
-      whereClauses.add('${DatabaseConstants.colListingExpiryDate} >= ?');
-      whereArgs.add(minDate);
-    }
-    if (radiusKm != null && radiusKm > 0) {
-      whereClauses.add('(${DatabaseConstants.colListingDistanceKm} IS NULL OR ${DatabaseConstants.colListingDistanceKm} <= ?)');
-      whereArgs.add(radiusKm);
-    }
-
-    // Sorting
-    String orderBy;
-    switch (sort) {
-      case 'cheapest':
-        orderBy = '${DatabaseConstants.colListingCurrentPrice} ASC';
-        break;
-      case 'expiring':
-        orderBy = '${DatabaseConstants.colListingExpiryDate} ASC';
-        break;
-      case 'nearest':
-        orderBy = '${DatabaseConstants.colListingDistanceKm} ASC, ${DatabaseConstants.colListingId} DESC';
-        break;
-      default:
-        orderBy = '${DatabaseConstants.colListingCreatedAt} DESC';
-        break;
-    }
-
-    final maps = await db.query(
-      DatabaseConstants.tableCachedListings,
-      where: whereClauses.join(' AND '),
-      whereArgs: whereArgs,
-      orderBy: orderBy,
-    );
-
-    return maps.map((m) => CachedListingModel.fromMap(m)).toList();
   }
 
   Future<CachedListingModel?> getListingById(int id) async {
@@ -196,7 +171,9 @@ class LocalDatabaseService {
   Future<int> getListingsCount() async {
     final db = await _db;
     final count = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM ${DatabaseConstants.tableCachedListings}'),
+      await db.rawQuery(
+        'SELECT COUNT(*) FROM ${DatabaseConstants.tableCachedListings}',
+      ),
     );
     return count ?? 0;
   }
@@ -208,10 +185,7 @@ class LocalDatabaseService {
   /// Insert a new draft listing into the local queue. Returns generated local id.
   Future<int> insertDraft(DraftListingModel draft) async {
     final db = await _db;
-    return await db.insert(
-      DatabaseConstants.tableDraftListings,
-      draft.toMap(),
-    );
+    return await db.insert(DatabaseConstants.tableDraftListings, draft.toMap());
   }
 
   Future<int> updateDraft(DraftListingModel draft) async {
@@ -320,7 +294,9 @@ class LocalDatabaseService {
       return count ?? 0;
     }
     final count = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM ${DatabaseConstants.tableDraftListings}'),
+      await db.rawQuery(
+        'SELECT COUNT(*) FROM ${DatabaseConstants.tableDraftListings}',
+      ),
     );
     return count ?? 0;
   }
@@ -356,7 +332,10 @@ class LocalDatabaseService {
     } catch (_) {}
   }
 
-  Future<List<CachedOrderModel>> getOrders({int? buyerId, String? status}) async {
+  Future<List<CachedOrderModel>> getOrders({
+    int? buyerId,
+    String? status,
+  }) async {
     try {
       final db = await _db;
       final whereClauses = <String>[];
@@ -419,17 +398,15 @@ class LocalDatabaseService {
 
   Future<int> insertScore(GameScoreModel score) async {
     final db = await _db;
-    return await db.insert(
-      DatabaseConstants.tableGameScores,
-      score.toMap(),
-    );
+    return await db.insert(DatabaseConstants.tableGameScores, score.toMap());
   }
 
   Future<List<GameScoreModel>> getTopScores({int limit = 10}) async {
     final db = await _db;
     final maps = await db.query(
       DatabaseConstants.tableGameScores,
-      orderBy: '${DatabaseConstants.colGameScore} DESC, ${DatabaseConstants.colGameItemsSaved} DESC',
+      orderBy:
+          '${DatabaseConstants.colGameScore} DESC, ${DatabaseConstants.colGameItemsSaved} DESC',
       limit: limit,
     );
     return maps.map((m) => GameScoreModel.fromMap(m)).toList();
