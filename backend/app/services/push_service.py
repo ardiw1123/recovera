@@ -34,12 +34,12 @@ def _messaging():
                 credential = credentials.Certificate(cred_dict)
             elif settings.firebase_credentials_path and os.path.exists(settings.firebase_credentials_path):
                 credential = credentials.Certificate(settings.firebase_credentials_path)
-            elif os.path.exists("backend/sercrets/firebase-admin.json"):
-                credential = credentials.Certificate("backend/sercrets/firebase-admin.json")
             elif os.path.exists("backend/secrets/firebase-admin.json"):
                 credential = credentials.Certificate("backend/secrets/firebase-admin.json")
-            elif os.path.exists("sercrets/firebase-admin.json"):
-                credential = credentials.Certificate("sercrets/firebase-admin.json")
+            elif os.path.exists("backend/secrets/firebase-admin.json"):
+                credential = credentials.Certificate("backend/secrets/firebase-admin.json")
+            elif os.path.exists("secrets/firebase-admin.json"):
+                credential = credentials.Certificate("secrets/firebase-admin.json")
             elif os.path.exists("secrets/firebase-admin.json"):
                 credential = credentials.Certificate("secrets/firebase-admin.json")
             else:
