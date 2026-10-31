@@ -88,6 +88,13 @@ class AuthInterceptor extends Interceptor {
       return handler.next(err);
     }
 
+    // Background non-critical endpoints (seperti pendaftaran push token /devices)
+    // tidak boleh membatalkan atau mengakhiri sesi login pengguna.
+    if (requestOptions.path.contains('/devices') ||
+        requestOptions.extra['ignore_session_expiration'] == true) {
+      return handler.reject(err);
+    }
+
     // A. Jika request yang 401 adalah endpoint refresh itu sendiri,
     // maka refresh token sudah tidak sah atau kedaluwarsa.
     if (requestOptions.path.contains(ApiConstants.refreshEndpoint)) {

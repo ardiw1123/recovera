@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -12,6 +13,29 @@ import '../../data/repositories/auth_repository.dart';
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+  final notification = message.notification;
+  if (notification != null) {
+    final localNotifications = FlutterLocalNotificationsPlugin();
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    await localNotifications.initialize(settings: const InitializationSettings(android: android));
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'recovera_notifications',
+        'Notifikasi Recovera',
+        channelDescription: 'Pembaruan pesanan dan penawaran Recovera',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+      ),
+    );
+    await localNotifications.show(
+      id: notification.hashCode,
+      title: notification.title,
+      body: notification.body,
+      notificationDetails: details,
+    );
+  }
 }
 
 class PushNotificationService {
@@ -21,7 +45,7 @@ class PushNotificationService {
   late final FirebaseMessaging _messaging;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
-  final ApiClient _apiClient = ApiClient();
+  ApiClient get _apiClient => AuthRepository.instance.authApiService.client;
   bool _started = false;
   String? _fcmToken;
 
@@ -82,21 +106,19 @@ class PushNotificationService {
       final initialMessage = await _messaging.getInitialMessage();
       if (initialMessage != null) handleTap(initialMessage.data);
 
-      // Retrieve FCM device token
-      try {
-        final token = await _messaging.getToken();
-        if (token != null && token.isNotEmpty) {
+      // Retrieve FCM device token via v17+ registration API
+      _messaging.onRegistered.listen((token) {
+        if (token.isNotEmpty) {
           _fcmToken = token;
           _registerCurrentInstallation();
         }
-      } catch (e) {
-        if (kDebugMode) debugPrint('Error retrieving FCM token: $e');
-      }
-
-      _messaging.onTokenRefresh.listen((token) {
-        _fcmToken = token;
-        _registerCurrentInstallation();
       });
+
+      try {
+        await _messaging.register();
+      } catch (e) {
+        if (kDebugMode) debugPrint('Error registering FCM token: $e');
+      }
 
       AuthRepository.instance.addListener(_registerCurrentInstallation);
       _started = true;
@@ -105,18 +127,30 @@ class PushNotificationService {
     }
   }
 
-  Future<void> _registerCurrentInstallation() async {
-    if (!AuthRepository.instance.isAuthenticated) return;
+  Future<void> registerCurrentInstallation() async {
+    if (!AuthRepository.instance.isAuthenticated ||
+        AuthRepository.instance.isLoading) {
+      return;
+    }
     final token = _fcmToken;
-    if (token == null || token.isEmpty) return;
+    if (token == null || token.isEmpty) {
+      return;
+    }
     try {
       await _apiClient.post<Map<String, dynamic>>(
         '/devices',
         data: {'fcm_token': token},
+        options: Options(
+          extra: {'ignore_session_expiration': true},
+        ),
       );
     } catch (error) {
       if (kDebugMode) debugPrint('Unable to register push token: $error');
     }
+  }
+
+  void _registerCurrentInstallation() {
+    registerCurrentInstallation();
   }
 
   Future<void> _showForegroundNotification(RemoteMessage message) async {
