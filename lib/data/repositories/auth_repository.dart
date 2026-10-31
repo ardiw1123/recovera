@@ -97,6 +97,7 @@ class AuthRepository extends ChangeNotifier {
     required String password,
   }) async {
     _isLoading = true;
+    _currentTokens = null;
     notifyListeners();
 
     try {

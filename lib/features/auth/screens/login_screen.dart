@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/services/biometric_service.dart';
 import '../../../core/navigation/app_navigator.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/auth_widgets.dart';
 import 'register_screen.dart';
@@ -135,6 +136,8 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passCtrl.text,
       );
       if (!mounted) return;
+      // Daftarkan token FCM ke backend untuk user yang baru login
+      PushNotificationService.instance.registerCurrentInstallation();
       // Navigasi ke MainShell dan bersihkan seluruh stack auth sebelumnya
       Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
     } catch (e) {

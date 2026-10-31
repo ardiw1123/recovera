@@ -116,6 +116,9 @@ class SecureTokenStorage implements ITokenStorage {
             );
 
   final FlutterSecureStorage _storage;
+  static String? _cachedAccessToken;
+  static String? _cachedRefreshToken;
+  static AuthTokens? _cachedTokens;
 
   /// Konfigurasi Android KeyStore yang disyaratkan untuk audit keamanan
   static const AndroidOptions androidOptions = AndroidOptions(
@@ -129,6 +132,9 @@ class SecureTokenStorage implements ITokenStorage {
 
   @override
   Future<void> saveTokens(AuthTokens tokens) async {
+    _cachedTokens = tokens;
+    _cachedAccessToken = tokens.accessToken;
+    _cachedRefreshToken = tokens.refreshToken;
     await Future.wait([
       _storage.write(
         key: ApiConstants.keyAccessToken,
@@ -234,21 +240,35 @@ class SecureTokenStorage implements ITokenStorage {
   }
 
   @override
-  Future<String?> getAccessToken() {
-    return _storage.read(
+  Future<String?> getAccessToken() async {
+    if (_cachedAccessToken != null && _cachedAccessToken!.isNotEmpty) {
+      return _cachedAccessToken;
+    }
+    final val = await _storage.read(
       key: ApiConstants.keyAccessToken,
       aOptions: androidOptions,
       iOptions: iosOptions,
     );
+    if (val != null && val.isNotEmpty) {
+      _cachedAccessToken = val;
+    }
+    return val;
   }
 
   @override
-  Future<String?> getRefreshToken() {
-    return _storage.read(
+  Future<String?> getRefreshToken() async {
+    if (_cachedRefreshToken != null && _cachedRefreshToken!.isNotEmpty) {
+      return _cachedRefreshToken;
+    }
+    final val = await _storage.read(
       key: ApiConstants.keyRefreshToken,
       aOptions: androidOptions,
       iOptions: iosOptions,
     );
+    if (val != null && val.isNotEmpty) {
+      _cachedRefreshToken = val;
+    }
+    return val;
   }
 
   @override
@@ -273,6 +293,9 @@ class SecureTokenStorage implements ITokenStorage {
 
   @override
   Future<void> clearTokens() async {
+    _cachedTokens = null;
+    _cachedAccessToken = null;
+    _cachedRefreshToken = null;
     await Future.wait([
       _storage.delete(key: ApiConstants.keyAccessToken, aOptions: androidOptions, iOptions: iosOptions),
       _storage.delete(key: ApiConstants.keyRefreshToken, aOptions: androidOptions, iOptions: iosOptions),
