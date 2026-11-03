@@ -28,6 +28,7 @@ class SellerListingItem {
   final double? distanceKm;
   final int soldQty;
   final int ordersCount;
+  final MatchingSummary? matchingSummary;
 
   const SellerListingItem({
     required this.id,
@@ -55,10 +56,15 @@ class SellerListingItem {
     this.distanceKm,
     this.soldQty = 0,
     this.ordersCount = 0,
+    this.matchingSummary,
   });
 
   factory SellerListingItem.fromJson(Map<String, dynamic> json) {
     final product = json['product'] as Map<String, dynamic>?;
+    final matchingSummaryMap = json['matching_summary'] as Map<String, dynamic>?;
+    final matchingSummary = matchingSummaryMap != null
+        ? MatchingSummary.fromJson(matchingSummaryMap)
+        : null;
 
     return SellerListingItem(
       id: json['id'] is int ? json['id'] as int : int.parse(json['id'].toString()),
@@ -106,6 +112,7 @@ class SellerListingItem {
       ordersCount: json['orders_count'] is int
           ? json['orders_count'] as int
           : int.tryParse(json['orders_count']?.toString() ?? '0') ?? 0,
+      matchingSummary: matchingSummary,
     );
   }
 
@@ -162,6 +169,7 @@ class SellerListingItem {
         if (warehouseLng != null) 'warehouse_lng': warehouseLng,
         if (warehouseCity != null) 'warehouse_city': warehouseCity,
         if (distanceKm != null) 'distance_km': distanceKm,
+        if (matchingSummary != null) 'matching_summary': matchingSummary!.toJson(),
       };
 
   String get statusBadgeLabel {
@@ -313,4 +321,73 @@ class SellerRecommendationResult {
 /// Helper currency formatter delegating to AppPrefsRepository for multi-currency support
 String formatCurrency(num amount) {
   return AppPrefsRepository.instance.formatPrice(amount.toDouble());
+}
+
+/// Informasi calon pembeli teratas yang dinotifikasi oleh AI Engine
+class MatchedBuyerInfo {
+  final int buyerId;
+  final double matchScore;
+  final double distanceKm;
+  final String selectionSource;
+  final String businessType;
+  final String city;
+
+  const MatchedBuyerInfo({
+    required this.buyerId,
+    required this.matchScore,
+    required this.distanceKm,
+    this.selectionSource = 'model',
+    this.businessType = 'Usaha Kuliner',
+    this.city = 'Area Sekitar',
+  });
+
+  factory MatchedBuyerInfo.fromJson(Map<String, dynamic> json) {
+    return MatchedBuyerInfo(
+      buyerId: json['buyer_id'] is int
+          ? json['buyer_id'] as int
+          : int.tryParse(json['buyer_id']?.toString() ?? '0') ?? 0,
+      matchScore: (json['match_score'] as num?)?.toDouble() ?? 0.0,
+      distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 0.0,
+      selectionSource: json['selection_source'] as String? ?? 'model',
+      businessType: json['business_type'] as String? ?? 'Usaha Kuliner',
+      city: json['city'] as String? ?? 'Area Sekitar',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'buyer_id': buyerId,
+    'match_score': matchScore,
+    'distance_km': distanceKm,
+    'selection_source': selectionSource,
+    'business_type': businessType,
+    'city': city,
+  };
+}
+
+/// Ringkasan hasil pemadanan pembeli dan pengiriman penawaran
+class MatchingSummary {
+  final int totalOffersSent;
+  final List<MatchedBuyerInfo> topBuyers;
+
+  const MatchingSummary({
+    required this.totalOffersSent,
+    required this.topBuyers,
+  });
+
+  factory MatchingSummary.fromJson(Map<String, dynamic> json) {
+    final buyersJson = json['top_buyers'] as List<dynamic>? ?? [];
+    return MatchingSummary(
+      totalOffersSent: json['total_offers_sent'] is int
+          ? json['total_offers_sent'] as int
+          : int.tryParse(json['total_offers_sent']?.toString() ?? '0') ?? 0,
+      topBuyers: buyersJson
+          .map((e) => MatchedBuyerInfo.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'total_offers_sent': totalOffersSent,
+    'top_buyers': topBuyers.map((e) => e.toJson()).toList(),
+  };
 }

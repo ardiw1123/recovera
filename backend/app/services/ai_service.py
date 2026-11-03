@@ -443,6 +443,7 @@ def match_and_create_offers_for_listing(
 
     buyers_data = []
     buyer_user_map = {}
+    buyer_info_map = {}
     for b in buyers:
         if b.base_lat is None or b.base_lng is None:
             continue
@@ -458,6 +459,10 @@ def match_and_create_offers_for_listing(
             "payment_reliability_score": float(b.payment_reliability_score or 1.0),
         })
         buyer_user_map[b.id] = b.user_id
+        buyer_info_map[b.id] = {
+            "business_type": b.business_type or "Usaha Kuliner",
+            "city": b.address or "Area Sekitar",
+        }
 
     if not buyers_data:
         return {"total_offers_sent": 0, "top_buyers": []}
@@ -484,6 +489,8 @@ def match_and_create_offers_for_listing(
     # 2. Match pembeli menggunakan ranking model (Top-k)
     matched = ai_engine.match_buyers(listing_dict, buyers_df, k=top_k)
     if not matched:
+        logger.info("AI matching: 0 pembeli cocok untuk listing #%s. Periksa radius (<=15km) dan cold storage.", listing.id)
+    if not matched:
         return {"total_offers_sent": 0, "top_buyers": []}
 
     created_offers = []
@@ -508,6 +515,8 @@ def match_and_create_offers_for_listing(
             "match_score": round(float(m["match_score"]), 3),
             "distance_km": round(float(m["distance_km"]), 2),
             "selection_source": sel_source,
+            "business_type": buyer_info_map.get(buyer_id, {}).get("business_type", "Usaha Kuliner"),
+            "city": buyer_info_map.get(buyer_id, {}).get("city", "Area Sekitar"),
         })
 
         # 3. Notifikasi in-app untuk pembeli
