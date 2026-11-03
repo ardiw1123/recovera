@@ -831,6 +831,8 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
 
+      _showPublishSuccessDialog(published);
+      return;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -889,6 +891,301 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
         ),
       );
     }
+  }
+
+  void _showPublishSuccessDialog(SellerListingItem published) {
+    final topBuyers = published.matchingSummary?.topBuyers ?? [];
+    final hasBuyers = topBuyers.isNotEmpty;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.successBg,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.successBorder),
+                        ),
+                        child: const Icon(
+                          Icons.check_circle_rounded,
+                          color: AppColors.success,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Sukses Dipublikasi!',
+                              style: GoogleFonts.inter(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Lelang Dutch Auction aktif',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppColors.slateText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Produk "${published.productName}" kini aktif dan dapat ditemukan oleh pembeli bisnis di katalog lelang Recovera.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFF475569),
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDCFCE7),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.notifications_active_rounded,
+                                color: Color(0xFF16A34A),
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    hasBuyers
+                                        ? '${topBuyers.length} Pembeli Berpotensi Dinotifikasi'
+                                        : 'Notifikasi Otomatis Pembeli',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF14532D),
+                                    ),
+                                  ),
+                                  Text(
+                                    hasBuyers
+                                        ? 'Dipilih oleh AI Ranking (Radius ≤15 km)'
+                                        : 'Menunggu pembeli dalam radius 15 km',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: const Color(0xFF166534),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (hasBuyers) ...[
+                          const SizedBox(height: 14),
+                          const Divider(color: Color(0xFFDCFCE7), height: 1),
+                          const SizedBox(height: 10),
+                          ...topBuyers.asMap().entries.map((entry) {
+                            final idx = entry.key + 1;
+                            final b = entry.value;
+                            final isExplore =
+                                b.selectionSource.toLowerCase() == 'explore';
+
+                            IconData typeIcon = Icons.storefront_rounded;
+                            final lowerType = b.businessType.toLowerCase();
+                            if (lowerType.contains('resto') ||
+                                lowerType.contains('restoran')) {
+                              typeIcon = Icons.restaurant_rounded;
+                            } else if (lowerType.contains('katering') ||
+                                lowerType.contains('catering')) {
+                              typeIcon = Icons.dinner_dining_rounded;
+                            } else if (lowerType.contains('bakery') ||
+                                lowerType.contains('roti')) {
+                              typeIcon = Icons.bakery_dining_rounded;
+                            }
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 5),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 12,
+                                    backgroundColor: const Color(0xFFDCFCE7),
+                                    child: Text(
+                                      '$idx',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF15803D),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    typeIcon,
+                                    size: 16,
+                                    color: const Color(0xFF334155),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          b.businessType.toUpperCase(),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: const Color(0xFF0F172A),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          '${b.distanceKm.toStringAsFixed(1)} km · ${b.city}',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 10.5,
+                                            color: const Color(0xFF64748B),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isExplore
+                                              ? const Color(0xFFEFF6FF)
+                                              : const Color(0xFFECFDF5),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                          border: Border.all(
+                                            color: isExplore
+                                                ? const Color(0xFFBFDBFE)
+                                                : const Color(0xFFA7F3D0),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          isExplore ? 'Eksplorasi' : 'AI Model',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: isExplore
+                                                ? const Color(0xFF1D4ED8)
+                                                : const Color(0xFF047857),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Skor: ${(b.matchScore * 100).toInt()}%',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ] else ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Saat ini belum ada pembeli terverifikasi dalam radius 15 km dengan fasilitas penyimpanan yang sesuai. Notifikasi penawaran akan disebarkan otomatis jika ada pembeli yang relevan aktif.',
+                            style: GoogleFonts.inter(
+                              fontSize: 11.5,
+                              color: const Color(0xFF166534),
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      key: const Key('btn_publish_success_ok'),
+                      onPressed: () {
+                        Navigator.of(dialogCtx).pop();
+                        Navigator.of(context).pop();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Lihat di Stok Saya',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // ── Build Method ─────────────────────────────────────────────────────────

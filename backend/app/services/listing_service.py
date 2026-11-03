@@ -105,7 +105,11 @@ def search_listings(
 ) -> tuple[list[dict], int]:
     query = (
         db.query(Listing)
-        .options(joinedload(Listing.product), joinedload(Listing.seller))
+        .options(
+            joinedload(Listing.product),
+            joinedload(Listing.seller),
+            joinedload(Listing.orders),
+        )
         .join(Product)
         .join(Seller)
         .filter(Listing.status == "active")

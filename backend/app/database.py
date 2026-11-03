@@ -7,7 +7,8 @@ from app.config import get_settings
 settings = get_settings()
 
 # For SQLite, check_same_thread is needed; for PostgreSQL it is omitted
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+# Supabase Transaction Pooler (PgBouncer port 6543) requires disabling prepared statements (prepare_threshold: None) in psycopg v3
+connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {"prepare_threshold": None}
 
 engine = create_engine(
     settings.database_url,
