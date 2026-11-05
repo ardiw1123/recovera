@@ -329,7 +329,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 scrollDirection: Axis.horizontal,
                 itemCount: _quickChips.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
                   final chipText = _quickChips[index];
                   return ActionChip(

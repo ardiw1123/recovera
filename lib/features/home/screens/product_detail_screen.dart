@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -343,7 +343,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         _selectedQty = maxQty;
         _qtyController.text = '$maxQty';
       });
-      _showQtyWarning('Jumlah telah disesuaikan ke stok maksimal $maxQty $unit.');
+      _showQtyWarning(
+        'Jumlah telah disesuaikan ke stok maksimal $maxQty $unit.',
+      );
     } else {
       setState(() {
         _selectedQty = parsed;
@@ -361,9 +363,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         backgroundColor: const Color(0xFFD97706),
         elevation: 4,
         duration: const Duration(seconds: 2),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         content: Row(
           children: [
             const Icon(
@@ -394,7 +394,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final unit = _getDisplayUnit(listing);
 
     if (_selectedQty <= minQty) {
-      _showQtyWarning('Jumlah pembelian tidak bisa kurang dari minimal $minQty $unit.');
+      _showQtyWarning(
+        'Jumlah pembelian tidak bisa kurang dari minimal $minQty $unit.',
+      );
       return;
     }
 
@@ -410,7 +412,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final unit = _getDisplayUnit(listing);
 
     if (_selectedQty >= maxQty) {
-      _showQtyWarning('Jumlah telah mencapai batas stok maksimal ($maxQty $unit).');
+      _showQtyWarning(
+        'Jumlah telah mencapai batas stok maksimal ($maxQty $unit).',
+      );
       return;
     }
 
@@ -464,8 +468,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   String _formatExpiryDate(DateTime dt) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
     ];
     final day = dt.day.toString().padLeft(2, '0');
     final month = months[(dt.month - 1).clamp(0, 11)];
@@ -823,15 +837,52 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
 
     setState(() => _isPurchasing = true);
+
+    // 2. Tampilkan buffer loading langsung seketika setelah scan biometrik berhasil
+    if (!mounted) return;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final loadingDialog = showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const PopScope(
+        canPop: false,
+        child: _PaymentProcessingOverlay(),
+      ),
+    );
+
     try {
-      final order = await _orderRepository.buyListing(
-        listing.id,
-        qty: _selectedQty,
-        biometricVerified: true,
-      );
+      final order = await _processOrderCreation(listing);
+
+      // Tutup buffer loading segera setelah proses dan timer selesai
+      if (navigator.mounted && navigator.canPop()) {
+        navigator.pop();
+      }
+      await loadingDialog;
+
+      // 3. Tampilkan faktur / dialog sukses pemesanan
       if (mounted) {
         _showOrderSuccessDialog(order, listing);
       }
+    } catch (_) {
+      if (navigator.mounted && navigator.canPop()) {
+        navigator.pop();
+      }
+      await loadingDialog;
+    } finally {
+      if (mounted) {
+        setState(() => _isPurchasing = false);
+      }
+    }
+  }
+
+  Future<CachedOrderModel> _processOrderCreation(Listing listing) async {
+    try {
+      return await _orderRepository
+          .buyListing(
+            listing.id,
+            qty: _selectedQty,
+            biometricVerified: true,
+          );
     } catch (_) {
       // Demo order fallback - pastikan pesanan tersimpan ke OrderRepository & SQLite
       final mockOrderId = DateTime.now().millisecondsSinceEpoch % 100000;
@@ -856,13 +907,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       try {
         await _orderRepository.cacheOrder(mockOrder);
       } catch (_) {}
-      if (mounted) {
-        _showOrderSuccessDialog(mockOrder, listing);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isPurchasing = false);
-      }
+      return mockOrder;
     }
   }
 
@@ -1155,9 +1200,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             aspectRatio: 16 / 10,
             child: Stack(
               children: [
-                Positioned.fill(
-                  child: _buildHeroImage(listing.imageUrl),
-                ),
+                Positioned.fill(child: _buildHeroImage(listing.imageUrl)),
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
@@ -1299,7 +1342,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           fit: BoxFit.cover,
           errorBuilder: (_, _, _) => _buildDefaultHeroPlaceholder(),
         );
-      } else if (img.startsWith('/') || img.startsWith('file://') || img.contains(':\\')) {
+      } else if (img.startsWith('/') ||
+          img.startsWith('file://') ||
+          img.contains(':\\')) {
         final cleanPath = img.replaceFirst('file://', '');
         return Image.file(
           File(cleanPath),
@@ -2216,7 +2261,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                       Container(
                         key: const Key('text_qty_value'),
-                        constraints: const BoxConstraints(minWidth: 44, maxWidth: 64),
+                        constraints: const BoxConstraints(
+                          minWidth: 44,
+                          maxWidth: 64,
+                        ),
                         height: 28,
                         alignment: Alignment.center,
                         color: Colors.white,
@@ -2255,11 +2303,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 setState(() {
                                   _selectedQty = maxQty;
                                   _qtyController.text = '$maxQty';
-                                  _qtyController.selection = TextSelection.fromPosition(
-                                    TextPosition(offset: _qtyController.text.length),
-                                  );
+                                  _qtyController.selection =
+                                      TextSelection.fromPosition(
+                                        TextPosition(
+                                          offset: _qtyController.text.length,
+                                        ),
+                                      );
                                 });
-                                _showQtyWarning('Jumlah telah mencapai batas stok maksimal ($maxQty $unit).');
+                                _showQtyWarning(
+                                  'Jumlah telah mencapai batas stok maksimal ($maxQty $unit).',
+                                );
                               } else {
                                 setState(() {
                                   _selectedQty = parsed;
@@ -2380,4 +2433,191 @@ class _TierRibbonClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+
+/// Widget overlay animasi step-by-step saat sistem memproses pembayaran biometrik.
+/// Ditampilkan setelah sidik jari dikonfirmasi, sebelum faktur muncul.
+class _PaymentProcessingOverlay extends StatefulWidget {
+  const _PaymentProcessingOverlay();
+
+  @override
+  State<_PaymentProcessingOverlay> createState() =>
+      _PaymentProcessingOverlayState();
+}
+
+class _PaymentProcessingOverlayState extends State<_PaymentProcessingOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  int _currentStep = 0;
+
+  static const _steps = [
+    (Icons.fingerprint_rounded, 'Biometrik Dikonfirmasi', Color(0xFF10B981)),
+    (Icons.sync_rounded, 'Memproses Transaksi...', Color(0xFF0077B6)),
+    (Icons.receipt_long_rounded, 'Menyiapkan Faktur', Color(0xFF7C3AED)),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _controller.forward();
+    _advanceSteps();
+  }
+
+  Future<void> _advanceSteps() async {
+    for (var i = 1; i < _steps.length; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      if (!mounted) return;
+      setState(() => _currentStep = i);
+      _controller
+        ..reset()
+        ..forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final step = _steps[_currentStep];
+    final fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 32,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Header brand ──────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: const Icon(
+                    Icons.water_drop_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Recovera',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // ── Ikon langkah animasi ───────────────────────────
+            FadeTransition(
+              opacity: fadeAnim,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.75, end: 1.0).animate(fadeAnim),
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: step.$3.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(step.$1, color: step.$3, size: 36),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Spinner + teks langkah ─────────────────────────
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: step.$3,
+              ),
+            ),
+            const SizedBox(height: 14),
+            FadeTransition(
+              opacity: fadeAnim,
+              child: Text(
+                step.$2,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Mohon jangan tutup aplikasi',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: const Color(0xFF94A3B8),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Step dots indicator ────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(_steps.length, (i) {
+                final isActive = i == _currentStep;
+                final isDone = i < _currentStep;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: isActive ? 20 : 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: isDone
+                        ? const Color(0xFF10B981)
+                        : isActive
+                            ? AppColors.primary
+                            : const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: isDone
+                      ? const Icon(Icons.check, size: 6, color: Colors.white)
+                      : null,
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

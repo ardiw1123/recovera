@@ -244,7 +244,7 @@ class ChatRepository {
 
       final nearest = listingsWithDist.take(3).toList();
       final sb = StringBuffer();
-      sb.writeln('Berdasarkan jangkauan lokasi kamu (${userCity}), ini 3 produk lelang yang jaraknya paling dekat:\n');
+      sb.writeln('Berdasarkan jangkauan lokasi kamu ($userCity), ini 3 produk lelang yang jaraknya paling dekat:\n');
 
       for (var i = 0; i < nearest.length; i++) {
         final p = nearest[i]['listing'] as Listing;
