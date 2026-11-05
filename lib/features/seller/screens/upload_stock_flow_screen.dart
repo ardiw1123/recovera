@@ -832,54 +832,6 @@ class _UploadStockFlowScreenState extends State<UploadStockFlowScreen> {
       setState(() => _isSubmitting = false);
 
       _showPublishSuccessDialog(published);
-      return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              const Icon(
-                Icons.check_circle_rounded,
-                color: AppColors.success,
-                size: 28,
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Sukses Dipublikasi!',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-          content: Text(
-            'Produk "${published.productName}" kini telah aktif dan dapat ditemukan oleh pembeli bisnis di katalog lelang Recovera.',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: const Color(0xFF475569),
-            ),
-          ),
-          actions: [
-            ElevatedButton(
-              key: const Key('btn_publish_success_ok'),
-              onPressed: () {
-                Navigator.of(context).pop(); // Tutup dialog
-                Navigator.of(context).pop(); // Kembali ke Stok Saya
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text('Lihat di Stok Saya'),
-            ),
-          ],
-        ),
-      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);

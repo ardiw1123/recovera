@@ -270,7 +270,6 @@ class ChatRepository {
     final matchedListings = dummyListings.where((l) {
       final name = l.productName.toLowerCase();
       final cat = l.category.label.toLowerCase();
-      final brand = (l.brand ?? '').toLowerCase();
       return (q.contains('susu') && name.contains('susu')) ||
           (q.contains('keju') && name.contains('keju')) ||
           (q.contains('minyak') && name.contains('minyak')) ||
