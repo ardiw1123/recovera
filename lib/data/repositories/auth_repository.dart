@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../../core/network/api_client.dart';
 import '../../core/storage/token_storage.dart';
 import '../../features/auth/models/user_profile.dart';
@@ -6,10 +7,7 @@ import '../services/auth_api_service.dart';
 
 /// Repository autentikasi terpusat sebagai single source of truth untuk state autentikasi
 class AuthRepository extends ChangeNotifier {
-  AuthRepository({
-    required this.authApiService,
-    required this.tokenStorage,
-  });
+  AuthRepository({required this.authApiService, required this.tokenStorage});
 
   final AuthApiService authApiService;
   final ITokenStorage tokenStorage;
@@ -79,7 +77,9 @@ class AuthRepository extends ChangeNotifier {
       email: '${name.toLowerCase().replaceAll(' ', '')}@recovera.dev',
       name: name,
       role: role,
-      companyName: companyName ?? (role == 'seller' ? 'PT Sumber Pangan (Distributor)' : 'PT. Adaro'),
+      companyName:
+          companyName ??
+          (role == 'seller' ? 'PT Sumber Pangan (Distributor)' : 'PT. Adaro'),
       businessType: role == 'seller' ? 'distributor' : 'resto',
       address: 'Jl. Merpati No. 12, Klaten',
       city: 'Klaten',
@@ -97,10 +97,14 @@ class AuthRepository extends ChangeNotifier {
     required String password,
   }) async {
     _isLoading = true;
+    _currentTokens = null;
     notifyListeners();
 
     try {
-      final tokens = await authApiService.login(email: email, password: password);
+      final tokens = await authApiService.login(
+        email: email,
+        password: password,
+      );
       await tokenStorage.saveTokens(tokens);
       _currentTokens = tokens;
       return tokens;
@@ -190,7 +194,10 @@ class AuthRepository extends ChangeNotifier {
   /// Memuat profil pengguna dari API terautentikasi
   Future<UserProfile> fetchProfile() async {
     final profile = await authApiService.getProfile();
-    if (profile.id != 0 || profile.email.isNotEmpty || profile.name.isNotEmpty || _currentUserProfile == null) {
+    if (profile.id != 0 ||
+        profile.email.isNotEmpty ||
+        profile.name.isNotEmpty ||
+        _currentUserProfile == null) {
       _currentUserProfile = profile;
     }
     notifyListeners();
@@ -211,6 +218,7 @@ class AuthRepository extends ChangeNotifier {
     double? baseLat,
     double? baseLng,
     List<String>? prefCategories,
+    int? maxRadiusKm,
     bool? hasColdStorage,
   }) async {
     _isLoading = true;
@@ -230,6 +238,7 @@ class AuthRepository extends ChangeNotifier {
         baseLat: baseLat,
         baseLng: baseLng,
         prefCategories: prefCategories,
+        maxRadiusKm: maxRadiusKm,
         hasColdStorage: hasColdStorage,
       );
       _currentUserProfile = updated;
@@ -297,4 +306,3 @@ class AuthRepository extends ChangeNotifier {
     }
   }
 }
-

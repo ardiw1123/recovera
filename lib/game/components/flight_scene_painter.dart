@@ -16,6 +16,7 @@ class FlightScenePainter extends CustomPainter {
     required this.collectedFoods,
     required this.collectingFoods,
     required this.passedCheckpoints,
+    this.drawPlayerSprite = true,
   });
 
   final SkyBalanceLevel level;
@@ -26,6 +27,10 @@ class FlightScenePainter extends CustomPainter {
   final Set<int> collectedFoods;
   final Map<int, DateTime> collectingFoods;
   final Set<int> passedCheckpoints;
+
+  /// When false only the player's shadow is painted, because the avatar is
+  /// drawn as a widget on top of the scene.
+  final bool drawPlayerSprite;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -335,6 +340,7 @@ class FlightScenePainter extends CustomPainter {
         ..color = const Color(0xFF286A87)
             .withValues(alpha: .24 * (1 - body.shadowOffset * .5)),
     );
+    if (!drawPlayerSprite) return;
     canvas.save();
     canvas.translate(point.dx, point.dy);
     canvas.rotate((body.velocityX * .001).clamp(-.3, .3));

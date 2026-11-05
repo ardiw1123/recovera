@@ -313,7 +313,7 @@ def test_auxiliary_endpoints(client, db_session):
     assert "USD" in rates_data["rates"]
 
     # 2. Blockchain verify
-    bc_res = client.get("/blockchain/verify/0xabc123456789def")
+    bc_res = client.get("/blockchain/verify/0x24c5755a91a54cb4e0f273a5e7c1534cc635e16400bec4aa019a1fb118aabb5c")
     assert bc_res.status_code == 200
     assert bc_res.json()["data"]["verified"] is True
     assert bc_res.json()["data"]["network"] == "BOT Chain Testnet"

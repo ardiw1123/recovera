@@ -1,3 +1,4 @@
+import '../../core/services/network_connectivity_service.dart';
 import '../database/database_constants.dart';
 import '../models/cached_listing_model.dart';
 import '../models/draft_listing_model.dart';
@@ -87,8 +88,10 @@ class ListingRepository {
     double? radiusKm,
   }) async {
     final client = remoteClient;
-    // If remote client is configured and refresh requested, try fetching from network
-    if (client != null && forceRefresh) {
+    final isOnline = NetworkConnectivityService.instance.isOnline;
+
+    // Jika forceRefresh true atau perangkat online, utamakan panggilan remote ke API
+    if (client != null && (forceRefresh || isOnline)) {
       try {
         final remoteItems = await client.fetchRemoteListings(
           search: search,
@@ -400,7 +403,8 @@ class ListingRepository {
 
     var filtered = items;
     if (category != null && category.isNotEmpty && category != 'Semua' && category != 'All') {
-      filtered = filtered.where((l) => l.category.toLowerCase() == category.toLowerCase()).toList();
+      final catSet = category.split(',').map((c) => c.trim().toLowerCase()).toSet();
+      filtered = filtered.where((l) => catSet.contains(l.category.toLowerCase())).toList();
     }
     if (search != null && search.isNotEmpty) {
       final q = search.toLowerCase();

@@ -29,6 +29,8 @@ class ListingResponse(BaseModel):
     created_at: str
 
     current_price: float
+    sold_qty: int = 0
+    orders_count: int = 0
     next_drop_at: str | None = None
     auction_end_timezones: MultiTimezoneSchedule | None = None
     product: ProductResponse | None = None

@@ -187,7 +187,7 @@ Ringkasnya: stok mendekati kedaluwarsa pada distributor tidak memiliki kanal lik
 - Automated job: listing tak laku **dan** sisa umur < 14 hari →ikoł dialihkan.
 - Grade: **A** (≥7 hari, layak konsumsi manusia) → Food Bank; **B** → Pabrik Pakan Ternak; **C** → Kompos/Pupuk Organik.
 - Diversion membuat entri `donations`, **hash sertifikat dicatat on-chain** di BOT Chain Testnet via smart contract (`storeHash()`), dan nomor sertifikat.
-- Sertifikat menampilkan nilai pangan terselamatkan dalam **USD/EUR/GBP** dan waktu terbit dalam zona **London**.
+- Sertifikat menampilkan nilai pangan terselamatkan dalam **USD/EUR/GBP/IDR** dan waktu terbit dalam zona **WIB**.
 - Tombol "Verifikasi" memanggil `GET /blockchain/verify/{tx_hash}` dan menampilkan status verifikasi hash di BOT Chain Testnet via Block Explorer.
 - Hash sertifikat yang sudah dicatat on-chain dapat diverifikasi oleh siapa pun via Block Explorer publik.
 

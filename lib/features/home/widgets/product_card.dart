@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../data/repositories/app_prefs_repository.dart';
 import '../models/product_model.dart';
@@ -7,11 +9,7 @@ import '../screens/product_detail_screen.dart';
 
 /// Kartu satu listing produk dengan metrik rekomendasi proximity — field sesuai skema DB.
 class ProductCard extends StatelessWidget {
-  const ProductCard({
-    super.key,
-    required this.listing,
-    this.onTap,
-  });
+  const ProductCard({super.key, required this.listing, this.onTap});
 
   final Listing listing;
   final VoidCallback? onTap;
@@ -109,16 +107,25 @@ class ProductCard extends StatelessWidget {
                           const SizedBox(height: 3),
                           Container(
                             key: Key('match_score_badge_${listing.id}'),
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1.5,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFECFDF5),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: const Color(0xFFA7F3D0)),
+                              border: Border.all(
+                                color: const Color(0xFFA7F3D0),
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.radar_rounded, size: 9, color: Color(0xFF059669)),
+                                const Icon(
+                                  Icons.radar_rounded,
+                                  size: 9,
+                                  color: Color(0xFF059669),
+                                ),
                                 const SizedBox(width: 2),
                                 Text(
                                   listing.matchScorePercentage,
@@ -135,83 +142,89 @@ class ProductCard extends StatelessWidget {
                       ],
                     ),
 
-                  // Proximity distance + city + MOQ (qty + default_unit)
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.near_me_outlined,
-                        size: 11,
-                        color: Color(0xFF0284C7),
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        listing.distanceText,
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF0284C7),
+                    // Proximity distance + city + MOQ (qty + default_unit)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.near_me_outlined,
+                          size: 11,
+                          color: Color(0xFF0284C7),
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '•',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          color: const Color(0xFF94A3B8),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          listing.city,
+                        const SizedBox(width: 2),
+                        Text(
+                          listing.distanceText,
                           style: GoogleFonts.inter(
                             fontSize: 10,
-                            color: const Color(0xFF64748B),
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF0284C7),
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
+                        const SizedBox(width: 4),
+                        Text(
+                          '•',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: const Color(0xFF94A3B8),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            listing.city,
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: const Color(0xFF64748B),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
 
                     // Harga (tidak membuat baris baru terpisah di bawah foto)
                     ListenableBuilder(
                       listenable: AppPrefsRepository.instance,
                       builder: (context, _) {
-                        final curPrice = AppPrefsRepository.instance.formatPrice(listing.currentPrice);
-                        final norPrice = AppPrefsRepository.instance.formatPrice(listing.normalPrice);
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              curPrice,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primary,
+                        final curPrice = AppPrefsRepository.instance
+                            .formatPrice(listing.currentPrice);
+                        final norPrice = AppPrefsRepository.instance
+                            .formatPrice(listing.normalPrice);
+                        return FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                curPrice,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.primary,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              '/ ${listing.defaultUnit}',
-                              style: GoogleFonts.inter(
-                                fontSize: 9.5,
-                                color: const Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
+                              const SizedBox(width: 3),
+                              Text(
+                                '/ ${listing.defaultUnit}',
+                                style: GoogleFonts.inter(
+                                  fontSize: 9.5,
+                                  color: const Color(0xFF64748B),
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              norPrice,
-                              style: GoogleFonts.inter(
-                                fontSize: 9.5,
-                                color: const Color(0xFF94A3B8),
-                                decoration: TextDecoration.lineThrough,
+                              const SizedBox(width: 5),
+                              Text(
+                                norPrice,
+                                style: GoogleFonts.inter(
+                                  fontSize: 9.5,
+                                  color: const Color(0xFF94A3B8),
+                                  decoration: TextDecoration.lineThrough,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         );
                       },
                     ),
@@ -255,17 +268,6 @@ class ProductCard extends StatelessWidget {
       ),
     );
   }
-
-  /// Format angka menjadi "8.250" dsb.
-  String _fmt(double price) {
-    final str = price.toInt().toString();
-    final buf = StringBuffer();
-    for (var i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buf.write('.');
-      buf.write(str[i]);
-    }
-    return buf.toString();
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -286,16 +288,7 @@ class _ListingImage extends StatelessWidget {
           // Gambar atau ikon fallback
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: listing.imageUrl != null
-                ? Image.network(
-                    listing.imageUrl!,
-                    width: 88,
-                    height: 88,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _iconFallback(),
-                  )
-                : _iconFallback(),
+            child: _buildListingImage(listing.imageUrl),
           ),
 
           // Badge diskon berbentuk potongan pita (tidak bold)
@@ -307,9 +300,7 @@ class _ListingImage extends StatelessWidget {
               child: Container(
                 key: Key('discount_badge_${listing.id}'),
                 padding: const EdgeInsets.fromLTRB(6, 2, 10, 2),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFDC2626),
-                ),
+                decoration: const BoxDecoration(color: Color(0xFFDC2626)),
                 child: Text(
                   '-${listing.effectiveDiscountPercent}%',
                   style: GoogleFonts.inter(
@@ -328,8 +319,7 @@ class _ListingImage extends StatelessWidget {
               top: 4,
               right: 4,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
                   color: listing.storageType == 'frozen'
                       ? const Color(0xFF0891B2)
@@ -348,6 +338,30 @@ class _ListingImage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildListingImage(String? img) {
+    if (img != null && img.isNotEmpty) {
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        return Image.network(
+          img,
+          width: 88,
+          height: 88,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _iconFallback(),
+        );
+      } else if (img.startsWith('/') || img.startsWith('file://') || img.contains(':\\')) {
+        final cleanPath = img.replaceFirst('file://', '');
+        return Image.file(
+          File(cleanPath),
+          width: 88,
+          height: 88,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _iconFallback(),
+        );
+      }
+    }
+    return _iconFallback();
   }
 
   Widget _iconFallback() {
@@ -391,8 +405,10 @@ class _ExpiryBadge extends StatelessWidget {
       textColor = const Color(0xFF16A34A); // Hijau
     }
 
+    final text = days <= 0 ? 'Sudah Kedaluwarsa' : 'Sisa $days Hari';
+
     return Text(
-      'Sisa $days Hari',
+      text,
       style: GoogleFonts.inter(
         fontSize: 10,
         fontWeight: FontWeight.w600,
@@ -418,4 +434,3 @@ class _RibbonClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
-

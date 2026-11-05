@@ -2,6 +2,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 from fastapi import APIRouter, Body, Path, Query, Request, status
+from sqlalchemy.orm import joinedload
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,8 @@ from app.services.listing_service import (
     search_listings,
 )
 from app.services.order_service import execute_buy_now
+from app.services.push_service import send_to_user
+from app.models.user import Buyer
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
@@ -72,7 +75,14 @@ async def get_seller_inventory(db: DbSessionDep, seller_user: RequireSellerDep) 
     seller = db.query(Seller).filter(Seller.user_id == seller_user.id).first()
     if not seller:
         return wrap_success([])
+    today = date.today()
     items = db.query(Listing).filter(Listing.seller_id == seller.id).order_by(Listing.created_at.desc()).all()
+    for item in items:
+        if item.qty <= 0 and item.status == "active":
+            item.status = "sold"
+        elif item.expiry_date < today and item.status == "active":
+            item.status = "expired"
+    db.commit()
     return wrap_success([
         _format_listing_response(item, *calculate_current_dutch_price(item)) for item in items
     ])
@@ -82,49 +92,65 @@ async def get_seller_inventory(db: DbSessionDep, seller_user: RequireSellerDep) 
 async def get_seller_dashboard(db: DbSessionDep, seller_user: RequireSellerDep) -> dict:
     seller = db.query(Seller).filter(Seller.user_id == seller_user.id).first()
     if not seller:
-        return wrap_success({"data": {"company_name": "", "active_listings_count": 0, "prev_month_active_count": 0, "current_month_orders_count": 0, "prev_month_orders_count": 0, "near_expiry_listings": [], "recent_activities": []}})
-
-    from datetime import date, datetime, timedelta
+        return wrap_success({
+            "company_name": "",
+            "active_listings_count": 0,
+            "prev_month_active_count": 0,
+            "current_month_orders_count": 0,
+            "prev_month_orders_count": 0,
+            "near_expiry_listings": [],
+            "recent_activities": [],
+            "esg_certificate_count": 0,
+            "total_carbon_saved": 0.0,
+        })
 
     today = date.today()
     first_day_this_month = today.replace(day=1)
-    # Calculate first day of previous month
     if first_day_this_month.month == 1:
         first_day_prev_month = date(today.year - 1, 12, 1)
     else:
         first_day_prev_month = date(today.year, first_day_this_month.month - 1, 1)
 
+    # Timezone-aware UTC timestamps for PostgreSQL queries
+    start_this_month = datetime(first_day_this_month.year, first_day_this_month.month, 1, tzinfo=timezone.utc)
+    start_prev_month = datetime(first_day_prev_month.year, first_day_prev_month.month, 1, tzinfo=timezone.utc)
+
     # active_listings_count: listing milik seller ini yang statusnya 'active'
-    active_listings = db.query(Listing).filter(Listing.seller_id == seller.id, Listing.status == 'active').all()
-    active_listings_count = len(active_listings)
+    active_listings_count = db.query(Listing).filter(
+        Listing.seller_id == seller.id,
+        Listing.status == 'active'
+    ).count()
 
     # prev_month_active_count: listing milik seller ini yang statusnya 'active' dan created_at di bulan lalu
-    prev_month_active_listings = db.query(Listing).filter(
+    prev_month_active_count = db.query(Listing).filter(
         Listing.seller_id == seller.id,
         Listing.status == 'active',
-        Listing.created_at >= first_day_prev_month,
-        Listing.created_at < first_day_this_month
-    ).all()
-    prev_month_active_count = len(prev_month_active_listings)
+        Listing.created_at >= start_prev_month,
+        Listing.created_at < start_this_month
+    ).count()
 
     # current_month_orders_count: order yang listing.seller_id = seller ini, dan orders.created_at di bulan ini
-    current_month_orders = db.query(Order).join(Listing).filter(
+    current_month_orders_count = db.query(Order).join(Listing).filter(
         Listing.seller_id == seller.id,
-        Order.created_at >= datetime(first_day_this_month.year, first_day_this_month.month, 1),
-        Order.created_at <= datetime.combine(today, datetime.min.time())
-    ).all()
-    current_month_orders_count = len(current_month_orders)
+        Order.created_at >= start_this_month
+    ).count()
 
     # prev_month_orders_count: sama seperti di atas tapi untuk bulan lalu
-    prev_month_orders = db.query(Order).join(Listing).filter(
+    prev_month_orders_count = db.query(Order).join(Listing).filter(
         Listing.seller_id == seller.id,
-        Order.created_at >= datetime(first_day_prev_month.year, first_day_prev_month.month, 1),
-        Order.created_at < datetime(first_day_this_month.year, first_day_this_month.month, 1)
-    ).all()
-    prev_month_orders_count = len(prev_month_orders)
+        Order.created_at >= start_prev_month,
+        Order.created_at < start_this_month
+    ).count()
 
     # near_expiry_listings: 3 listing aktif milik seller ini, urutkan berdasarkan expiry_date dari yang terdekat
-    near_expiry = db.query(Listing).filter(Listing.seller_id == seller.id, Listing.status == 'active').order_by(Listing.expiry_date.asc()).limit(3).all()
+    near_expiry = (
+        db.query(Listing)
+        .options(joinedload(Listing.product))
+        .filter(Listing.seller_id == seller.id, Listing.status == 'active')
+        .order_by(Listing.expiry_date.asc())
+        .limit(3)
+        .all()
+    )
     near_expiry_listings = []
     for listing in near_expiry:
         days_remaining = (listing.expiry_date - today).days
@@ -139,47 +165,67 @@ async def get_seller_dashboard(db: DbSessionDep, seller_user: RequireSellerDep) 
         })
 
     # recent_activities: gabungkan log dari order terbaru seller (stok terjual) dan listing terbaru (upload stok), urutkan berdasarkan waktu terbaru, ambil 5 teratas
-    recent_activities_payload = []
+    recent_orders = (
+        db.query(Order)
+        .options(joinedload(Order.listing).joinedload(Listing.product))
+        .join(Listing)
+        .filter(Listing.seller_id == seller.id)
+        .order_by(Order.created_at.desc())
+        .limit(5)
+        .all()
+    )
 
-    # Dari order terbaru yang terkait dengan listing seller
-    recent_orders = db.query(Order).join(Listing).filter(
-        Listing.seller_id == seller.id
-    ).order_by(Order.created_at.desc()).limit(5).all()
+    recent_listings = (
+        db.query(Listing)
+        .options(joinedload(Listing.product))
+        .filter(Listing.seller_id == seller.id)
+        .order_by(Listing.created_at.desc())
+        .limit(5)
+        .all()
+    )
 
+    raw_activities = []
     for order in recent_orders:
-        product = order.listing.product
-        recent_activities_payload.append({
+        product = order.listing.product if (order.listing and order.listing.product) else None
+        order_dt = order.created_at
+        if order_dt and order_dt.tzinfo is None:
+            order_dt = order_dt.replace(tzinfo=timezone.utc)
+        raw_activities.append({
+            "sort_dt": order_dt or datetime.min.replace(tzinfo=timezone.utc),
             "type": "sold",
             "title": f"{product.name if product else 'Produk'} terjual",
             "subtitle": "Berhasil dicairkan",
-            "timestamp": order.created_at.isoformat() if order.created_at else "",
+            "timestamp": order_dt.isoformat() if order_dt else "",
         })
-
-    # Dari listing terbaru seller
-    recent_listings = db.query(Listing).filter(Listing.seller_id == seller.id).order_by(Listing.created_at.desc()).limit(5).all()
 
     for listing in recent_listings:
         product = listing.product
-        recent_activities_payload.append({
+        listing_dt = listing.created_at
+        if listing_dt and listing_dt.tzinfo is None:
+            listing_dt = listing_dt.replace(tzinfo=timezone.utc)
+        raw_activities.append({
+            "sort_dt": listing_dt or datetime.min.replace(tzinfo=timezone.utc),
             "type": "uploaded",
             "title": f"{product.name if product else 'Produk'} ditambahkan",
             "subtitle": "Berhasil diunggah",
-            "timestamp": listing.created_at.isoformat() if listing.created_at else "",
+            "timestamp": listing_dt.isoformat() if listing_dt else "",
         })
 
-    # Gabungkan dan urutkan berdasarkan waktu terbaru, ambil 5 teratas
-    all_activities = recent_orders + recent_listings
-    all_activities.sort(key=lambda x: x.created_at or datetime.min, reverse=True)
-    recent_activities_final = all_activities[:5]
+    raw_activities.sort(key=lambda x: x["sort_dt"], reverse=True)
+    recent_activities = [
+        {
+            "type": item["type"],
+            "title": item["title"],
+            "subtitle": item["subtitle"],
+            "timestamp": item["timestamp"],
+        }
+        for item in raw_activities[:5]
+    ]
 
-    for activity in recent_activities_final:
-        product = activity.product if hasattr(activity, 'product') and activity.product else None
-        recent_activities_payload.append({
-            "type": "sold" if hasattr(activity, 'status') and activity.status == "sold" else "uploaded",
-            "title": f"{product.name if product else 'Produk'} terjual" if hasattr(activity, 'status') and activity.status == "sold" else f"{product.name if product else 'Produk'} ditambahkan",
-            "subtitle": "Berhasil dicairkan" if hasattr(activity, 'status') and activity.status == "sold" else "Berhasil diunggah",
-            "timestamp": activity.created_at.isoformat() if activity.created_at else "",
-        })
+    from app.models.donation import Donation
+    esg_donations = db.query(Donation).join(Listing).filter(Listing.seller_id == seller.id).all()
+    esg_count = len(esg_donations)
+    total_carbon = sum(float(d.carbon_saved_kg) for d in esg_donations)
 
     data = {
         "company_name": seller.company_name,
@@ -188,10 +234,12 @@ async def get_seller_dashboard(db: DbSessionDep, seller_user: RequireSellerDep) 
         "current_month_orders_count": current_month_orders_count,
         "prev_month_orders_count": prev_month_orders_count,
         "near_expiry_listings": near_expiry_listings,
-        "recent_activities": recent_activities_final,
+        "recent_activities": recent_activities,
+        "esg_certificate_count": esg_count,
+        "total_carbon_saved": round(total_carbon, 2),
     }
 
-    return wrap_success({"data": data})
+    return wrap_success(data)
 
 
 @router.post("/seller/inventory/drafts", status_code=status.HTTP_201_CREATED)
@@ -452,6 +500,11 @@ async def publish_seller_inventory_listing(
         except Exception as e:
             logger.error("AI matching on publish encountered an issue: %s", e)
 
+    for match in matching_summary.get("top_buyers", []):
+        buyer = db.query(Buyer).filter(Buyer.id == match.get("buyer_id")).first()
+        if buyer:
+            send_to_user(db, buyer.user_id, "Stok baru cocok untuk bisnis Anda", f"{listing.product.name if listing.product else 'Produk baru'} tersedia dari penjual yang cocok.", {"type": "new_listing", "listing_id": listing.id})
+
     return wrap_success(
         _format_listing_response(
             listing,
@@ -466,6 +519,10 @@ def _format_listing_response(item: Listing, cur_price: float, next_drop: str | N
                               days_to_expiry: int | None = None, matching_summary: dict | None = None) -> dict:
     prod_data = ProductResponse.model_validate(item.product, from_attributes=True).model_dump() if item.product else None
     seller_data = item.seller
+
+    orders = item.orders or []
+    sold_qty = sum(o.qty for o in orders if o.status != 'cancelled')
+    orders_count = len([o for o in orders if o.status != 'cancelled'])
 
     return ListingResponse(
         id=item.id,
@@ -484,6 +541,8 @@ def _format_listing_response(item: Listing, cur_price: float, next_drop: str | N
         status=item.status,
         created_at=item.created_at.isoformat(),
         current_price=cur_price,
+        sold_qty=sold_qty,
+        orders_count=orders_count,
         next_drop_at=next_drop,
         auction_end_timezones=format_multi_timezone(item.auction_end_at),
         product=prod_data,
@@ -660,6 +719,11 @@ async def create_listing(
         except Exception as e:
             logger.error("AI matching on create_listing encountered an issue: %s", e)
 
+    for match in matching_summary.get("top_buyers", []):
+        buyer = db.query(Buyer).filter(Buyer.id == match.get("buyer_id")).first()
+        if buyer:
+            send_to_user(db, buyer.user_id, "Stok baru cocok untuk bisnis Anda", f"{product.name} tersedia dari penjual yang cocok.", {"type": "new_listing", "listing_id": listing.id})
+
     cur_price, next_drop = calculate_current_dutch_price(listing)
     return wrap_success(
         _format_listing_response(
@@ -780,19 +844,35 @@ async def buy_listing(
     )
 
     listing = order.listing
+    img_url = listing.product.image_url if (listing and listing.product) else None
+    buyer_name = order.buyer.user.name if (order.buyer and order.buyer.user) else None
+    buyer_business_type = order.buyer.business_type if order.buyer else None
+    seller_name = listing.seller.company_name if (listing and listing.seller) else None
+
     product_detail = {
         "product_name": listing.product.name if listing.product else "Food Item",
         "category": listing.product.category if listing.product else "General",
         "batch_number": listing.batch_number,
+        "image_url": img_url,
+        "buyer_name": buyer_name,
+        "buyer_business_type": buyer_business_type,
         "warehouse_lat": listing.seller.warehouse_lat if listing.seller else None,
         "warehouse_lng": listing.seller.warehouse_lng if listing.seller else None,
-        "warehouse_address": listing.seller.address if listing.seller else None,
+        "warehouse_address": (
+            f"{listing.seller.company_name}, {listing.seller.city or listing.seller.address}"
+            if (listing.seller and listing.seller.company_name)
+            else (listing.seller.address if listing.seller else None)
+        ),
     }
 
     resp = OrderResponse(
         id=order.id,
         listing_id=order.listing_id,
         buyer_id=order.buyer_id,
+        buyer_name=buyer_name,
+        buyer_business_type=buyer_business_type,
+        seller_name=seller_name,
+        image_url=img_url,
         qty=order.qty,
         final_unit_price=float(order.final_unit_price),
         total_price=float(order.total_price),

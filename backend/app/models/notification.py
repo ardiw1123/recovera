@@ -7,6 +7,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    JSON,
 )
 from sqlalchemy.orm import relationship
 
@@ -21,6 +22,7 @@ class Notification(Base):
     title = Column(String(150), nullable=False)
     body = Column(Text, nullable=False)
     type = Column(String(50), nullable=False)
+    data = Column(JSON, nullable=False, default=dict)
     is_read = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 

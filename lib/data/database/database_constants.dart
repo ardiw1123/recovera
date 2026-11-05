@@ -4,7 +4,7 @@ class DatabaseConstants {
   DatabaseConstants._();
 
   static const String databaseName = 'recovera.db';
-  static const int databaseVersion = 1;
+  static const int databaseVersion = 2;
 
   // Table names
   static const String tableCachedListings = 'cached_listings';
@@ -12,6 +12,16 @@ class DatabaseConstants {
   static const String tableCachedOrders = 'cached_orders';
   static const String tableGameScores = 'game_scores';
   static const String tableAppPrefs = 'app_prefs';
+  static const String tableChatMessages = 'chat_messages';
+
+  // Columns: chat_messages
+  static const String colChatId = 'id';
+  static const String colChatUserId = 'user_id';
+  static const String colChatRole = 'role';
+  static const String colChatMessage = 'message';
+  static const String colChatIntent = 'intent';
+  static const String colChatRichCardJson = 'rich_card_json';
+  static const String colChatCreatedAt = 'created_at';
 
   // Columns: cached_listings
   static const String colListingId = 'id';

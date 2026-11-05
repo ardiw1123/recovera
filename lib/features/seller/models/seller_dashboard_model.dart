@@ -9,6 +9,8 @@ class SellerDashboardData {
   final int prevMonthOrdersCount;
   final List<NearExpiryItem> nearExpiryListings;
   final List<RecentActivity> recentActivities;
+  final int esgCertificateCount;
+  final double totalCarbonSaved;
 
   const SellerDashboardData({
     required this.companyName,
@@ -18,6 +20,8 @@ class SellerDashboardData {
     required this.prevMonthOrdersCount,
     required this.nearExpiryListings,
     required this.recentActivities,
+    this.esgCertificateCount = 0,
+    this.totalCarbonSaved = 0.0,
   });
 
   factory SellerDashboardData.fromJson(Map<String, dynamic> json) {
@@ -33,6 +37,8 @@ class SellerDashboardData {
       recentActivities: (json['recent_activities'] as List<dynamic>?)
           ?.map((item) => RecentActivity.fromJson(item as Map<String, dynamic>))
           .toList() ?? [],
+      esgCertificateCount: (json['esg_certificate_count'] as num?)?.toInt() ?? 0,
+      totalCarbonSaved: (json['total_carbon_saved'] as num?)?.toDouble() ?? 0.0,
     );
   }
 

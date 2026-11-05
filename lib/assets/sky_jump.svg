@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" width="480" height="320">
+  <!-- Soft shadow underneath cloud platform -->
+  <ellipse cx="240" cy="254" rx="130" ry="16" fill="#E2E8F0" />
+
+  <!-- Cloud platform (wide rounded pill / cloud shape, flat white body) -->
+  <rect x="110" y="210" width="260" height="42" rx="21" fill="#FFFFFF" stroke="#0077B6" stroke-width="3" stroke-linejoin="round" />
+
+  <!-- Thin cyan platform top edge -->
+  <path d="M 132 210 Q 240 210 348 210" stroke="#00B4D8" stroke-width="5" stroke-linecap="round" fill="none" />
+
+  <!-- Upward bounce arc arrow (curves up to the right) -->
+  <g fill="none" stroke="#0077B6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 235 190 C 275 180 340 160 340 100" stroke-width="6" />
+    <path d="M 322 114 L 340 96 L 356 116" stroke-width="6" />
+  </g>
+
+  <!-- Mint frog character (slightly left of center, hovering just above platform) -->
+  <g transform="translate(180, 150)">
+    <!-- Back / bounce legs -->
+    <!-- Left foot -->
+    <path d="M -26 22 C -36 30 -40 38 -34 42 C -28 46 -22 38 -18 30 Z"
+          fill="#10B981" stroke="#059669" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+    <!-- Right foot -->
+    <path d="M 16 22 C 22 30 30 40 36 36 C 40 32 32 26 24 22 Z"
+          fill="#10B981" stroke="#059669" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+
+    <!-- Front little hands raised happily -->
+    <path d="M -30 2 C -38 -2 -44 -6 -40 -12 C -34 -10 -30 0 -26 6 Z"
+          fill="#10B981" stroke="#059669" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+    <path d="M 30 2 C 38 -2 44 -6 40 -12 C 34 -10 30 0 26 6 Z"
+          fill="#10B981" stroke="#059669" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+
+    <!-- Frog main body -->
+    <ellipse cx="0" cy="8" rx="36" ry="28" fill="#10B981" stroke="#059669" stroke-width="3" />
+
+    <!-- Frog cute white belly -->
+    <ellipse cx="0" cy="14" rx="20" ry="15" fill="#FFFFFF" />
+
+    <!-- Eye sockets (bumps on top) -->
+    <circle cx="-19" cy="-18" r="14" fill="#10B981" stroke="#059669" stroke-width="3" />
+    <circle cx="19" cy="-18" r="14" fill="#10B981" stroke="#059669" stroke-width="3" />
+
+    <!-- Eye whites -->
+    <circle cx="-19" cy="-18" r="10" fill="#FFFFFF" />
+    <circle cx="19" cy="-18" r="10" fill="#FFFFFF" />
+
+    <!-- Pupils (#03045E, happy glance toward bounce direction) -->
+    <circle cx="-17" cy="-19" r="5.5" fill="#03045E" />
+    <circle cx="21" cy="-19" r="5.5" fill="#03045E" />
+
+    <!-- Catchlights -->
+    <circle cx="-19" cy="-21" r="2" fill="#FFFFFF" />
+    <circle cx="19" cy="-21" r="2" fill="#FFFFFF" />
+
+    <!-- Happy smile -->
+    <path d="M -7 4 Q 0 10 7 4" fill="none" stroke="#03045E" stroke-width="3" stroke-linecap="round" />
+  </g>
+</svg>

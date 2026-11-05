@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/auth_widgets.dart';
 import 'login_screen.dart';
-import '../../shell/main_shell.dart';
 
 /// PBI-03 — Layar Registrasi B2B Recovera
 ///
@@ -50,12 +50,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_agreeTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Harap setujui Syarat & Ketentuan terlebih dahulu.',
-              style: GoogleFonts.inter(fontSize: 13)),
+          content: Text(
+            'Harap setujui Syarat & Ketentuan terlebih dahulu.',
+            style: GoogleFonts.inter(fontSize: 13),
+          ),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
       return;
@@ -82,18 +85,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Selamat datang di Recovera!',
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.white)),
+          content: Text(
+            'Selamat datang di Recovera!',
+            style: GoogleFonts.inter(fontSize: 13, color: AppColors.white),
+          ),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainShell()),
-      );
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -104,8 +107,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     } finally {
@@ -143,10 +147,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.primaryLight,
-                    AppColors.primaryLight,
-                  ],
+                  colors: [AppColors.primaryLight, AppColors.primaryLight],
                 ),
               ),
               child: SingleChildScrollView(
@@ -279,8 +280,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           // ── Terms Checkbox ─────────────────────────────
                           _TermsCheckbox(
                             value: _agreeTerms,
-                            onChanged: (v) =>
-                                setState(() => _agreeTerms = v!),
+                            onChanged: (v) => setState(() => _agreeTerms = v!),
                           ),
                           const SizedBox(height: 20),
 
@@ -296,7 +296,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               minimumSize: const Size(double.infinity, 48),
-                              side: const BorderSide(color: AppColors.primary, width: 1.5),
+                              side: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.5,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(50),
                               ),
@@ -323,19 +326,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               final companyName = enteredCompany.isNotEmpty
                                   ? enteredCompany
                                   : (_selectedRole == 'seller'
-                                      ? 'PT Sumber Pangan (Distributor)'
-                                      : 'Restoran Berkah Rasa');
+                                        ? 'PT Sumber Pangan (Distributor)'
+                                        : 'Restoran Berkah Rasa');
                               AuthRepository.instance.loginAsDemo(
                                 role: _selectedRole,
                                 name: name,
                                 companyName: companyName,
                               );
-                              Navigator.pushReplacement(
+                              Navigator.of(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) => const MainShell(),
-                                ),
-                              );
+                              ).pushNamedAndRemoveUntil('/home', (_) => false);
                             },
                           ),
                           const SizedBox(height: 20),
@@ -356,8 +356,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       onTap: () => Navigator.pushReplacement(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (_) =>
-                                              const LoginScreen(),
+                                          builder: (_) => const LoginScreen(),
                                         ),
                                       ),
                                       child: Text(
@@ -403,18 +402,10 @@ class _WaveCardClipper extends CustomClipper<Path> {
     path.lineTo(0, 48);
 
     // Wave Bézier pertama: kiri → tengah
-    path.cubicTo(
-      0, 12,
-      w * 0.30, 0,
-      w * 0.50, 22,
-    );
+    path.cubicTo(0, 12, w * 0.30, 0, w * 0.50, 22);
 
     // Wave Bézier kedua: tengah → kanan
-    path.cubicTo(
-      w * 0.70, 44,
-      w * 0.90, 4,
-      w, 24,
-    );
+    path.cubicTo(w * 0.70, 44, w * 0.90, 4, w, 24);
 
     path.lineTo(w, h);
     path.close();
@@ -537,8 +528,10 @@ class _RoleDropdown extends StatelessWidget {
           decoration: InputDecoration(
             filled: true,
             fillColor: const Color(0xFFF8FAFC),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 14,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(50),
               borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -549,25 +542,25 @@ class _RoleDropdown extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(50),
-              borderSide:
-                  const BorderSide(color: AppColors.primary, width: 2),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
             ),
           ),
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: AppColors.slateText),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColors.slateText,
+          ),
           style: GoogleFonts.inter(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: AppColors.darkNavy,
           ),
           items: options
-              .map((o) => DropdownMenuItem<String>(
-                    value: o['value'],
-                    child: Text(
-                      o['label']!,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ))
+              .map(
+                (o) => DropdownMenuItem<String>(
+                  value: o['value'],
+                  child: Text(o['label']!, overflow: TextOverflow.ellipsis),
+                ),
+              )
               .toList(),
         ),
       ],
@@ -576,10 +569,7 @@ class _RoleDropdown extends StatelessWidget {
 }
 
 class _TermsCheckbox extends StatelessWidget {
-  const _TermsCheckbox({
-    required this.value,
-    required this.onChanged,
-  });
+  const _TermsCheckbox({required this.value, required this.onChanged});
 
   final bool value;
   final ValueChanged<bool?> onChanged;
@@ -611,8 +601,7 @@ class _TermsCheckbox extends StatelessWidget {
                   height: 1.5,
                 ),
                 children: [
-                  const TextSpan(
-                      text: 'Dengan membuat akun, Anda menyetujui '),
+                  const TextSpan(text: 'Dengan membuat akun, Anda menyetujui '),
                   TextSpan(
                     text: 'Syarat & Ketentuan',
                     style: GoogleFonts.inter(

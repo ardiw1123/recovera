@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../../core/constants/api_constants.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exception.dart';
@@ -64,10 +65,7 @@ class AuthApiService {
     try {
       final response = await client.post<Map<String, dynamic>>(
         ApiConstants.loginEndpoint,
-        data: {
-          'email': email,
-          'password': password,
-        },
+        data: {'email': email, 'password': password},
         options: Options(extra: {AuthInterceptor.noAuthExtraKey: true}),
       );
 
@@ -159,6 +157,7 @@ class AuthApiService {
     double? baseLat,
     double? baseLng,
     List<String>? prefCategories,
+    int? maxRadiusKm,
     bool? hasColdStorage,
   }) async {
     final payload = <String, dynamic>{};
@@ -174,6 +173,7 @@ class AuthApiService {
     if (baseLat != null) payload['base_lat'] = baseLat;
     if (baseLng != null) payload['base_lng'] = baseLng;
     if (prefCategories != null) payload['pref_categories'] = prefCategories;
+    if (maxRadiusKm != null) payload['max_radius_km'] = maxRadiusKm;
     if (hasColdStorage != null) payload['has_cold_storage'] = hasColdStorage;
 
     try {
@@ -220,4 +220,3 @@ class AuthApiService {
     }
   }
 }
-

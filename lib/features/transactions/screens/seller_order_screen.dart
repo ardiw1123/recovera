@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/network/api_client.dart';
 import '../../../data/repositories/order_repository.dart';
+import '../../../data/services/order_api_service.dart';
 import '../data/sample_transaction_orders.dart';
 import '../models/transaction_order_model.dart';
 
@@ -10,10 +13,7 @@ import '../models/transaction_order_model.dart';
 /// Menampilkan ringkasan omset penjualan, total lot terjual, daftar pesanan masuk dari UMKM,
 /// serta aksi penjual untuk memperbarui alur penyiapan dan serah terima batch.
 class SellerOrderScreen extends StatefulWidget {
-  const SellerOrderScreen({
-    super.key,
-    this.orderRepository,
-  });
+  const SellerOrderScreen({super.key, this.orderRepository});
 
   final OrderRepository? orderRepository;
 
@@ -34,7 +34,9 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
   @override
   void initState() {
     super.initState();
-    _orderRepository = widget.orderRepository ?? OrderRepository();
+    _orderRepository =
+        widget.orderRepository ??
+        OrderRepository(remoteClient: OrderApiService(client: ApiClient()));
     _loadSellerOrders();
   }
 
@@ -42,11 +44,12 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
   Future<void> _loadSellerOrders() async {
     setState(() => _isLoading = true);
     try {
-      // Gunakan data dummy seller yang realistis dan konsisten
-      await Future.delayed(const Duration(milliseconds: 150));
+      final cachedList = await _orderRepository.getOrders(forceRefresh: true);
       if (mounted) {
         setState(() {
-          _sellerOrders = List<TransactionOrder>.from(dummySellerOrders);
+          _sellerOrders = cachedList
+              .map((o) => TransactionOrder.fromCachedOrder(o, isSeller: true))
+              .toList();
         });
       }
     } catch (_) {
@@ -63,32 +66,81 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
   }
 
   /// Memperbarui status pesanan seller
-  void _updateOrderStatus(TransactionOrder targetOrder, String newStatus) async {
+  void _updateOrderStatus(
+    TransactionOrder targetOrder,
+    String newStatus,
+  ) async {
     setState(() {
-      final index = _sellerOrders.indexWhere((order) => order.id == targetOrder.id);
+      final index = _sellerOrders.indexWhere(
+        (order) => order.id == targetOrder.id,
+      );
       if (index != -1) {
         _sellerOrders[index] = _sellerOrders[index].copyWith(status: newStatus);
       }
     });
 
     try {
-      await _orderRepository.cacheOrder(
-        targetOrder.copyWith(status: newStatus).toCachedOrder(),
-      );
-    } catch (_) {}
+      await _orderRepository.updateOrderStatus(targetOrder.id, newStatus);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Status pesanan gagal diperbarui: $e')),
+        );
+      }
+      _loadSellerOrders();
+      return;
+    }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           'Pesanan ${targetOrder.orderCode} berhasil diperbarui ke: ${_getStatusLabel(newStatus)}',
-          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         backgroundColor: const Color(0xFF10B981),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
+  }
+
+  /// Mengirim pengingat pengambilan (pick-up) ke pembeli
+  Future<void> _remindBuyerToPickup(TransactionOrder order) async {
+    try {
+      await _orderRepository.remindBuyer(order.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Pengingat pick-up berhasil dikirim ke pembeli (${order.partnerName})',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.white),
+            ),
+            backgroundColor: const Color(0xFF0284C7),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        final errText = e.toString();
+        final msg = errText.contains('429') || errText.toLowerCase().contains('tunggu')
+            ? 'Pengingat sudah dikirim sebelumnya. Silakan tunggu jeda 3 jam.'
+            : 'Gagal mengirim pengingat: $e';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
   }
 
   /// Format nominal mata uang Rupiah
@@ -295,14 +347,16 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
                 label:
                     'Siap Diambil (${_sellerOrders.where((o) => o.status == 'in_progress').length})',
                 isSelected: _selectedStatusFilter == 'in_progress',
-                onTap: () => setState(() => _selectedStatusFilter = 'in_progress'),
+                onTap: () =>
+                    setState(() => _selectedStatusFilter = 'in_progress'),
               ),
               const SizedBox(width: 8),
               _buildFilterChip(
                 label:
                     'Selesai (${_sellerOrders.where((o) => o.status == 'completed').length})',
                 isSelected: _selectedStatusFilter == 'completed',
-                onTap: () => setState(() => _selectedStatusFilter = 'completed'),
+                onTap: () =>
+                    setState(() => _selectedStatusFilter = 'completed'),
               ),
             ],
           ),
@@ -344,15 +398,20 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'TOTAL PENDAPATAN',
-                      style: GoogleFonts.inter(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF64748B),
-                        letterSpacing: 0.4,
+                    Expanded(
+                      child: Text(
+                        'TOTAL PENDAPATAN',
+                        style: GoogleFonts.inter(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF64748B),
+                          letterSpacing: 0.4,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
@@ -415,15 +474,20 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'TOTAL PENJUALAN',
-                      style: GoogleFonts.inter(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF64748B),
-                        letterSpacing: 0.4,
+                    Expanded(
+                      child: Text(
+                        'TOTAL PENJUALAN',
+                        style: GoogleFonts.inter(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF64748B),
+                          letterSpacing: 0.4,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
@@ -481,7 +545,9 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
           color: isSelected ? const Color(0xFF03045E) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? const Color(0xFF03045E) : const Color(0xFFCBD5E1),
+            color: isSelected
+                ? const Color(0xFF03045E)
+                : const Color(0xFFCBD5E1),
           ),
           boxShadow: isSelected
               ? [
@@ -537,20 +603,35 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
                   child: Row(
                     children: [
                       const Icon(
-                        Icons.store_rounded,
+                        Icons.person_outline_rounded,
                         size: 18,
                         color: Color(0xFF0284C7),
                       ),
                       const SizedBox(width: 6),
                       Flexible(
-                        child: Text(
-                          order.partnerName,
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A),
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              order.partnerName,
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF0F172A),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (order.partnerSubtitle != null &&
+                                order.partnerSubtitle!.isNotEmpty)
+                              Text(
+                                order.partnerSubtitle!,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: const Color(0xFF64748B),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
                         ),
                       ),
                     ],
@@ -563,7 +644,9 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
 
             // Date & ID
             Text(
-              '24 Okt 2026, 15:10 WIB • ID: ${order.orderCode}',
+              '${_formatDateTime(order.createdAt)} • ID: ${order.orderCode}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
                 fontSize: 11,
                 color: const Color(0xFF94A3B8),
@@ -577,21 +660,7 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    order.imageUrl,
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      width: 64,
-                      height: 64,
-                      color: const Color(0xFFF1F5F9),
-                      child: const Icon(
-                        Icons.inventory_2_outlined,
-                        color: Color(0xFF94A3B8),
-                      ),
-                    ),
-                  ),
+                  child: _buildProductThumbnail(order.imageUrl, size: 64),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -619,7 +688,9 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(6),
@@ -714,6 +785,30 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
                   onPressed: () {
                     _updateOrderStatus(order, 'completed');
                   },
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 38,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0284C7),
+                    side: const BorderSide(color: Color(0xFFBAE6FD)),
+                    backgroundColor: const Color(0xFFF0F9FF),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  icon: const Icon(Icons.notifications_active_outlined, size: 16),
+                  label: Text(
+                    'Ingatkan Pembeli untuk Ambil (Pick-up)',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onPressed: () => _remindBuyerToPickup(order),
                 ),
               ),
             ],
@@ -901,8 +996,14 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
               _buildInvoiceLine('Nama Barang', order.productName),
               _buildInvoiceLine('Nomor Batch', order.batchNumber),
               _buildInvoiceLine('Jumlah / Qty', order.unit),
-              _buildInvoiceLine('Harga Satuan Final', _formatCurrencyRupiah(order.unitPrice)),
-              _buildInvoiceLine('Status Pembayaran', 'Lunas (Dana Terverifikasi)'),
+              _buildInvoiceLine(
+                'Harga Satuan Final',
+                _formatCurrencyRupiah(order.unitPrice),
+              ),
+              _buildInvoiceLine(
+                'Status Pembayaran',
+                'Lunas (Dana Terverifikasi)',
+              ),
               const Divider(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -951,6 +1052,55 @@ class _SellerOrderScreenState extends State<SellerOrderScreen> {
           ),
         );
       },
+    );
+  }
+
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    final m = months[(local.month - 1).clamp(0, 11)];
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '${local.day} $m ${local.year}, $hh:$mm WIB';
+  }
+
+  Widget _buildProductThumbnail(String img, {double size = 64}) {
+    if (img.isNotEmpty) {
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        return Image.network(
+          img,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _fallbackThumbnail(size),
+        );
+      } else if (img.startsWith('/') || img.startsWith('file://') || img.contains(':\\')) {
+        final cleanPath = img.replaceFirst('file://', '');
+        return Image.file(
+          File(cleanPath),
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _fallbackThumbnail(size),
+        );
+      }
+    }
+    return _fallbackThumbnail(size);
+  }
+
+  Widget _fallbackThumbnail(double size) {
+    return Container(
+      width: size,
+      height: size,
+      color: const Color(0xFFF1F5F9),
+      child: const Icon(
+        Icons.inventory_2_outlined,
+        color: Color(0xFF94A3B8),
+        size: 28,
+      ),
     );
   }
 

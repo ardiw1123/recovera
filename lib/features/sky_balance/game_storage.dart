@@ -13,6 +13,7 @@ class GameStorage {
   static const _gamesWonKey = 'sky_balance_games_won';
   static const _totalFoodKey = 'sky_balance_total_food';
   static const _recoveryPointsKey = 'sky_balance_recovery_points';
+  static const _characterKey = 'sky_balance_character';
 
   final GameRepository _repository;
 
@@ -30,6 +31,23 @@ class GameStorage {
   Future<int> get gamesPlayed async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_gamesPlayedKey) ?? 0;
+  }
+
+  /// Lifetime food collected across every climb.
+  Future<int> get totalFood async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_totalFoodKey) ?? 0;
+  }
+
+  /// Id of the character the player last picked in the lobby.
+  Future<String?> get characterId async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_characterKey);
+  }
+
+  Future<void> saveCharacterId(String characterId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_characterKey, characterId);
   }
 
   Future<bool> recordResult(SkyBalanceResult result) async {

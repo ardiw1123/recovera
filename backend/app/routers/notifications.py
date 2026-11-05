@@ -34,6 +34,7 @@ async def list_notifications(
             type=n.type,
             is_read=n.is_read,
             created_at=n.created_at.isoformat(),
+            data=n.data or {},
         ).model_dump()
         for n in notifs
     ]
@@ -77,5 +78,6 @@ async def mark_notification_read(
             type=notif.type,
             is_read=notif.is_read,
             created_at=notif.created_at.isoformat(),
+            data=notif.data or {},
         ).model_dump()
     )

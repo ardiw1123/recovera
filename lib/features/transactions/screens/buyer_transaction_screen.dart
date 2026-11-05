@@ -1,8 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+
+import '../../../core/services/network_connectivity_service.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/network/api_client.dart';
 import '../../../data/repositories/order_repository.dart';
+import '../../../data/services/order_api_service.dart';
 import '../data/sample_transaction_orders.dart';
 import '../models/transaction_order_model.dart';
 import '../widgets/order_tracking_compass_sheet.dart';
@@ -11,10 +17,7 @@ import '../widgets/order_tracking_compass_sheet.dart';
 /// Menampilkan daftar pesanan, status alur pick-up mandiri, batas waktu penjemputan,
 /// dan integrasi pelacakan kompas tanpa fitur rating & tanpa toggle role.
 class BuyerTransactionScreen extends StatefulWidget {
-  const BuyerTransactionScreen({
-    super.key,
-    this.orderRepository,
-  });
+  const BuyerTransactionScreen({super.key, this.orderRepository});
 
   final OrderRepository? orderRepository;
 
@@ -35,30 +38,41 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
   @override
   void initState() {
     super.initState();
-    _orderRepository = widget.orderRepository ?? OrderRepository();
+    NetworkConnectivityService.instance.addListener(_onConnectivityChanged);
+    _orderRepository =
+        widget.orderRepository ??
+        OrderRepository(remoteClient: OrderApiService(client: ApiClient()));
     _loadBuyerOrders();
+  }
+
+  void _onConnectivityChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    NetworkConnectivityService.instance.removeListener(_onConnectivityChanged);
+    super.dispose();
   }
 
   /// Memuat data pesanan pembeli dari lokal SQLite atau sampel data realistis
   Future<void> _loadBuyerOrders() async {
     setState(() => _isLoading = true);
     try {
-      final cachedList = await _orderRepository.getOrders();
-      if (cachedList.isNotEmpty) {
-        final mappedList = cachedList
-            .map((item) => TransactionOrder.fromCachedOrder(item))
-            .toList();
-        if (mounted) {
-          setState(() {
-            _orderList = mappedList;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _orderList = List<TransactionOrder>.from(dummyBuyerOrders);
-          });
-        }
+      final cachedList = await _orderRepository.getOrders(forceRefresh: true);
+      final mappedList = cachedList
+          .map((item) => TransactionOrder.fromCachedOrder(item, isSeller: false))
+          .toList();
+
+      // Jika belum ada pesanan sama sekali, tampilkan sampel data untuk demonstrasi
+      if (mappedList.isEmpty) {
+        mappedList.addAll(dummyBuyerOrders);
+      }
+
+      if (mounted) {
+        setState(() {
+          _orderList = mappedList;
+        });
       }
     } catch (_) {
       if (mounted) {
@@ -74,9 +88,14 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
   }
 
   /// Memperbarui status pesanan lokal & sinkron ke SQLite
-  void _updateOrderStatus(TransactionOrder targetOrder, String newStatus) async {
+  void _updateOrderStatus(
+    TransactionOrder targetOrder,
+    String newStatus,
+  ) async {
     setState(() {
-      final index = _orderList.indexWhere((order) => order.id == targetOrder.id);
+      final index = _orderList.indexWhere(
+        (order) => order.id == targetOrder.id,
+      );
       if (index != -1) {
         _orderList[index] = _orderList[index].copyWith(status: newStatus);
       }
@@ -106,7 +125,9 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
   List<TransactionOrder> get _filteredOrders {
     if (_selectedStatusFilter == 'active') {
       return _orderList
-          .where((order) => order.status == 'in_progress' || order.status == 'paid')
+          .where(
+            (order) => order.status == 'in_progress' || order.status == 'paid',
+          )
           .toList();
     } else if (_selectedStatusFilter == 'completed') {
       return _orderList.where((order) => order.status == 'completed').toList();
@@ -221,36 +242,38 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
         ),
         const SizedBox(height: 12),
 
-        // SQLite Offline/Sync Banner
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE0F2FE),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFBAE6FD)),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.bolt_rounded,
-                color: Color(0xFF0284C7),
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Menampilkan data lokal (SQLite cached_orders) • Otomatis sinkron',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF0369A1),
+        // Offline Storage & Sync Banner
+        if (!NetworkConnectivityService.instance.isOnline) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE0F2FE),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFBAE6FD)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.offline_pin_rounded,
+                  color: Color(0xFF0284C7),
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Tersimpan di mode offline • Otomatis sinkron',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF0369A1),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
 
         // Tab Filter Status
         SingleChildScrollView(
@@ -274,13 +297,15 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
                 label:
                     'Selesai (${_orderList.where((order) => order.status == 'completed').length})',
                 isSelected: _selectedStatusFilter == 'completed',
-                onTap: () => setState(() => _selectedStatusFilter = 'completed'),
+                onTap: () =>
+                    setState(() => _selectedStatusFilter = 'completed'),
               ),
               const SizedBox(width: 8),
               _buildFilterChip(
                 label: 'Dibatalkan',
                 isSelected: _selectedStatusFilter == 'cancelled',
-                onTap: () => setState(() => _selectedStatusFilter = 'cancelled'),
+                onTap: () =>
+                    setState(() => _selectedStatusFilter = 'cancelled'),
               ),
             ],
           ),
@@ -406,7 +431,9 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
 
             // Waktu Transaksi & Kode Order
             Text(
-              '24 Okt 2026, 14:30 WIB • ID: ${order.orderCode}',
+              '${_formatDateTime(order.createdAt)} • ID: ${order.orderCode}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
                 fontSize: 11,
                 color: const Color(0xFF94A3B8),
@@ -420,21 +447,7 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    order.imageUrl,
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      width: 64,
-                      height: 64,
-                      color: const Color(0xFFF1F5F9),
-                      child: const Icon(
-                        Icons.inventory_2_outlined,
-                        color: Color(0xFF94A3B8),
-                      ),
-                    ),
-                  ),
+                  child: _buildProductThumbnail(order.imageUrl, size: 64),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -462,7 +475,9 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(6),
@@ -539,7 +554,7 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '⏱️ Batas Ambil: 25 Okt 2026, 21:00 WIB',
+                            '⏱️ Batas Ambil: ${_formatDateTime(order.pickupDeadline ?? order.createdAt.add(const Duration(hours: 24)))}',
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -613,16 +628,25 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Menghubungi layanan pelanggan ${order.partnerName}...',
-                              style: GoogleFonts.inter(color: Colors.white),
-                            ),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
+                      onPressed: () async {
+                        try {
+                          await _orderRepository.remindSeller(order.id);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Pengingat dikirim kepada penjual.',
+                                ),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.toString())),
+                            );
+                          }
+                        }
                       },
                     ),
                   ),
@@ -651,7 +675,10 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
             ] else if (isCompleted) ...[
               const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0FDF4),
                   borderRadius: BorderRadius.circular(8),
@@ -665,15 +692,19 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
                       size: 16,
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      'Selesai via Verifikasi QR Gudang',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF15803D),
+                    Expanded(
+                      child: Text(
+                        'Selesai via Verifikasi QR Gudang',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF15803D),
+                        ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     TextButton(
                       onPressed: () => _showInvoiceDialog(order),
                       style: TextButton.styleFrom(
@@ -843,8 +874,14 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
               _buildInvoiceLine('Produk', order.productName),
               _buildInvoiceLine('Batch Number', order.batchNumber),
               _buildInvoiceLine('Jumlah / Qty', order.unit),
-              _buildInvoiceLine('Harga Satuan', _formatCurrencyRupiah(order.unitPrice)),
-              _buildInvoiceLine('Biaya Penanganan Platform', 'Rp 0 (Subsidi B2B)'),
+              _buildInvoiceLine(
+                'Harga Satuan',
+                _formatCurrencyRupiah(order.unitPrice),
+              ),
+              _buildInvoiceLine(
+                'Biaya Penanganan Platform',
+                'Rp 0 (Subsidi B2B)',
+              ),
               const Divider(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -893,6 +930,55 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
           ),
         );
       },
+    );
+  }
+
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    final m = months[(local.month - 1).clamp(0, 11)];
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '${local.day} $m ${local.year}, $hh:$mm WIB';
+  }
+
+  Widget _buildProductThumbnail(String img, {double size = 64}) {
+    if (img.isNotEmpty) {
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        return Image.network(
+          img,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _fallbackThumbnail(size),
+        );
+      } else if (img.startsWith('/') || img.startsWith('file://') || img.contains(':\\')) {
+        final cleanPath = img.replaceFirst('file://', '');
+        return Image.file(
+          File(cleanPath),
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _fallbackThumbnail(size),
+        );
+      }
+    }
+    return _fallbackThumbnail(size);
+  }
+
+  Widget _fallbackThumbnail(double size) {
+    return Container(
+      width: size,
+      height: size,
+      color: const Color(0xFFF1F5F9),
+      child: const Icon(
+        Icons.inventory_2_outlined,
+        color: Color(0xFF94A3B8),
+        size: 28,
+      ),
     );
   }
 

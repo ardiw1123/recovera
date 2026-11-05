@@ -17,6 +17,7 @@ import '../services/profile_photo_service.dart';
 import '../widgets/auth_widgets.dart';
 import '../../feedback/screens/saran_kesan_screen.dart';
 import 'location_management_screen.dart';
+import 'business_info_edit_screen.dart';
 import 'login_screen.dart';
 import '../../sky_balance/sky_balance_screen.dart';
 import '../../transactions/screens/transaction_history_screen.dart';
@@ -307,20 +308,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final profile = AuthRepository.instance.currentUserProfile;
         final tokens = AuthRepository.instance.currentTokens;
 
-        final company = (profile?.companyName != null && profile!.companyName!.isNotEmpty ? profile.companyName : null) ??
-            (profile?.name != null && profile!.name.isNotEmpty ? profile.name : null) ??
-            (tokens?.name != null && tokens!.name!.isNotEmpty ? tokens.name : null) ??
+        final company =
+            (profile?.companyName != null && profile!.companyName!.isNotEmpty
+                ? profile.companyName
+                : null) ??
+            (profile?.name != null && profile!.name.isNotEmpty
+                ? profile.name
+                : null) ??
+            (tokens?.name != null && tokens!.name!.isNotEmpty
+                ? tokens.name
+                : null) ??
             _defaultCompany;
         final role = profile?.role != null
             ? (profile!.role == 'seller'
                   ? 'Distributor (Seller)'
                   : 'UMKM Kuliner (Buyer)')
             : (tokens?.role == 'seller'
-                ? 'Distributor (Seller)'
-                : _defaultRole);
-        final email = profile?.email != null && profile!.email.isNotEmpty
-            ? profile.email
-            : (tokens?.name != null && tokens!.name!.contains('@') ? tokens.name : null);
+                  ? 'Distributor (Seller)'
+                  : _defaultRole);
         final city = profile?.city ?? _defaultCity;
         final headerHeight = (MediaQuery.sizeOf(context).height * 0.18)
             .clamp(132.0, 156.0)
@@ -862,25 +867,31 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Pilih Mata Uang Acuan (PB-062)',
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Pilih Mata Uang Acuan (PB-062)',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF0F172A),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        Text(
-                          'Diterapkan di katalog & konversi detail lelang',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: const Color(0xFF64748B),
+                          Text(
+                            'Diterapkan di katalog & konversi detail lelang',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: const Color(0xFF64748B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -1065,25 +1076,31 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Pilih Zona Waktu Operasional (PB-063)',
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF0F172A),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Pilih Zona Waktu Operasional (PB-063)',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF0F172A),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        Text(
-                          'Menyesuaikan jadwal lelang & deadline pickup barang',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: const Color(0xFF64748B),
+                          Text(
+                            'Menyesuaikan jadwal lelang & deadline pickup barang',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: const Color(0xFF64748B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -1237,7 +1254,14 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         iconBg: const Color(0xFFEFF6FF),
         iconColor: AppColors.primary,
         label: 'Informasi Bisnis',
-        onTap: () {},
+        onTap: () async {
+          final updated = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(builder: (_) => const BusinessInfoEditScreen()),
+          );
+          if (updated == true && mounted) {
+            setState(() {});
+          }
+        },
       ),
       _ProfileMenuItem(
         key: const Key('menu_transaction_history'),
@@ -1253,9 +1277,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         subtitleColor: AppColors.primary,
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const TransactionHistoryScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const TransactionHistoryScreen()),
           );
         },
       ),
@@ -1317,7 +1339,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
             height: 28,
             child: Switch.adaptive(
               value: _isBiometricEnabled,
-              activeColor: const Color(0xFF059669),
+              activeTrackColor: const Color(0xFF059669),
               onChanged: _onToggleBiometric,
             ),
           ),

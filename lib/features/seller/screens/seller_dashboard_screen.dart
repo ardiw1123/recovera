@@ -1,21 +1,26 @@
+import '../../../data/repositories/app_prefs_repository.dart';
 import 'dart:async';
-import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/theme/app_colors.dart';
+import '../../../core/network/api_client.dart';
+import '../../../data/models/cached_order_model.dart';
+import '../../../data/repositories/order_repository.dart';
+import '../../../data/services/order_api_service.dart';
+import '../../../data/repositories/notification_repository.dart';
 import '../models/seller_dashboard_model.dart';
 import '../repositories/seller_repository.dart';
 import 'upload_stock_flow_screen.dart';
+import 'esg_certificate_list_screen.dart';
+import 'seller_inventory_screen.dart';
 import '../../transactions/screens/seller_order_screen.dart';
+import '../../../features/home/screens/notification_list_screen.dart';
+import '../../chat/screens/chatbot_screen.dart';
 
-/// Halaman Beranda Seller — Dashboard Ringkasan
-/// menggantikan SellerInventoryScreen di tab Beranda.
-/// Menampilkan ringkasan aktif, stok expired, dan aktivitas terbaru.
 class SellerDashboardScreen extends StatefulWidget {
-  const SellerDashboardScreen({
-    super.key,
-    this.repository,
-  });
+  const SellerDashboardScreen({super.key, this.repository});
 
   final SellerRepository? repository;
 
@@ -26,7 +31,12 @@ class SellerDashboardScreen extends StatefulWidget {
 class _SellerDashboardScreenState extends State<SellerDashboardScreen>
     with SingleTickerProviderStateMixin {
   late final SellerRepository _repository;
-  Timer? _refreshTimer;
+  late Timer? _refreshTimer;
+  late final OrderRepository _ordersRepository;
+  List<CachedOrderModel> _pendingOrders = [];
+  final NotificationRepository _notificationRepository =
+      NotificationRepository();
+  int _unreadNotificationCount = 0;
   bool _isLoading = false;
   String? _errorMessage;
   SellerDashboardData? _dashboardData;
@@ -35,8 +45,25 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   void initState() {
     super.initState();
     _repository = widget.repository ?? SellerRepository.instance;
+    _ordersRepository = OrderRepository(
+      remoteClient: OrderApiService(client: ApiClient()),
+    );
     _loadData();
+    _loadUnreadNotificationCount();
     _startAutoRefresh();
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final notifications = await _notificationRepository.fetchNotifications();
+      if (mounted) {
+        setState(
+          () => _unreadNotificationCount = notifications
+              .where((item) => !item.isRead)
+              .length,
+        );
+      }
+    } catch (_) {}
   }
 
   @override
@@ -48,10 +75,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   void _startAutoRefresh() {
     _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       if (!mounted) return;
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
       _loadData();
     });
   }
@@ -65,9 +88,16 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
 
     try {
       final data = await _repository.loadDashboard();
+      final orders = await _ordersRepository.getOrders(forceRefresh: true);
       if (mounted) {
         setState(() {
           _dashboardData = data;
+          _pendingOrders = orders
+              .where(
+                (order) =>
+                    order.status == 'paid' || order.status == 'in_progress',
+              )
+              .toList();
           _isLoading = false;
         });
       }
@@ -78,40 +108,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
           _isLoading = false;
         });
       }
-    }
-  }
-
-  // Helper untuk format waktu relatif
-  String _formatTimestamp(String? timestamp) {
-    if (timestamp == null || timestamp.isEmpty) return '';
-    try {
-      final dt = DateTime.parse(timestamp);
-      final now = DateTime.now();
-      final diff = now.difference(dt);
-
-      if (diff.inDays >= 1) {
-        // Jika lebih dari 1 hari, gunakan format "Kemarin/Hari ini/Bulan lalu"
-        if (dt.day == now.day && dt.month == now.month && dt.year == now.year) {
-          return 'Hari ini, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-        }
-        if (dt.day == now.subtract(const Duration(days: 1)).day &&
-            dt.month == now.subtract(const Duration(days: 1)).month &&
-            dt.year == now.subtract(const Duration(days: 1)).year) {
-          return 'Kemarin, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-        }
-        return '${dt.day}/${dt.month}/${dt.year}, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-      } else {
-        // Kurang dari 1 hari
-        if (diff.inMinutes > 0) {
-          return '${diff.inMinutes} menit lalu';
-        } else if (diff.inSeconds > 0) {
-          return '${diff.inSeconds} detik lalu';
-        } else {
-          return 'Baru saja';
-        }
-      }
-    } catch (_) {
-      return timestamp;
     }
   }
 
@@ -138,20 +134,384 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final companyName = _dashboardData?.companyName ?? '';
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _loadData,
-          color: AppColors.primary,
-          child: _buildBody(),
-        ),
+      floatingActionButton: _buildChatbotFab(),
+      body: Column(
+        children: [
+          // ── Fixed Wave Header (Desain disamakan dengan Buyer Header) ──
+          _buildFixedWaveHeader(companyName),
+
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _loadData,
+              color: AppColors.primary,
+              child: _buildBody(),
+            ),
+          ),
+        ],
       ),
-      floatingActionButton: _buildFab(),
     );
   }
 
+  /// Header Beranda Penjual dengan desain gelombang ombak (identik dengan Buyer)
+  Widget _buildFixedWaveHeader(String companyName) {
+    return Stack(
+      children: [
+        // Layer gelombang latar belakang (soft contrast)
+        Positioned.fill(
+          child: ClipPath(
+            clipper: _HeaderWaveBackdropClipper(),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryLight.withValues(alpha: 0.5),
+                    AppColors.secondary.withValues(alpha: 0.6),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
 
+        // Layer gelombang utama dengan konten header tetap (fixed)
+        ClipPath(
+          clipper: _HeaderWaveClipper(),
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primaryDark,
+                  AppColors.primary,
+                  AppColors.primaryLight,
+                ],
+              ),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sisi Kiri: Logo Brand Recovera, Greeting Seller, dan Lokasi/Chips
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // ── Logo Recovera & Teks Brand ──
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              children: [
+                                Image.asset(
+                                  'lib/assets/recovera-logo-mark.png',
+                                  width: 24,
+                                  height: 24,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, _, _) => const Icon(
+                                    Icons.eco_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Recovera',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    letterSpacing: -0.6,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'RECOVERA B2B',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981)
+                                        .withValues(alpha: 0.25),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: const Color(0xFF6EE7B7)
+                                          .withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.verified_rounded,
+                                        size: 9,
+                                        color: Color(0xFF6EE7B7),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        'Verified',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF6EE7B7),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          // ── Greeting Seller: "Halo, [companyName]!" ──
+                          Text(
+                            'Halo, ${companyName.isNotEmpty ? companyName : "Mitra Bisnis"}',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: -0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+
+                          // ── Bar Lokasi Gudang & Chips Info ──
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_rounded,
+                                    color: Color(0xFF90E0EF),
+                                    size: 15,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Gudang Utama',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    size: 15,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.22,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.radar_rounded,
+                                          size: 10,
+                                          color: Color(0xFF90E0EF),
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          'Radius < 15 km',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ListenableBuilder(
+                                    listenable: AppPrefsRepository.instance,
+                                    builder: (context, _) {
+                                      final cur = AppPrefsRepository
+                                          .instance
+                                          .selectedCurrency;
+                                      final tz = AppPrefsRepository
+                                          .instance
+                                          .selectedTimezone;
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.22,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '$cur • $tz',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // ── Tombol Pesanan / Transaksi Masuk (Kanan Atas) ──
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SellerOrderScreen(),
+                          ),
+                        );
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.receipt_long_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // ── Tombol Notifikasi (Kanan Atas) ──
+                    GestureDetector(
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationListScreen(),
+                          ),
+                        );
+                        _loadUnreadNotificationCount();
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.notifications_none_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                          if (_unreadNotificationCount > 0)
+                            Positioned(
+                              right: 2,
+                              top: 2,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildBody() {
     // Jika belum ada data, tampilkan loading
@@ -179,13 +539,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 5a. Header Section
-          _buildHeader(data.companyName),
-
-          const SizedBox(height: 24),
+          // 5a. Header telah dipindahkan ke top sticky wave header
 
           // 5b. Bento Summary Cards
           _buildBentoCards(data),
+
+          const SizedBox(height: 24),
+
+          _buildQuickActionsBar(),
 
           const SizedBox(height: 24),
 
@@ -195,9 +556,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
           const SizedBox(height: 24),
 
           // 5d. Card Aktivitas Terbaru
-          _buildRecentActivitiesCard(data.recentActivities),
+          _buildPendingOrdersCard(),
 
           const SizedBox(height: 24),
+          _buildEsgImpactSummary(data),
         ],
       ),
     );
@@ -206,27 +568,23 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   Widget _buildHeader(String companyName) {
     return Row(
       children: [
-        // Logo Recovera horizontal
-        Container(
-          width: 120,
+        Image.asset(
+          'lib/assets/recovera-logo-horizontal.png',
+          width: 72,
           height: 40,
-          decoration: BoxDecoration(
-            image: const DecorationImage(
-              image: AssetImage('assets/images/recovera_logo_horizontal.png'),
-              fit: BoxFit.contain,
-            ),
-          ),
+          fit: BoxFit.contain,
         ),
         const SizedBox(width: 12),
-        // Teks sapaan dan subtitle
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Halo, $companyName',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  fontSize: 22,
+                  fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: AppColors.darkNavy,
                 ),
@@ -234,54 +592,37 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
               const SizedBox(height: 2),
               Text(
                 'Bersama kita memulihkan nilai pangan',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 11,
                   color: AppColors.slateText,
                 ),
               ),
             ],
           ),
         ),
-        // Ikon Riwayat Pesanan Seller di kanan logo
-        GestureDetector(
-          key: const Key('btn_seller_orders'),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const SellerOrderScreen(),
-              ),
+        IconButton(
+          tooltip: 'Notifikasi',
+          onPressed: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NotificationListScreen()),
             );
+            _loadUnreadNotificationCount();
           },
-          child: Container(
-            width: 36,
-            height: 36,
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: const Icon(
-              Icons.receipt_long_rounded,
-              size: 20,
-              color: Color(0xFF03045E),
-            ),
-          ),
-        ),
-        // Ikon notifikasi di kanan logo
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: const Icon(
-            Icons.notifications_none_rounded,
-            size: 20,
-            color: Color(0xFF64748B),
+          icon: Stack(
+            children: [
+              const Icon(
+                Icons.notifications_none_rounded,
+                color: AppColors.primary,
+              ),
+              if (_unreadNotificationCount > 0)
+                const Positioned(
+                  right: 0,
+                  top: 0,
+                  child: CircleAvatar(radius: 4, backgroundColor: Colors.red),
+                ),
+            ],
           ),
         ),
       ],
@@ -309,11 +650,20 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
       }
     }
 
-    return Row(
+    final expiringCount = data.nearExpiryListings
+        .where((item) => item.daysRemaining <= 7)
+        .length;
+    Widget row(_BentoCard first, _BentoCard second) => Row(
       children: [
-        // Card kiri: Stok Aktif
-        Expanded(
-          child: _BentoCard(
+        Expanded(child: first),
+        const SizedBox(width: 12),
+        Expanded(child: second),
+      ],
+    );
+    return Column(
+      children: [
+        row(
+          _BentoCard(
             label: 'Stok Aktif',
             value: activeCount.toString(),
             subtitle: calculatePercent(activeCount, prevMonthActive),
@@ -321,153 +671,289 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
             color: AppColors.primary,
             bgColor: Colors.white,
           ),
-        ),
-        const SizedBox(width: 12),
-        // Card kanan: Transaksi Bulan Ini
-        Expanded(
-          child: _BentoCard(
+          _BentoCard(
             label: 'Transaksi Bulan Ini',
             value: currentMonthOrders.toString(),
             subtitle: calculatePercent(currentMonthOrders, prevMonthOrders),
             icon: Icons.receipt_long,
-            color: const Color(0xFF10B981), // success green
+            color: const Color(0xFF10B981),
             bgColor: Colors.white,
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const SellerOrderScreen(),
-                ),
-              );
-            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        row(
+          _BentoCard(
+            label: 'Segera Kedaluwarsa',
+            value: '$expiringCount',
+            subtitle: '7 hari atau kurang',
+            icon: Icons.warning_amber_rounded,
+            color: const Color(0xFFD97706),
+            bgColor: Colors.white,
+          ),
+          _BentoCard(
+            label: 'Sertifikat ESG',
+            value: '${data.esgCertificateCount}',
+            subtitle: 'Sertifikat diterbitkan',
+            icon: Icons.eco_outlined,
+            color: const Color(0xFF15803D),
+            bgColor: Colors.white,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildNearExpiryCard(List<NearExpiryItem>? listings) {
-    final nearExpiry = listings ?? [];
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+  Widget _buildQuickActionsBar() {
+    final actions = [
+      (
+        Icons.add_a_photo_outlined,
+        'Upload Stok',
+        () => const UploadStockFlowScreen(),
+      ),
+      (
+        Icons.inventory_2_outlined,
+        'Inventaris',
+        () => const SellerInventoryScreen(),
+      ),
+      (
+        Icons.eco_outlined,
+        'Sertifikat ESG',
+        () => const EsgCertificateListScreen(),
+      ),
+      (Icons.receipt_long_outlined, 'Pesanan', () => const SellerOrderScreen()),
+    ];
+    return Row(
+      children: [
+        for (final action in actions)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () =>
+                      Navigator.of(context)
+                          .push(MaterialPageRoute(builder: (_) => action.$3())),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 4,
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(action.$1, color: AppColors.primary, size: 21),
+                        const SizedBox(height: 5),
+                        Text(
+                          action.$2,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        ],
+      ],
+    );
+  }
+
+  Widget _buildNearExpiryCard(List<NearExpiryItem>? listings) {
+    final nearExpiry = listings ?? const <NearExpiryItem>[];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.warning_amber_rounded,
-                size: 20,
-                color: Color(0xFFD97706),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Stok Mendekati Expired',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.darkNavy,
-                ),
-              ),
-            ],
+          Text(
+            'Stok Mendekati Kedaluwarsa',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.darkNavy,
+            ),
           ),
           const SizedBox(height: 8),
           if (nearExpiry.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Text(
-                'Tidak ada stok yang mendekati expired 👍',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: AppColors.slateText,
-                ),
+            Text(
+              'Tidak ada stok yang mendekati kedaluwarsa.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: AppColors.slateText,
               ),
             )
           else
-            ...List.generate(
-              nearExpiry.length,
-              (index) {
-                final item = nearExpiry[index];
-                return _NearExpiryItemCard(
-                  item: item,
-                  badgeColor: _getBadgeColor(item.daysRemaining),
-                  badgeLabel: _getBadgeLabel(item.daysRemaining),
-                );
-              },
+            ...nearExpiry.map(
+              (item) => _NearExpiryItemCard(
+                item: item,
+                badgeColor: _getBadgeColor(item.daysRemaining),
+                badgeLabel: _getBadgeLabel(item.daysRemaining),
+              ),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildRecentActivitiesCard(List<RecentActivity>? activities) {
-    final actList = activities ?? [];
-
+  Widget _buildPendingOrdersCard() {
+    final orders = _pendingOrders.take(5).toList();
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.history_rounded,
-                size: 20,
-                color: Color(0xFF64748B),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Aktivitas Terbaru',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.darkNavy,
-                ),
-              ),
-            ],
+          Text(
+            'Pesanan Menunggu Tindakan',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.darkNavy,
+            ),
           ),
-          const SizedBox(height: 8),
-          if (actList.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Text(
-                'Tidak ada aktivitas terbaru',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: AppColors.slateText,
-                ),
+          const SizedBox(height: 10),
+          if (orders.isEmpty)
+            Text(
+              'Tidak ada pesanan yang menunggu tindakan.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: AppColors.slateText,
               ),
             )
           else
-            ...List.generate(
-              min(actList.length, 5),
-              (index) => _RecentActivityItem(
-                activity: actList[index],
-                formatTimestamp: _formatTimestamp,
+            ...orders.map(
+              (order) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            order.productName.isEmpty
+                                ? 'Listing #${order.listingId}'
+                                : order.productName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            'Pembeli #${order.buyerId} · ${order.status == 'paid' ? 'Menunggu disiapkan' : 'Siap diambil'}',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: AppColors.slateText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        try {
+                          await _ordersRepository.updateOrderStatus(
+                            order.id,
+                            order.status == 'paid'
+                                ? 'in_progress'
+                                : 'completed',
+                          );
+                          await _loadData();
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Status pesanan gagal diperbarui: $e',
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      child: Text(
+                        order.status == 'paid' ? 'Siapkan' : 'Selesaikan',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+          if (_pendingOrders.length > 5)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SellerOrderScreen()),
+                ),
+                child: const Text('Lihat semua'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEsgImpactSummary(SellerDashboardData data) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF3),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.eco_outlined, color: Color(0xFF15803D), size: 30),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${data.totalCarbonSaved.toStringAsFixed(1)} kg CO₂e diselamatkan',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF166534),
+                  ),
+                ),
+                Text(
+                  '${data.esgCertificateCount} sertifikat ESG',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: const Color(0xFF334155),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const EsgCertificateListScreen(),
+              ),
+            ),
+            child: const Text('Lihat Sertifikat'),
+          ),
         ],
       ),
     );
@@ -514,7 +1000,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
               ),
             ),
           ],
@@ -523,22 +1012,33 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
     );
   }
 
-  Widget _buildFab() {
-    return FloatingActionButton.extended(
-      onPressed: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const UploadStockFlowScreen(),
+  Widget _buildChatbotFab() {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.38),
+            blurRadius: 14,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
           ),
-        );
-      },
-      backgroundColor: AppColors.primary,
-      icon: const Icon(Icons.add, color: AppColors.white),
-      label: Text(
-        'Upload Stok',
-        style: GoogleFonts.inter(
-          fontWeight: FontWeight.w600,
+        ],
+      ),
+      child: FloatingActionButton(
+        key: const Key('fab_chatbot_seller'),
+        tooltip: 'Rera',
+        onPressed: () {
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const ChatbotScreen()));
+        },
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        shape: const CircleBorder(),
+        child: const Icon(
+          Icons.smart_toy_rounded,
           color: AppColors.white,
+          size: 26,
         ),
       ),
     );
@@ -553,7 +1053,6 @@ class _BentoCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final Color bgColor;
-  final VoidCallback? onTap;
 
   const _BentoCard({
     required this.label,
@@ -562,27 +1061,23 @@ class _BentoCard extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.bgColor,
-    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.15),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.15),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -635,9 +1130,8 @@ class _BentoCard extends StatelessWidget {
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 // ─── Widget Item Stok Mendekati Expired ─────────────────────────────
@@ -667,11 +1161,7 @@ class _NearExpiryItemCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
             ),
-            child: Icon(
-              Icons.local_drink_rounded,
-              size: 24,
-              color: badgeColor,
-            ),
+            child: Icon(Icons.local_drink_rounded, size: 24, color: badgeColor),
           ),
           const SizedBox(width: 12),
           // Detail produk
@@ -722,96 +1212,49 @@ class _NearExpiryItemCard extends StatelessWidget {
   }
 }
 
-// ─── Widget Item Aktivitas Terbaru ───────────────────────────────────
-class _RecentActivityItem extends StatelessWidget {
-  final RecentActivity activity;
-  final Function(String?) formatTimestamp;
 
-  const _RecentActivityItem({
-    required this.activity,
-    required this.formatTimestamp,
-  });
+/// Custom Clipper untuk gelombang header bawah (disamakan dengan Buyer HomeScreen)
+class _HeaderWaveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 24);
+    path.cubicTo(
+      size.width * 0.30,
+      size.height + 6,
+      size.width * 0.65,
+      size.height - 32,
+      size.width,
+      size.height - 12,
+    );
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final iconData = _getIconForType(activity.type);
-    final iconColor = _getIconColorForType(activity.type);
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(iconData, size: 18, color: iconColor),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  activity.title,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.darkNavy,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  activity.subtitle,
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    color: AppColors.slateText,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ],
-            ),
-          ),
-          Text(
-            formatTimestamp(activity.timestamp),
-            style: GoogleFonts.inter(
-              fontSize: 10,
-              color: AppColors.slateText,
-            ),
-          ),
-        ],
-      ),
+/// Custom Clipper untuk aksen gelombang sekunder di latar belakang header
+class _HeaderWaveBackdropClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 14);
+    path.cubicTo(
+      size.width * 0.35,
+      size.height + 14,
+      size.width * 0.70,
+      size.height - 20,
+      size.width,
+      size.height - 6,
     );
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
   }
 
-  IconData _getIconForType(String type) {
-    switch (type.toLowerCase()) {
-      case 'sold':
-        return Icons.remove_circle_rounded;
-      case 'uploaded':
-        return Icons.upload_rounded;
-      case 'expired':
-        return Icons.remove_circle_rounded;
-      default:
-        return Icons.history_rounded;
-    }
-  }
-
-  Color _getIconColorForType(String type) {
-    switch (type.toLowerCase()) {
-      case 'sold':
-        return AppColors.error;
-      case 'uploaded':
-        return AppColors.primary;
-      case 'expired':
-        return AppColors.error;
-      default:
-        return AppColors.slateText;
-    }
-  }
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

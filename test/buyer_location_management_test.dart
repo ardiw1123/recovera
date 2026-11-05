@@ -490,10 +490,16 @@ void main() {
         greaterThan(tester.getTopLeft(skyBalance).dy),
       );
 
+      await tester.ensureVisible(skyBalance);
+      await tester.pump();
       await tester.tap(skyBalance);
-      await tester.pumpAndSettle();
-      expect(find.text('Sky Balance'), findsOneWidget);
-      expect(find.text('HOW TO PLAY'), findsOneWidget);
+      // The lobby runs a looping cloud animation, so settle frame by frame
+      // instead of pumpAndSettle (which would never settle).
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('How to play'), findsOneWidget);
+      expect(find.text('PLAY'), findsOneWidget);
+      expect(find.text('PLAY'), findsOneWidget);
     });
   });
 

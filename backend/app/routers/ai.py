@@ -2,13 +2,44 @@ from typing import Annotated
 from fastapi import APIRouter, Body, File, Request, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 
-from app.core.dependencies import RequireSellerDep
+from app.core.dependencies import CurrentUserDep, DbSessionDep, RequireSellerDep
 from app.core.exceptions import AppException
-from app.schemas.ai import InvoiceOcrResponse, PriceAdviceRequest, PriceAdviceResponse
+from app.schemas.ai import (
+    ChatRequest,
+    ChatResponse,
+    InvoiceOcrResponse,
+    PriceAdviceRequest,
+    PriceAdviceResponse,
+)
 from app.schemas.envelope import ResponseEnvelope, wrap_success
-from app.services.ai_service import calculate_price_advice, process_invoice_ocr
+from app.services.ai_service import (
+    calculate_price_advice,
+    process_chat_message,
+    process_invoice_ocr,
+)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+
+@router.post(
+    "/chat",
+    status_code=status.HTTP_200_OK,
+    response_model=ResponseEnvelope[ChatResponse],
+)
+async def chat_with_assistant(
+    request: Request,
+    user: CurrentUserDep,
+    db: DbSessionDep,
+    payload: Annotated[ChatRequest, Body()],
+) -> dict:
+    engine = getattr(request.app.state, "ai", None)
+    response = await process_chat_message(
+        db=db,
+        user=user,
+        payload=payload,
+        ai_engine=engine,
+    )
+    return wrap_success(response.model_dump())
 
 
 @router.post(
@@ -61,4 +92,5 @@ async def get_price_advice(
         ai_engine=engine,
     )
     return wrap_success(advice.model_dump())
+
 

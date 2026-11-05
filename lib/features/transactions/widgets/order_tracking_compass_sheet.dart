@@ -442,8 +442,28 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
     );
   }
 
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    final m = months[(local.month - 1).clamp(0, 11)];
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '${local.day} $m ${local.year}, $hh:$mm WIB';
+  }
+
   // ── 3. Deadline Warning Card ──────────────────────────────────────────────
   Widget _buildDeadlineCard(TransactionOrder order) {
+    final deadline =
+        order.pickupDeadline ?? order.createdAt.add(const Duration(hours: 24));
+    final diff = deadline.difference(DateTime.now());
+    final remainingText = diff.isNegative
+        ? 'Telah lewat batas'
+        : diff.inHours > 0
+            ? 'Sisa ${diff.inHours} Jam'
+            : 'Sisa ${diff.inMinutes} Menit';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -470,7 +490,7 @@ class _OrderTrackingCompassSheetState extends State<OrderTrackingCompassSheet> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '25 Okt 2026, 21:00 WIB (Sisa 6 Jam). Alokasi batch pangan akan dibatalkan otomatis jika melewati batas waktu.',
+                  '${_formatDateTime(deadline)} ($remainingText). Alokasi batch pangan akan dibatalkan otomatis jika melewati batas waktu.',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     color: const Color(0xFF92400E),
