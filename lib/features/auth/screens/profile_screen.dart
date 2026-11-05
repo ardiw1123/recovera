@@ -767,20 +767,45 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
     if (newValue) {
       // Minta verifikasi sidik jari dulu sebelum mengaktifkan (PB-016)
       final authenticated = await BiometricService.instance.authenticate(
-        reason: 'Verifikasi sidik jari Anda untuk mengaktifkan login cepat & pembayaran Recovera',
+        reason:
+            'Verifikasi sidik jari untuk mengaktifkan login biometrik Recovera',
+        biometricOnly: true,
       );
       if (!authenticated) return; // Batal jika sidik jari gagal/dibatalkan
+
+      // Ikat identitas akun yang sedang aktif saat ini
+      final profile = AuthRepository.instance.currentUserProfile;
+      final tokens = AuthRepository.instance.currentTokens;
+      final refreshToken = tokens?.refreshToken ??
+          (await BiometricService.instance.getRefreshToken()) ??
+          'biometric_refresh_user';
+
+      if (profile != null) {
+        await BiometricService.instance.bindUser(
+          userId: profile.id,
+          name: profile.name,
+          email: profile.email,
+          role: profile.role,
+          companyName: profile.companyName,
+          refreshToken: refreshToken,
+        );
+      }
+    } else {
+      // Hapus ikatan akun saat dinonaktifkan
+      await BiometricService.instance.unbindUser();
     }
 
     setState(() => _isBiometricEnabled = newValue);
     await BiometricService.instance.setBiometricLoginEnabled(newValue);
     await _prefsRepo.setBiometricEnabled(newValue);
     if (mounted) {
+      final currentName =
+          AuthRepository.instance.currentUserProfile?.name ?? 'Akun Anda';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             newValue
-                ? 'Login & pembayaran biometrik berhasil diaktifkan'
+                ? 'Login biometrik berhasil diaktifkan untuk $currentName'
                 : 'Login & pembayaran biometrik dinonaktifkan',
             style: GoogleFonts.inter(),
           ),

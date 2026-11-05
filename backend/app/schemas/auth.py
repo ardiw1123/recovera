@@ -30,6 +30,16 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class SocialLoginRequest(BaseModel):
+    provider: Literal["google", "facebook"]
+    email: EmailStr
+    name: str
+    id_token: str | None = None
+    access_token: str | None = None
+    photo_url: str | None = None
+    role: Literal["seller", "buyer"] = "buyer"
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

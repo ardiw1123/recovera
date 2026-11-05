@@ -11,6 +11,7 @@ class ApiConstants {
   // ── Auth Endpoints ──────────────────────────────────────────────────────────
   static const String registerEndpoint = '/auth/register';
   static const String loginEndpoint = '/auth/login';
+  static const String socialLoginEndpoint = '/auth/social-login';
   static const String refreshEndpoint = '/auth/refresh';
   static const String logoutEndpoint = '/auth/logout';
   static const String profileEndpoint = '/profile';

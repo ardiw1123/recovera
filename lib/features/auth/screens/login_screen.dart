@@ -1,11 +1,14 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/biometric_service.dart';
+import '../../../core/services/social_auth_service.dart';
 import '../../../core/navigation/app_navigator.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../core/services/push_notification_service.dart';
+import '../models/user_profile.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/auth_widgets.dart';
 import 'register_screen.dart';
@@ -47,14 +50,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleBiometricLogin() async {
     final isEnabled = await BiometricService.instance.isBiometricLoginEnabled();
+    final boundUser = await BiometricService.instance.getBoundUser();
     final refreshToken = await BiometricService.instance.getRefreshToken();
 
-    if (!isEnabled && refreshToken == null) {
+    // 1. Validasi: Pengguna harus sudah mengaktifkan biometrik di Pengaturan Profil akun miliknya
+    if (!isEnabled || boundUser == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Silakan login akun terlebih dahulu untuk mengaktifkan login biometrik.',
+              'Fitur biometrik belum diaktifkan di akun ini. Silakan login terlebih dahulu, lalu aktifkan di menu Pengaturan Profil.',
               style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
             ),
             backgroundColor: const Color(0xFF64748B),
@@ -68,36 +73,120 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    final boundName = boundUser['name'] ?? 'Akun Anda';
+    final boundRole = boundUser['role'] ?? 'buyer';
+    final boundEmail = boundUser['email'] ?? '';
+    final boundCompany = boundUser['company_name'];
+    final boundId = int.tryParse(boundUser['id'] ?? '1') ?? 1;
+
+    // 2. Minta pemindaian sidik jari murni (biometricOnly: true)
     final success = await BiometricService.instance.authenticate(
-      reason: 'Pindai sidik jari untuk masuk ke akun Recovera Anda',
+      reason: 'Pindai sidik jari untuk masuk sebagai $boundName',
+      biometricOnly: true,
     );
 
-    if (success && mounted) {
-      setState(() => _isLoading = true);
-      try {
-        if (refreshToken != null && refreshToken != 'demo_refresh_token') {
-          final newTokens = await AuthRepository.instance.authApiService
-              .refreshToken(refreshToken);
-          await AuthRepository.instance.tokenStorage.saveTokens(newTokens);
-          await AuthRepository.instance.init();
-        } else {
-          AuthRepository.instance.loginAsDemo(
-            role: 'buyer',
-            name: 'Gevinta (Biometrik)',
-          );
-        }
-        if (!mounted) return;
-        Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
-      } catch (_) {
-        if (!mounted) return;
-        AuthRepository.instance.loginAsDemo(
-          role: 'buyer',
-          name: 'Gevinta (Biometrik)',
+    // 3. Jika dibatalkan atau gagal, tetap di halaman login (JANGAN login ke akun manapun!)
+    if (!success) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Otentikasi biometrik dibatalkan.',
+              style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+            ),
+            backgroundColor: const Color(0xFF64748B),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
         );
-        Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
       }
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      if (refreshToken != null &&
+          !refreshToken.startsWith('demo_') &&
+          !refreshToken.startsWith('social_') &&
+          !refreshToken.startsWith('biometric_') &&
+          refreshToken.isNotEmpty) {
+        final newTokens = await AuthRepository.instance.authApiService
+            .refreshToken(refreshToken);
+        await AuthRepository.instance.tokenStorage.saveTokens(newTokens);
+        await AuthRepository.instance.init();
+      } else {
+        AuthRepository.instance.restoreSession(
+          tokens: AuthTokens(
+            accessToken: 'biometric_${DateTime.now().millisecondsSinceEpoch}',
+            refreshToken: refreshToken ?? 'biometric_refresh_$boundId',
+            tokenType: 'Bearer',
+            expiresIn: 3600,
+            userId: boundId,
+            role: boundRole,
+            name: boundName,
+          ),
+          profile: UserProfile(
+            id: boundId,
+            email: boundEmail,
+            name: boundName,
+            role: boundRole,
+            companyName: boundCompany ??
+                (boundRole == 'seller'
+                    ? 'Perusahaan $boundName'
+                    : 'Bisnis $boundName'),
+            businessType: boundRole == 'seller' ? 'distributor' : 'resto',
+            address: 'Jl. Merpati No. 12, Klaten',
+            city: 'Klaten',
+            baseLat: -7.7058,
+            baseLng: 110.6053,
+            warehouseLat: -7.7058,
+            warehouseLng: 110.6053,
+          ),
+        );
+      }
+      if (!mounted) return;
+      PushNotificationService.instance.registerCurrentInstallation();
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
+    } catch (_) {
+      // Fallback offline: tetap gunakan identitas akun pemilik yang terikat, bukan akun demo hardcoded!
+      if (!mounted) return;
+      AuthRepository.instance.restoreSession(
+        tokens: AuthTokens(
+          accessToken:
+              'biometric_offline_${DateTime.now().millisecondsSinceEpoch}',
+          refreshToken: refreshToken ?? 'biometric_refresh_$boundId',
+          tokenType: 'Bearer',
+          expiresIn: 3600,
+          userId: boundId,
+          role: boundRole,
+          name: boundName,
+        ),
+        profile: UserProfile(
+          id: boundId,
+          email: boundEmail,
+          name: boundName,
+          role: boundRole,
+          companyName: boundCompany ??
+              (boundRole == 'seller'
+                  ? 'Perusahaan $boundName'
+                  : 'Bisnis $boundName'),
+          businessType: boundRole == 'seller' ? 'distributor' : 'resto',
+          address: 'Jl. Merpati No. 12, Klaten',
+          city: 'Klaten',
+          baseLat: -7.7058,
+          baseLng: 110.6053,
+          warehouseLat: -7.7058,
+          warehouseLng: 110.6053,
+        ),
+      );
+      PushNotificationService.instance.registerCurrentInstallation();
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -159,6 +248,67 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _handleSocialLogin(SocialProvider provider) async {
+    try {
+      final socialUser = provider == SocialProvider.google
+          ? await SocialAuthService.instance.signInWithGoogle(context)
+          : await SocialAuthService.instance.signInWithFacebook(context);
+
+      if (socialUser == null) {
+        // Pengguna membatalkan dialog pemilihan akun
+        return;
+      }
+
+      setState(() => _isLoading = true);
+      await AuthRepository.instance.loginWithSocial(socialUser);
+
+      // Simpan session token untuk mengaktifkan biometrik / PIN HP otomatis
+      final currentTokens = AuthRepository.instance.currentTokens;
+      if (currentTokens != null) {
+        await BiometricService.instance.saveSessionTokens(
+          accessToken: currentTokens.accessToken,
+          refreshToken: currentTokens.refreshToken,
+        );
+      }
+
+      if (!mounted) return;
+      PushNotificationService.instance.registerCurrentInstallation();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Berhasil masuk sebagai ${socialUser.displayName}',
+            style: GoogleFonts.inter(fontSize: 13, color: AppColors.white),
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal login sosial: ${e.toString().replaceAll('Exception: ', '')}',
+            style: GoogleFonts.inter(fontSize: 13, color: AppColors.white),
+          ),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -243,13 +393,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             children: [
                               SocialLoginButton(
                                 label: 'Google',
-                                onTap: () {},
+                                onTap: _isLoading
+                                    ? () {}
+                                    : () => _handleSocialLogin(
+                                          SocialProvider.google,
+                                        ),
                                 logoWidget: _GoogleLogo(),
                               ),
                               const SizedBox(width: 12),
                               SocialLoginButton(
                                 label: 'Facebook',
-                                onTap: () {},
+                                onTap: _isLoading
+                                    ? () {}
+                                    : () => _handleSocialLogin(
+                                          SocialProvider.facebook,
+                                        ),
                                 filled: true,
                                 logoWidget: const Icon(
                                   Icons.facebook_rounded,

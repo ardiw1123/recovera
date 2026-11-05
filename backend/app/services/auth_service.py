@@ -11,7 +11,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import Buyer, RefreshToken, Seller, User
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import LoginRequest, RegisterRequest, SocialLoginRequest, TokenResponse
 
 
 def register_user(db: Session, req: RegisterRequest) -> TokenResponse:
@@ -103,6 +103,73 @@ def login_user(db: Session, req: LoginRequest) -> TokenResponse:
     db.commit()
 
     access_token = create_access_token(subject=user.id, role=user.role, extra_claims={"name": user.name})
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=raw_refresh_token,
+        token_type="bearer",
+        expires_in=3600,
+        user_id=user.id,
+        role=user.role,
+        name=user.name,
+    )
+
+
+def social_login_user(db: Session, req: SocialLoginRequest) -> TokenResponse:
+    import secrets
+
+    user = db.query(User).filter(User.email == req.email).first()
+
+    if not user:
+        random_password = secrets.token_urlsafe(32)
+        user = User(
+            email=req.email,
+            password_hash=hash_password(random_password),
+            role=req.role,
+            name=req.name,
+            photo_url=req.photo_url,
+        )
+        db.add(user)
+        db.flush()
+
+        if req.role == "buyer":
+            buyer = Buyer(
+                user_id=user.id,
+                business_type="resto",
+                address="Alamat Terdaftar (SSO)",
+                base_lat=-7.7058,
+                base_lng=110.6053,
+                pref_categories=[],
+            )
+            db.add(buyer)
+        elif req.role == "seller":
+            seller = Seller(
+                user_id=user.id,
+                company_name=f"Bisnis {req.name}",
+                address="Gudang Terdaftar (SSO)",
+                warehouse_lat=-7.7058,
+                warehouse_lng=110.6053,
+                city="Klaten",
+            )
+            db.add(seller)
+        db.commit()
+        db.refresh(user)
+
+    raw_refresh_token, token_hash, expires_at = create_refresh_token()
+    db_refresh = RefreshToken(
+        user_id=user.id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        is_revoked=False,
+    )
+    db.add(db_refresh)
+    db.commit()
+
+    access_token = create_access_token(
+        subject=user.id,
+        role=user.role,
+        extra_claims={"name": user.name},
+    )
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=raw_refresh_token,

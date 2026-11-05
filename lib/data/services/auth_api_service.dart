@@ -82,6 +82,46 @@ class AuthApiService {
     }
   }
 
+  /// Autentikasi Single Sign-On (SSO Google / Facebook) ke backend Recovera
+  Future<AuthTokens> socialLogin({
+    required String provider,
+    required String email,
+    required String name,
+    String? idToken,
+    String? accessToken,
+    String? photoUrl,
+    String role = 'buyer',
+  }) async {
+    final payload = <String, dynamic>{
+      'provider': provider,
+      'email': email,
+      'name': name,
+      'role': role,
+    };
+    if (idToken != null) payload['id_token'] = idToken;
+    if (accessToken != null) payload['access_token'] = accessToken;
+    if (photoUrl != null) payload['photo_url'] = photoUrl;
+
+    try {
+      final response = await client.post<Map<String, dynamic>>(
+        ApiConstants.socialLoginEndpoint,
+        data: payload,
+        options: Options(extra: {AuthInterceptor.noAuthExtraKey: true}),
+      );
+
+      final data = response.data;
+      if (data == null || data['success'] != true) {
+        final error = data?['error']?['message'] ?? 'SSO Login gagal';
+        final code = data?['error']?['code'] as String?;
+        throw ApiException(error, code: code);
+      }
+
+      return AuthTokens.fromJson(data['data'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e, 'SSO Login gagal');
+    }
+  }
+
   /// Rotasi refresh token secara eksplisit
   Future<AuthTokens> refreshToken(String refreshToken) async {
     try {

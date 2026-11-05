@@ -2,9 +2,9 @@ from typing import Annotated
 from fastapi import APIRouter, Body, status
 
 from app.core.dependencies import CurrentUserDep, DbSessionDep
-from app.schemas.auth import LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest, SocialLoginRequest, TokenResponse
 from app.schemas.envelope import ResponseEnvelope, wrap_success
-from app.services.auth_service import login_user, logout_user, refresh_access_token, register_user
+from app.services.auth_service import login_user, logout_user, refresh_access_token, register_user, social_login_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -32,6 +32,19 @@ async def login(
     payload: Annotated[LoginRequest, Body()],
 ) -> dict:
     result = login_user(db, payload)
+    return wrap_success(result.model_dump())
+
+
+@router.post(
+    "/social-login",
+    status_code=status.HTTP_200_OK,
+    response_model=ResponseEnvelope[TokenResponse],
+)
+async def social_login(
+    db: DbSessionDep,
+    payload: Annotated[SocialLoginRequest, Body()],
+) -> dict:
+    result = social_login_user(db, payload)
     return wrap_success(result.model_dump())
 
 

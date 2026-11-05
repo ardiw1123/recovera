@@ -18,6 +18,7 @@ import '../../../data/repositories/order_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../../../data/services/order_api_service.dart';
 import '../../../core/services/biometric_service.dart';
+import '../../auth/screens/profile_screen.dart';
 import '../models/product_model.dart';
 import '../../seller/repositories/seller_repository.dart';
 import '../../seller/models/esg_certificate_model.dart';
@@ -807,33 +808,123 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Future<void> _executePurchase(Listing listing) async {
-    if (_isPurchasing) return;
-    // 1. Step-Up Biometrik (US-02 & PB-017 / Shopee-style)
-    final isAvailable = await BiometricService.instance.isBiometricAvailable();
-    if (isAvailable) {
-      final verified = await BiometricService.instance.authenticate(
-        reason:
-            'Konfirmasi sidik jari untuk menyelesaikan pembelian ${listing.productName}',
-      );
-      if (!verified) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Verifikasi biometrik dibatalkan. Transaksi tidak diproses.',
-                style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+  Future<void> _showBiometricRequiredDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
               ),
-              backgroundColor: const Color(0xFFDC2626),
-              behavior: SnackBarBehavior.floating,
+              child: const Icon(
+                Icons.fingerprint_rounded,
+                color: AppColors.primary,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Aktifkan Sidik Jari',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Untuk keamanan transaksi lelang Recovera, Anda wajib mengaktifkan autentikasi sidik jari di menu Profil terlebih dahulu.',
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: const Color(0xFF475569),
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Batal',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
+              elevation: 0,
             ),
-          );
-        }
-        return;
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const ProfileScreen(),
+                ),
+              );
+            },
+            child: Text(
+              'Buka Profil',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _executePurchase(Listing listing) async {
+    if (_isPurchasing) return;
+
+    // 1. Validasi: Pengguna harus sudah mengaktifkan biometrik di menu Profil
+    final isBiometricEnabled =
+        await BiometricService.instance.isBiometricLoginEnabled();
+    if (!isBiometricEnabled) {
+      if (!mounted) return;
+      await _showBiometricRequiredDialog();
+      return;
+    }
+
+    // 2. Step-Up Biometrik murni (biometricOnly: true)
+    final verified = await BiometricService.instance.authenticate(
+      reason:
+          'Pindai sidik jari untuk menyelesaikan pembelian ${listing.productName}',
+      biometricOnly: true,
+    );
+    if (!verified) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Verifikasi sidik jari dibatalkan. Transaksi tidak diproses.',
+              style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+            ),
+            backgroundColor: const Color(0xFFDC2626),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
       }
+      return;
     }
 
     setState(() => _isPurchasing = true);
