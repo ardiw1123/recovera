@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -851,7 +851,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
 
     try {
-      final order = await _processOrderCreation(listing);
+      // Jalankan proses pembuatan pesanan bersamaan dengan timer animasi (~1.4 detik)
+      final results = await Future.wait([
+        _processOrderCreation(listing),
+        Future<void>.delayed(const Duration(milliseconds: 1400)),
+      ]);
+      final order = results.first as CachedOrderModel;
 
       // Tutup buffer loading segera setelah proses dan timer selesai
       if (navigator.mounted && navigator.canPop()) {
@@ -882,7 +887,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             listing.id,
             qty: _selectedQty,
             biometricVerified: true,
-          );
+          )
+          .timeout(const Duration(seconds: 2));
     } catch (_) {
       // Demo order fallback - pastikan pesanan tersimpan ke OrderRepository & SQLite
       final mockOrderId = DateTime.now().millisecondsSinceEpoch % 100000;
