@@ -6,3 +6,4 @@
     <string name="facebook_client_token">YOUR_FB_CLIENT_TOKEN</string>
     <string name="fb_login_protocol_scheme">fbYOUR_FB_APP_ID</string>
 </resources>
+
