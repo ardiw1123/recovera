@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/biometric_service.dart';
-import '../../../core/services/social_auth_service.dart';
 import '../../../core/navigation/app_navigator.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -16,7 +15,7 @@ import 'register_screen.dart';
 /// PBI-03 — Layar Login B2B Recovera
 ///
 /// Design: Header biru 30% + overlapping white card
-/// Fitur  : Email + password form, Google & Facebook social login,
+/// Fitur  : Email + password form, biometrik login,
 ///          "Lupa password?" link, navigasi ke Register.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -251,67 +250,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleSocialLogin(SocialProvider provider) async {
-    try {
-      final socialUser = provider == SocialProvider.google
-          ? await SocialAuthService.instance.signInWithGoogle(context)
-          : await SocialAuthService.instance.signInWithFacebook(context);
-
-      if (socialUser == null) {
-        // Pengguna membatalkan dialog pemilihan akun
-        return;
-      }
-
-      setState(() => _isLoading = true);
-      await AuthRepository.instance.loginWithSocial(socialUser);
-
-      // Simpan session token untuk mengaktifkan biometrik / PIN HP otomatis
-      final currentTokens = AuthRepository.instance.currentTokens;
-      if (currentTokens != null) {
-        await BiometricService.instance.saveSessionTokens(
-          accessToken: currentTokens.accessToken,
-          refreshToken: currentTokens.refreshToken,
-        );
-      }
-
-      if (!mounted) return;
-      PushNotificationService.instance.registerCurrentInstallation();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Berhasil masuk sebagai ${socialUser.displayName}',
-            style: GoogleFonts.inter(fontSize: 13, color: AppColors.white),
-          ),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-
-      Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Gagal login sosial: ${e.toString().replaceAll('Exception: ', '')}',
-            style: GoogleFonts.inter(fontSize: 13, color: AppColors.white),
-          ),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -388,39 +326,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // ── Social Login Row ────────────────────────
-                          Row(
-                            children: [
-                              SocialLoginButton(
-                                label: 'Google',
-                                onTap: _isLoading
-                                    ? () {}
-                                    : () => _handleSocialLogin(
-                                          SocialProvider.google,
-                                        ),
-                                logoWidget: _GoogleLogo(),
-                              ),
-                              const SizedBox(width: 12),
-                              SocialLoginButton(
-                                label: 'Facebook',
-                                onTap: _isLoading
-                                    ? () {}
-                                    : () => _handleSocialLogin(
-                                          SocialProvider.facebook,
-                                        ),
-                                filled: true,
-                                logoWidget: const Icon(
-                                  Icons.facebook_rounded,
-                                  color: AppColors.white,
-                                  size: 18,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-
-                          // ── Divider ─────────────────────────────────
-                          _OrDivider(),
                           const SizedBox(height: 20),
 
                           // ── Email ───────────────────────────────────
@@ -684,44 +589,6 @@ class _WaveCardClipper extends CustomClipper<Path> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Sub-widgets lokal (private)
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _GoogleLogo extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Text(
-      'G',
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w700,
-        color: Color(0xFF4285F4),
-      ),
-    );
-  }
-}
-
-class _OrDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            'atau login dengan email',
-            style: GoogleFonts.inter(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: AppColors.slateText,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-        const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
-      ],
-    );
-  }
-}
 
 class _ValidCheckIcon extends StatelessWidget {
   const _ValidCheckIcon();

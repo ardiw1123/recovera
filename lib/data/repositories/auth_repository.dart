@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/network/api_client.dart';
-import '../../core/services/social_auth_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../features/auth/models/user_profile.dart';
 import '../services/auth_api_service.dart';
@@ -123,71 +122,6 @@ class AuthRepository extends ChangeNotifier {
     } catch (e) {
       // Lempar error ke UI agar pesan validasi (password salah / akun tidak ditemukan) tampil
       rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  /// Login menggunakan akun sosial (Google / Facebook) dengan SSO nyata
-  Future<AuthTokens> loginWithSocial(SocialAuthUser socialUser) async {
-    _isLoading = true;
-    _currentTokens = null;
-    notifyListeners();
-
-    try {
-      final email = socialUser.email.trim();
-      final name = socialUser.displayName.trim();
-      const defaultRole = 'buyer';
-
-      AuthTokens tokens;
-      try {
-        tokens = await authApiService.socialLogin(
-          provider: socialUser.provider.name,
-          email: email,
-          name: name,
-          idToken: socialUser.idToken,
-          accessToken: socialUser.accessToken,
-          photoUrl: socialUser.photoUrl,
-          role: defaultRole,
-        );
-      } catch (_) {
-        // Fallback jika backend offline / endpoint belum terhubung
-        try {
-          tokens = await authApiService.login(
-            email: email,
-            password: 'SocialAuth#${socialUser.id}',
-          );
-        } catch (_) {
-          tokens = AuthTokens(
-            accessToken:
-                'social_access_${socialUser.provider.name}_${DateTime.now().millisecondsSinceEpoch}',
-            refreshToken:
-                'social_refresh_${socialUser.provider.name}_${socialUser.id}',
-            tokenType: 'Bearer',
-            expiresIn: 3600,
-            userId: socialUser.id.hashCode.abs(),
-            role: defaultRole,
-            name: name,
-          );
-        }
-      }
-
-      await tokenStorage.saveTokens(tokens);
-      _currentTokens = tokens;
-      _currentUserProfile = UserProfile(
-        id: tokens.userId ?? 1,
-        email: email,
-        name: name,
-        role: tokens.role ?? defaultRole,
-        companyName: 'Bisnis $name',
-        businessType: 'resto',
-        address: 'Jl. Merpati No. 12, Klaten',
-        city: 'Klaten',
-        baseLat: -7.7058,
-        baseLng: 110.6053,
-      );
-      return tokens;
     } finally {
       _isLoading = false;
       notifyListeners();

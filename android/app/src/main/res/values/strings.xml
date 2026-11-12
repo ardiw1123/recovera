@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Facebook SDK Configuration -->
-    <!-- Ganti YOUR_FB_APP_ID dan YOUR_FB_CLIENT_TOKEN dengan nilai asli dari developers.facebook.com -->
-    <string name="facebook_app_id">YOUR_FB_APP_ID</string>
-    <string name="facebook_client_token">YOUR_FB_CLIENT_TOKEN</string>
-    <string name="fb_login_protocol_scheme">fbYOUR_FB_APP_ID</string>
-</resources>
-
