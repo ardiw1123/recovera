@@ -776,7 +776,8 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
       // Ikat identitas akun yang sedang aktif saat ini
       final profile = AuthRepository.instance.currentUserProfile;
       final tokens = AuthRepository.instance.currentTokens;
-      final refreshToken = tokens?.refreshToken ??
+      final refreshToken =
+          tokens?.refreshToken ??
           (await BiometricService.instance.getRefreshToken()) ??
           'biometric_refresh_user';
 
@@ -824,28 +825,28 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
   String _getCurrencyLabel(String code) {
     switch (code) {
       case 'USD':
-        return 'USD (\$) • US Dollar';
+        return 'USD (\$) | US Dollar';
       case 'EUR':
-        return 'EUR (€) • Euro Uni Eropa';
+        return 'EUR (€) | Euro Uni Eropa';
       case 'GBP':
-        return 'GBP (£) • British Pound';
+        return 'GBP (£) | British Pound';
       case 'IDR':
       default:
-        return 'IDR (Rp) • Rupiah Indonesia';
+        return 'IDR (Rp) | Rupiah Indonesia';
     }
   }
 
   String _getTimezoneLabel(String code) {
     switch (code) {
       case 'WITA':
-        return 'WITA (UTC+8) • Waktu Indonesia Tengah';
+        return 'WITA (UTC+8) | Waktu Indonesia Tengah';
       case 'WIT':
-        return 'WIT (UTC+9) • Waktu Indonesia Timur';
+        return 'WIT (UTC+9) | Waktu Indonesia Timur';
       case 'London':
-        return 'London (BST/UTC+1) • Standar Audit ESG';
+        return 'London (BST/UTC+1) | Standar Audit ESG';
       case 'WIB':
       default:
-        return 'WIB (UTC+7) • Waktu Indonesia Barat';
+        return 'WIB (UTC+7) | Waktu Indonesia Barat';
     }
   }
 
@@ -897,7 +898,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Pilih Mata Uang Acuan (PB-062)',
+                            'Pilih Mata Uang Acuan',
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -1106,7 +1107,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Pilih Zona Waktu Operasional (PB-063)',
+                            'Pilih Zona Waktu Operasional',
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -1326,7 +1327,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         icon: Icons.currency_exchange_rounded,
         iconBg: const Color(0xFFEFF6FF),
         iconColor: AppColors.primary,
-        label: 'Mata Uang Acuan (PB-062)',
+        label: 'Mata Uang Acuan',
         subtitle: _getCurrencyLabel(_selectedCurrency),
         subtitleColor: AppColors.primary,
         onTap: () => _showCurrencyPickerBottomSheet(context),
@@ -1337,7 +1338,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         icon: Icons.schedule_rounded,
         iconBg: const Color(0xFFF0FDF4),
         iconColor: const Color(0xFF16A34A),
-        label: 'Zona Waktu Operasional (PB-063)',
+        label: 'Zona Waktu Operasional',
         subtitle: _getTimezoneLabel(_selectedTimezone),
         subtitleColor: const Color(0xFF16A34A),
         onTap: () => _showTimezonePickerBottomSheet(context),

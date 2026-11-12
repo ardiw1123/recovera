@@ -13,7 +13,7 @@ class SaranKesanScreen extends StatelessWidget {
   static const _saran =
       'Semoga pembelajaran dapat terus dikembangkan dengan lebih banyak contoh project dan studi kasus yang dekat dengan kebutuhan pengembangan aplikasi mobile saat ini, sehingga mahasiswa dapat semakin memahami penerapan materi secara langsung.';
   static const _terimaKasih =
-      'Terima kasih atas ilmu, arahan, dan pengalaman yang diberikan selama perkuliahan.';
+      'Terima kasih atas ilmu, arahan dan pengalaman yang diberikan selama perkuliahan. Semoga nilai kelompok ini A. Aamiin!';
 
   @override
   Widget build(BuildContext context) {
@@ -377,7 +377,7 @@ class _ThankYouCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Terima Kasih!',
+                  'Terima Kasih Pak Bagus!',
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
