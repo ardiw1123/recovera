@@ -64,11 +64,6 @@ class _BuyerTransactionScreenState extends State<BuyerTransactionScreen> {
           .map((item) => TransactionOrder.fromCachedOrder(item, isSeller: false))
           .toList();
 
-      // Jika belum ada pesanan sama sekali, tampilkan sampel data untuk demonstrasi
-      if (mappedList.isEmpty) {
-        mappedList.addAll(dummyBuyerOrders);
-      }
-
       if (mounted) {
         setState(() {
           _orderList = mappedList;

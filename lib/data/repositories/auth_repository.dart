@@ -5,6 +5,7 @@ import '../../core/services/social_auth_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../features/auth/models/user_profile.dart';
 import '../services/auth_api_service.dart';
+import 'order_repository.dart';
 
 /// Repository autentikasi terpusat sebagai single source of truth untuk state autentikasi
 class AuthRepository extends ChangeNotifier {
@@ -119,6 +120,7 @@ class AuthRepository extends ChangeNotifier {
       );
       await tokenStorage.saveTokens(tokens);
       _currentTokens = tokens;
+      await OrderRepository().clearOrderCache();
       return tokens;
     } catch (e) {
       // Lempar error ke UI agar pesan validasi (password salah / akun tidak ditemukan) tampil
@@ -175,6 +177,7 @@ class AuthRepository extends ChangeNotifier {
 
       await tokenStorage.saveTokens(tokens);
       _currentTokens = tokens;
+      await OrderRepository().clearOrderCache();
       _currentUserProfile = UserProfile(
         id: tokens.userId ?? 1,
         email: email,
@@ -223,6 +226,7 @@ class AuthRepository extends ChangeNotifier {
       );
       await tokenStorage.saveTokens(tokens);
       _currentTokens = tokens;
+      await OrderRepository().clearOrderCache();
       return tokens;
     } catch (e) {
       // Lempar error ke UI agar pesan validasi (email sudah terdaftar) tampil
@@ -262,6 +266,7 @@ class AuthRepository extends ChangeNotifier {
       await tokenStorage.clearTokens();
       _currentTokens = null;
       _currentUserProfile = null;
+      await OrderRepository().clearOrderCache();
     } finally {
       _isLoading = false;
       notifyListeners();

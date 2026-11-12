@@ -68,6 +68,14 @@ class OrderRepository {
     if (isOnline && client != null) {
       try {
         final remoteOrders = await client.fetchRemoteOrders();
+        if (forceRefresh) {
+          _inMemoryOrders.clear();
+          if (!kIsWeb) {
+            try {
+              await _localDb.clearOrders();
+            } catch (_) {}
+          }
+        }
         for (final ro in remoteOrders) {
           _upsertInMemory(ro);
         }
