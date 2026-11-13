@@ -46,6 +46,8 @@ class RefreshRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     refresh_token: str | None = None
+    fcm_token: str | None = None
+    fid: str | None = None
 
 
 class TokenResponse(BaseModel):

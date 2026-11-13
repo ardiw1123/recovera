@@ -17,6 +17,9 @@ class AuthRepository extends ChangeNotifier {
   UserProfile? _currentUserProfile;
   bool _isLoading = false;
 
+  /// Callback opsional untuk mengambil payload identifier perangkat saat logout.
+  Map<String, String?>? Function()? beforeLogoutDeviceProvider;
+
   AuthTokens? get currentTokens => _currentTokens;
   UserProfile? get currentUserProfile => _currentUserProfile;
   bool get isLoading => _isLoading;
@@ -192,8 +195,13 @@ class AuthRepository extends ChangeNotifier {
 
     try {
       final refreshToken = await tokenStorage.getRefreshToken();
+      final devicePayload = beforeLogoutDeviceProvider?.call();
       try {
-        await authApiService.logout(refreshToken: refreshToken);
+        await authApiService.logout(
+          refreshToken: refreshToken,
+          fcmToken: devicePayload?['fcm_token'],
+          fid: devicePayload?['fid'],
+        );
       } catch (_) {
         // Abaikan error jaringan saat logout server agar logout lokal tetap tuntas
       }

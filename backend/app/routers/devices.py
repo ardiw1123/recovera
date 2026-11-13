@@ -22,6 +22,13 @@ async def register_device_token(
 ) -> dict:
     identifier_column = DeviceToken.fid if payload.fid else DeviceToken.fcm_token
     identifier = payload.fid or payload.fcm_token
+
+    # Transfer device ownership cleanly when another account previously logged in on this device.
+    db.query(DeviceToken).filter(
+        identifier_column == identifier,
+        DeviceToken.user_id != current_user.id,
+    ).delete(synchronize_session=False)
+
     existing = db.query(DeviceToken).filter(
         DeviceToken.user_id == current_user.id,
         identifier_column == identifier,

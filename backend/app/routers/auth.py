@@ -72,5 +72,13 @@ async def logout(
     payload: Annotated[LogoutRequest | None, Body()] = None,
 ) -> dict:
     raw_token = payload.refresh_token if payload else None
-    logout_user(db, current_user.id, raw_token)
+    fcm_token = payload.fcm_token if payload else None
+    fid = payload.fid if payload else None
+    logout_user(
+        db,
+        current_user.id,
+        raw_refresh_token=raw_token,
+        fcm_token=fcm_token,
+        fid=fid,
+    )
     return wrap_success({"message": "Successfully logged out and session revoked"})

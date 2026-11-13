@@ -10,7 +10,7 @@ from app.core.security import (
     hash_token,
     verify_password,
 )
-from app.models.user import Buyer, RefreshToken, Seller, User
+from app.models.user import Buyer, DeviceToken, RefreshToken, Seller, User
 from app.schemas.auth import LoginRequest, RegisterRequest, SocialLoginRequest, TokenResponse
 
 
@@ -242,7 +242,13 @@ def refresh_access_token(db: Session, raw_refresh_token: str) -> TokenResponse:
     )
 
 
-def logout_user(db: Session, user_id: int, raw_refresh_token: str | None = None) -> None:
+def logout_user(
+    db: Session,
+    user_id: int,
+    raw_refresh_token: str | None = None,
+    fcm_token: str | None = None,
+    fid: str | None = None,
+) -> None:
     if raw_refresh_token:
         token_hash = hash_token(raw_refresh_token)
         tokens = db.query(RefreshToken).filter(
@@ -259,4 +265,16 @@ def logout_user(db: Session, user_id: int, raw_refresh_token: str | None = None)
         ).all()
         for t in tokens:
             t.is_revoked = True
+
+    if fcm_token:
+        db.query(DeviceToken).filter(
+            DeviceToken.user_id == user_id,
+            DeviceToken.fcm_token == fcm_token,
+        ).delete(synchronize_session=False)
+    if fid:
+        db.query(DeviceToken).filter(
+            DeviceToken.user_id == user_id,
+            DeviceToken.fid == fid,
+        ).delete(synchronize_session=False)
+
     db.commit()
