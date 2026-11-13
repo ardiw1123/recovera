@@ -306,32 +306,32 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ── Judul ────────────────────────────────────
+                          // ── [GANTI_TEKS_LOGIN_JUDUL] & [GANTI_WARNA_JUDUL] ──────────
                           Text(
-                            'Welcome back!',
+                            'Welcome back!', // <-- Ganti teks judul di sini
                             style: GoogleFonts.inter(
                               fontSize: 26,
                               fontWeight: FontWeight.w700,
-                              color: AppColors.darkNavy,
+                              color: AppColors.darkNavy, // <-- Ganti warna judul di sini
                               letterSpacing: -0.5,
                             ),
                           ),
                           const SizedBox(height: 4),
+
+                          // ── [GANTI_TEKS_LOGIN_SUBTITLE] & [GANTI_WARNA_SUBTITLE] ────
                           Text(
-                            'Halo, silakan login untuk melanjutkan.',
+                            'Halo, silakan login untuk melanjutkan.', // <-- Ganti teks subtitle di sini
                             style: GoogleFonts.inter(
                               fontSize: 13,
-                              color: AppColors.slateText,
+                              color: AppColors.slateText, // <-- Ganti warna subtitle di sini
                             ),
                           ),
                           const SizedBox(height: 20),
 
-                          const SizedBox(height: 20),
-
-                          // ── Email ───────────────────────────────────
+                          // ── [GANTI_TEKS_EMAIL_FIELD] ────────────────────────────────
                           PillTextField(
-                            label: 'Email Address',
-                            hint: 'nama@perusahaan.com',
+                            label: 'Email Address', // <-- Ganti label email di sini
+                            hint: 'nama@perusahaan.com', // <-- Ganti placeholder email di sini
                             controller: _emailCtrl,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
@@ -352,10 +352,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // ── Password ─────────────────────────────────
+                          // ── [GANTI_TEKS_PASSWORD_FIELD] ─────────────────────────────
                           PillTextField(
-                            label: 'Password',
-                            hint: '••••••••',
+                            label: 'Password', // <-- Ganti label password di sini
+                            hint: '••••••••', // <-- Ganti placeholder password di sini
                             controller: _passCtrl,
                             obscureText: _obscurePass,
                             textInputAction: TextInputAction.done,
@@ -382,7 +382,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             },
                           ),
 
-                          // ── Lupa Password ───────────────────────────
+                          // ── [GANTI_TEKS_LUPA_PASSWORD] ──────────────────────────────
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
@@ -394,7 +394,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               child: Text(
-                                'Lupa password?',
+                                'Lupa password?', // <-- Ganti teks lupa password di sini
                                 style: GoogleFonts.inter(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500,
@@ -405,12 +405,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 8),
 
-                          // ── Tombol Login + Biometrik (PB-016) ────────
+                          // ── [GANTI_TEKS_TOMBOL_LOGIN] ───────────────────────────────
                           Row(
                             children: [
                               Expanded(
                                 child: PillButton(
-                                  label: 'Login Akun',
+                                  label: 'Login Akun', // <-- Ganti label tombol login di sini
                                   onPressed: _handleLogin,
                                   isLoading: _isLoading,
                                 ),
@@ -420,11 +420,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                 Tooltip(
                                   message: 'Login Cepat dengan Sidik Jari',
                                   child: Material(
-                                    color: const Color(0xFFEFF6FF),
+                                    color: const Color(0xFFEFF6FF), // <-- Background tombol fingerprint
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16),
                                       side: const BorderSide(
-                                        color: Color(0xFFBFDBFE),
+                                        color: Color(0xFFBFDBFE), // <-- Border tombol fingerprint
                                         width: 1.5,
                                       ),
                                     ),
@@ -437,7 +437,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         child: Center(
                                           child: Icon(
                                             Icons.fingerprint_rounded,
-                                            color: AppColors.primary,
+                                            color: AppColors.primary, // <-- Warna icon fingerprint
                                             size: 28,
                                           ),
                                         ),
@@ -450,7 +450,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // ── Sign up Redirect ─────────────────────────
+                          // ── [GANTI_TEKS_REGISTER_REDIRECT] ───────────────────────────
                           Center(
                             child: RichText(
                               text: TextSpan(
@@ -459,7 +459,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   color: AppColors.slateText,
                                 ),
                                 children: [
-                                  const TextSpan(text: 'Belum punya akun? '),
+                                  const TextSpan(text: 'Belum punya akun? '), // <-- Teks ajakan daftar
                                   WidgetSpan(
                                     alignment: PlaceholderAlignment.middle,
                                     child: GestureDetector(
@@ -471,11 +471,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                       ),
                                       child: Text(
-                                        'Sign up',
+                                        'Sign up', // <-- Teks tombol ke halaman register
                                         style: GoogleFonts.inter(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700,
-                                          color: AppColors.primary,
+                                          color: AppColors.primary, // <-- Warna link sign up
                                         ),
                                       ),
                                     ),

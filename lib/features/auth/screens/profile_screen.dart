@@ -401,11 +401,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               const SizedBox(height: 16),
 
-                              // ── Logout Button ──────────────────────
+                              // ── [GANTI_TEKS_TOMBOL_LOGOUT] & [GANTI_WARNA_LOGOUT] ──────
                               PillButton(
-                                label: 'Logout',
+                                label: 'Logout', // <-- Ganti teks tombol Logout di sini
                                 outlined: true,
-                                backgroundColor: AppColors.error,
+                                backgroundColor: AppColors.error, // <-- Ganti warna border/teks logout di sini
                                 foregroundColor: AppColors.error,
                                 icon: const Icon(
                                   Icons.logout_rounded,
@@ -525,14 +525,15 @@ class _ProfileHeader extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
               ),
+              // ── [GANTI_TEKS_HEADER_PROFIL] ──────────────────────────
               Expanded(
                 child: Text(
-                  'Profil Saya',
+                  'Profil Saya', // <-- Ganti teks judul header profil di sini
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.white,
+                    color: AppColors.white, // <-- Ganti warna judul header profil
                     letterSpacing: 0.2,
                   ),
                 ),
@@ -1273,13 +1274,15 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
               ? '$city, Indonesia'
               : 'Atur Lokasi Pengiriman');
 
+    // ── [GANTI_TEKS_MENU_PROFIL] ───────────────────────────────────────────
+    // Ubah label, subtitle, atau icon menu profil di daftar bawah ini:
     final items = [
       _ProfileMenuItem(
         key: const Key('menu_business_info'),
         icon: Icons.business_rounded,
         iconBg: const Color(0xFFEFF6FF),
         iconColor: AppColors.primary,
-        label: 'Informasi Bisnis',
+        label: 'Informasi Bisnis', // <-- Ganti nama menu Informasi Bisnis
         onTap: () async {
           final updated = await Navigator.of(context).push<bool>(
             MaterialPageRoute(builder: (_) => const BusinessInfoEditScreen()),
@@ -1295,8 +1298,8 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         iconBg: const Color(0xFFEFF6FF),
         iconColor: AppColors.primary,
         label: AuthRepository.instance.isSeller
-            ? 'Kelola Pesanan Masuk'
-            : 'Riwayat Transaksi',
+            ? 'Kelola Pesanan Masuk' // <-- Ganti label jika akun Seller
+            : 'Riwayat Transaksi',   // <-- Ganti label jika akun Buyer
         subtitle: AuthRepository.instance.isSeller
             ? 'Pantau penjualan lot & serah terima batch'
             : 'Pantau status pesanan & pelacakan mandiri',
@@ -1312,7 +1315,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         icon: Icons.location_on_outlined,
         iconBg: const Color(0xFFE0F7FA),
         iconColor: AppColors.secondary,
-        label: 'Lokasi & Pengiriman',
+        label: 'Lokasi & Pengiriman', // <-- Ganti label menu Lokasi
         subtitle: locationSubtitle,
         subtitleColor: AppColors.secondary,
         onTap: () {
@@ -1327,7 +1330,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         icon: Icons.currency_exchange_rounded,
         iconBg: const Color(0xFFEFF6FF),
         iconColor: AppColors.primary,
-        label: 'Mata Uang Acuan',
+        label: 'Mata Uang Acuan', // <-- Ganti label menu Mata Uang
         subtitle: _getCurrencyLabel(_selectedCurrency),
         subtitleColor: AppColors.primary,
         onTap: () => _showCurrencyPickerBottomSheet(context),
@@ -1338,7 +1341,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         icon: Icons.schedule_rounded,
         iconBg: const Color(0xFFF0FDF4),
         iconColor: const Color(0xFF16A34A),
-        label: 'Zona Waktu Operasional',
+        label: 'Zona Waktu Operasional', // <-- Ganti label menu Zona Waktu
         subtitle: _getTimezoneLabel(_selectedTimezone),
         subtitleColor: const Color(0xFF16A34A),
         onTap: () => _showTimezonePickerBottomSheet(context),
@@ -1353,7 +1356,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
           iconColor: _isBiometricEnabled
               ? const Color(0xFF059669)
               : const Color(0xFF64748B),
-          label: 'Pengaturan Keamanan & Biometrik',
+          label: 'Pengaturan Keamanan & Biometrik', // <-- Ganti label menu Biometrik
           subtitle: _isBiometricEnabled
               ? 'Sidik Jari Aktif untuk Login & Pembayaran'
               : 'Aktifkan untuk Login Cepat & Pembayaran',
@@ -1375,7 +1378,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         icon: Icons.flight_takeoff_rounded,
         iconBg: const Color(0xFFE0F7FA),
         iconColor: AppColors.primary,
-        label: 'Sky Balance',
+        label: 'Sky Balance', // <-- Ganti label menu Game
         subtitle: 'Game petualangan dengan kontrol gerak',
         subtitleColor: AppColors.slateText,
         onTap: () {
@@ -1389,7 +1392,7 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         icon: Icons.chat_bubble_outline_rounded,
         iconBg: const Color(0xFFEEF2FF),
         iconColor: const Color(0xFF6366F1),
-        label: 'Saran & Kesan',
+        label: 'Saran & Kesan', // <-- Ganti label menu Saran & Kesan
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const SaranKesanScreen()),

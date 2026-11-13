@@ -697,9 +697,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                           const SizedBox(height: 6),
 
-                          // ── Greeting Pembeli: "Halo, [nama/Govina]!" ──
+                          // ── [GANTI_TEKS_GREETING_HOME] Greeting Pembeli: "Halo, [nama]!" ──
                           Text(
-                            'Halo, $buyerGreeting',
+                            'Halo, $buyerGreeting', // <-- Ganti sapaan di sini (misal: 'Selamat Datang, $buyerGreeting')
                             key: const Key('buyer_greeting_title'),
                             style: GoogleFonts.inter(
                               fontSize: 16,
@@ -999,8 +999,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 key: const Key('home_search_field'),
                 controller: _searchCtrl,
                 style: GoogleFonts.inter(fontSize: 12),
+                // ── [GANTI_TEKS_SEARCH_PLACEHOLDER] ──────────────────────────
                 decoration: InputDecoration(
-                  hintText: 'Cari produk pangan, distributor, kota...',
+                  hintText: 'Cari produk pangan, distributor, kota...', // <-- Ganti placeholder pencarian di sini
                   hintStyle: GoogleFonts.inter(
                     fontSize: 12,
                     color: const Color(0xFF94A3B8),

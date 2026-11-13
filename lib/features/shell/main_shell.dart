@@ -224,7 +224,7 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  // ── Bottom Nav Row untuk Pembeli (Role guard: Tab Stok dihilangkan sepenuhnya) ──
+  // ── [GANTI_TEKS_NAVBAR] Bottom Nav Row untuk Pembeli ─────────────────────────
   Widget _buildBuyerNavRow(int activeIndex) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -232,28 +232,28 @@ class _MainShellState extends State<MainShell> {
         _NavItem(
           icon: Icons.home_outlined,
           activeIcon: Icons.home_rounded,
-          label: 'Beranda',
+          label: 'Beranda', // <-- Ganti nama tab Beranda
           isActive: activeIndex == 0,
           onTap: () => _onTabSelected(0),
         ),
         _NavItem(
           icon: Icons.receipt_long_outlined,
           activeIcon: Icons.receipt_long,
-          label: 'Riwayat',
+          label: 'Riwayat', // <-- Ganti nama tab Riwayat Transaksi
           isActive: activeIndex == 1,
           onTap: () => _onTabSelected(1),
         ),
         _NavItem(
           icon: Icons.sports_esports_outlined,
           activeIcon: Icons.sports_esports,
-          label: 'Game',
+          label: 'Game', // <-- Ganti nama tab Game Sky Balance
           isActive: activeIndex == 2,
           onTap: () => _onTabSelected(2),
         ),
         _NavItem(
           icon: Icons.person_outline_rounded,
           activeIcon: Icons.person_rounded,
-          label: 'Profil',
+          label: 'Profil', // <-- Ganti nama tab Profil
           isActive: activeIndex == 3,
           onTap: () => _onTabSelected(3),
         ),

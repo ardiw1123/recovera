@@ -110,12 +110,20 @@ class PushNotificationService {
       _messaging.onRegistered.listen((token) {
         if (token.isNotEmpty) {
           _fcmToken = token;
+          if (kDebugMode) debugPrint('🔥 [FCM TOKEN]: $token');
           _registerCurrentInstallation();
         }
       });
 
       try {
         await _messaging.register();
+        // ignore: deprecated_member_use
+        final currentToken = await _messaging.getToken();
+        if (currentToken != null && currentToken.isNotEmpty) {
+          _fcmToken = currentToken;
+          if (kDebugMode) debugPrint('🔥 [FCM TOKEN]: $currentToken');
+          _registerCurrentInstallation();
+        }
       } catch (e) {
         if (kDebugMode) debugPrint('Error registering FCM token: $e');
       }
@@ -137,13 +145,14 @@ class PushNotificationService {
       return;
     }
     try {
-      await _apiClient.post<Map<String, dynamic>>(
+      final res = await _apiClient.post<Map<String, dynamic>>(
         '/devices',
         data: {'fcm_token': token},
         options: Options(
           extra: {'ignore_session_expiration': true},
         ),
       );
+      if (kDebugMode) debugPrint('✅ [DEVICE REGISTERED TO BACKEND]: ${res.data}');
     } catch (error) {
       if (kDebugMode) debugPrint('Unable to register push token: $error');
     }
@@ -151,6 +160,31 @@ class PushNotificationService {
 
   void _registerCurrentInstallation() {
     registerCurrentInstallation();
+  }
+
+  Future<void> showLocalNotification({
+    required String title,
+    required String body,
+    Map<String, dynamic>? data,
+  }) async {
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'recovera_notifications',
+        'Notifikasi Recovera',
+        channelDescription: 'Pembaruan pesanan dan penawaran Recovera',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+      ),
+    );
+    await _localNotifications.show(
+      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title: title,
+      body: body,
+      notificationDetails: details,
+      payload: data != null ? jsonEncode(data) : null,
+    );
   }
 
   Future<void> _showForegroundNotification(RemoteMessage message) async {

@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -24,8 +25,10 @@ import 'core/services/push_notification_service.dart';
 Future<void> main() async {
   // 1. Pastikan binding Flutter terinisialisasi
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   await AppPrefsRepository.instance.init();
   await NetworkConnectivityService.instance.init();
+  await PushNotificationService.instance.init();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -43,9 +46,6 @@ Future<void> main() async {
 
   // 5. Jalankan UI Aplikasi
   runApp(const RecoveraApp());
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    PushNotificationService.instance.init();
-  });
 }
 
 class RecoveraApp extends StatelessWidget {

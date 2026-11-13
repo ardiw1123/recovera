@@ -24,6 +24,10 @@ def _messaging():
                 or os.environ.get("FIREBASE_CREDENTIALS_JSON", "")
                 or os.environ.get("FIREBASE_ADMIN_JSON", "")
                 or os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
+                or os.environ.get("FIREBASE_ADMIN", "")
+                or os.environ.get("FIREBASE_ADMIN_KEY", "")
+                or os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
+                or os.environ.get("FIREBASE_CREDENTIALS", "")
             )
             if cred_json and cred_json.strip():
                 raw = cred_json.strip()
@@ -52,12 +56,17 @@ def _messaging():
 
 
 def send_to_user(db: Session, user_id: int, title: str, body: str, data: dict[str, Any] | None = None) -> None:
-    devices = db.query(DeviceToken).filter(DeviceToken.user_id == user_id).all()
     messaging = _messaging()
-    if not devices or messaging is None:
+    if messaging is None:
+        logger.warning("[FCM] Firebase messaging is not initialized (check FIREBASE_CREDENTIALS_JSON in Railway env)")
+        return
+    devices = db.query(DeviceToken).filter(DeviceToken.user_id == user_id).all()
+    if not devices:
+        logger.warning("[FCM] No registered devices found in DB for user_id %s. Ensure app calls POST /devices", user_id)
         return
     tokens = [device.fcm_token or device.fid for device in devices if (device.fcm_token or device.fid)]
     if not tokens:
+        logger.warning("[FCM] No valid tokens for user_id %s", user_id)
         return
 
     message = messaging.MulticastMessage(
@@ -79,6 +88,7 @@ def send_to_user(db: Session, user_id: int, title: str, body: str, data: dict[st
     )
     try:
         result = messaging.send_each_for_multicast(message)
+        logger.info("[FCM] Multicast sent to user %s: %s success, %s failure", user_id, result.success_count, result.failure_count)
         stale_devices = []
         for device, response in zip(devices, result.responses):
             error_code = getattr(response.exception, "code", None) if response.exception else None

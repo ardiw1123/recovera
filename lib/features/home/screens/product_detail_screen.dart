@@ -18,6 +18,7 @@ import '../../../data/repositories/order_repository.dart';
 import '../../../data/services/listing_api_service.dart';
 import '../../../data/services/order_api_service.dart';
 import '../../../core/services/biometric_service.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../auth/screens/profile_screen.dart';
 import '../models/product_model.dart';
 import '../../seller/repositories/seller_repository.dart';
@@ -747,11 +748,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 ),
               ),
               const SizedBox(width: 10),
+              // ── [GANTI_WARNA_KONFIRMASI_BAYAR] & [GANTI_TEKS_KONFIRMASI_BAYAR]
               Expanded(
                 flex: 2,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: AppColors.primary, // <-- Ganti warna tombol Konfirmasi & Bayar
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -761,7 +763,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   icon: const Icon(Icons.fingerprint_rounded, size: 20),
                   label: Text(
-                    'Konfirmasi & Bayar',
+                    'Konfirmasi & Bayar', // <-- Ganti label tombol konfirmasi bayar
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
@@ -954,6 +956,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         navigator.pop();
       }
       await loadingDialog;
+
+      // Picu notifikasi pop-up langsung di sistem HP (Heads-Up Alert)
+      PushNotificationService.instance.showLocalNotification(
+        title: 'Transaksi Berhasil! 🎉',
+        body: 'Pesanan lelang #${order.id} untuk ${listing.productName} telah berhasil dikonfirmasi.',
+        data: {
+          'type': 'order_ready',
+          'order_id': order.id,
+        },
+      );
 
       // 3. Tampilkan faktur / dialog sukses pemesanan
       if (mounted) {
@@ -1519,12 +1531,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       color: const Color(0xFF475569),
                     ),
                   ),
-                  // Pita Merah Tier (Ujung kiri berlekuk ribbon, ujung kanan rata mengikuti kartu)
+                  // ── [GANTI_WARNA_PITA_TIER] Pita Merah Tier (Penawaran Saat Ini) ──
                   ClipPath(
                     clipper: _TierRibbonClipper(),
                     child: Container(
                       padding: const EdgeInsets.fromLTRB(14, 4, 12, 4),
-                      color: const Color(0xFFDC2626), // Merah cerah elegan
+                      color: const Color(0xFFDC2626), // <-- Ganti warna pita tier (default: Merah)
                       child: Text(
                         'Tier 2',
                         style: GoogleFonts.inter(
@@ -2467,22 +2479,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         fontWeight: FontWeight.w400,
                       ),
                     ),
+                    // ── [GANTI_WARNA_TOTAL_HARGA_DETAIL] ───────────────────────
                     Text(
                       totalFormatted,
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
+                        color: AppColors.primary, // <-- Ganti warna angka total harga
                         letterSpacing: -0.3,
                       ),
                     ),
                   ],
                 ),
+                // ── [GANTI_WARNA_TOMBOL_BELI_DETAIL] & [GANTI_TEKS_TOMBOL_BELI]
                 ElevatedButton.icon(
                   key: const Key('btn_buy_now'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.primary, // <-- Ganti warna background tombol Beli Sekarang
+                    foregroundColor: Colors.white,      // <-- Ganti warna teks/ikon tombol
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
                       vertical: 10,
@@ -2494,7 +2508,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   icon: const Icon(Icons.shopping_bag_outlined, size: 16),
                   label: Text(
-                    'Beli Sekarang',
+                    'Beli Sekarang', // <-- Ganti label teks tombol Beli
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,

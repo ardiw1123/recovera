@@ -77,6 +77,7 @@ def execute_buy_now(
 
     try:
         from app.services.push_service import notify_user
+        # 1. Notifikasi untuk Penjual (Distributor)
         seller_user_id = listing.seller.user_id if listing.seller else None
         if seller_user_id:
             notify_user(
@@ -87,6 +88,15 @@ def execute_buy_now(
                 "new_order",
                 {"order_id": order.id},
             )
+        # 2. Notifikasi untuk Pembeli (Buyer)
+        notify_user(
+            db,
+            buyer_user.id,
+            "Pembelian Berhasil!",
+            f"Pesanan #{order.id} untuk {listing.product.name if listing.product else 'produk'} berhasil dikonfirmasi.",
+            "order_ready",
+            {"order_id": order.id},
+        )
     except Exception:
         # Notifikasi tidak boleh menggagalkan transaksi yang sudah berhasil.
         pass
