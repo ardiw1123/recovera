@@ -104,14 +104,24 @@ class AuthApiService {
     }
   }
 
-  /// Logout dan revocasi refresh token di backend
-  Future<void> logout({String? refreshToken}) async {
+  /// Logout dan revocasi refresh token serta pelepasan device token di backend
+  Future<void> logout({
+    String? refreshToken,
+    String? fcmToken,
+    String? fid,
+  }) async {
     try {
-      final response = refreshToken == null || refreshToken.isEmpty
+      final payload = <String, dynamic>{
+        if (refreshToken != null && refreshToken.isNotEmpty)
+          'refresh_token': refreshToken,
+        if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken,
+        if (fid != null && fid.isNotEmpty) 'fid': fid,
+      };
+      final response = payload.isEmpty
           ? await client.post<Map<String, dynamic>>(ApiConstants.logoutEndpoint)
           : await client.post<Map<String, dynamic>>(
               ApiConstants.logoutEndpoint,
-              data: {'refresh_token': refreshToken},
+              data: payload,
             );
       if (response.data?['success'] != true) {
         final error = response.data?['error']?['message'] ?? 'Logout gagal';

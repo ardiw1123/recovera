@@ -49,6 +49,14 @@ class Settings(BaseSettings):
             "FIREBASE_CONFIG",
         ),
     )
+    firebase_project_id: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "FIREBASE_PROJECT_ID",
+            "GOOGLE_CLOUD_PROJECT",
+            "GCLOUD_PROJECT",
+        ),
+    )
     bot_chain_rpc_url: str = "https://rpc.bohr.life"
     bot_chain_chain_id: int = 968
     bot_chain_private_key: str = ""

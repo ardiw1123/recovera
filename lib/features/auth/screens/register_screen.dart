@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/services/push_notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../widgets/auth_header.dart';
@@ -96,6 +97,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       );
+      PushNotificationService.instance.registerCurrentInstallation();
       Navigator.of(context).pushNamedAndRemoveUntil('/home', (_) => false);
     } catch (e) {
       if (!mounted) return;
